@@ -78,6 +78,7 @@ import {
 import ImportFreshnessStrip, { judgeImportFreshness } from "./inventory/ImportFreshnessStrip"
 import SheetSyncMenu from "./inventory/SheetSyncMenu"
 import type { HomeRecordDraft } from "./inventory/home-record-model"
+import { movementLot, shortProductName } from "./inventory/home-ledger-model"
 import LotAllocationDialog, { LotAllocationPreparing, plannedLotRequest, useLotAllocationPrompt } from "./inventory/LotAllocationDialog"
 import { confirmLotPayload, type LotAllocation } from "./inventory/lot-allocation-model"
 import { canRecordInboundOrAdjust, movementButtonState as resolveMovementButtonState, type MovementButton } from "./inventory/movement-permissions"
@@ -222,16 +223,7 @@ function confirmedSalesMovements(movements: HardwareMovement[]): HardwareMovemen
   })
 }
 
-// 제품 칩용 단축명 (기간 집계 칩에서 길이 절약).
-function shortProductName(name: string): string {
-  return name
-    .replace(/\s*전자칠판/g, "")
-    .replace(/\s*추적 카메라/g, "")
-    .replace(/\s*광각 카메라/g, "")
-    .replace(/\s*이동형 스탠드/g, " 스탠드")
-    .replace(/\s*윈도우 모듈/g, "")
-    .trim()
-}
+// shortProductName·movementLot 은 홈 원장과 같이 쓰려고 inventory/home-ledger-model.ts 로 옮겼다(규칙 그대로).
 
 // customerLabel(+GENERIC_LOCATIONS)은 구조 분해(#6)로 inventory/shared.tsx로 옮겼다 —
 // QuickRecordSheet(직전 기록 복제 미리보기)도 직접 참조해서다. 판정 로직은 그대로.
@@ -315,14 +307,6 @@ function formatDateSpan(first: string | null, last: string | null): string {
   if (!first) return formatShortDate(last!)
   if (!last || first === last) return formatShortDate(first)
   return `${formatShortDate(first)}~${formatShortDate(last)}`
-}
-
-export function movementLot(movement: HardwareMovement): string | null {
-  if (movement.lot_no && movement.lot_no.trim()) return movement.lot_no.trim()
-  if (movement.source === "sheet_import" && movement.reference_no && movement.reference_no.trim()) {
-    return movement.reference_no.trim()
-  }
-  return null
 }
 
 // isDraftPlanned·isSampleOutbound는 구조 분해(#6)로 inventory/shared.tsx로 옮겼다(QuickRecordSheet도
@@ -1704,9 +1688,6 @@ export default function HardwareInventoryClient({
       bucket.planned += row.plannedOut
       if (groupKey === "etc") etcRows.push({ product: row.product, warehouse: row.warehouseStock })
     }
-    // 아이콘 칩은 웜 뉴트럴 고정 — 카테고리 구분에 상태색(그린/앰버)을 쓰면 실제 신호(음수·부족)와
-    // 경쟁한다(DESIGN.md: 장식·카테고리 구분엔 웜 뉴트럴). 색은 수치·칩의 상태 표시에만 남긴다.
-    const NEUTRAL_TONE = { bg: "#F6F5F4", fg: "#615D59" }
     const toCard = (bucket: ReturnType<typeof emptyBucket>) => ({
       available: bucket.available,
       warehouse: bucket.warehouse,
@@ -1715,10 +1696,10 @@ export default function HardwareInventoryClient({
       promoted: bucket.hasPromoted ? bucket.promoted : null,
     })
     const cards = [
-      { key: "ifp86", label: "86인치 전자칠판", icon: Monitor, tone: NEUTRAL_TONE, ...toCard(buckets.ifp86) },
-      { key: "ifp75", label: "75인치 전자칠판", icon: Monitor, tone: NEUTRAL_TONE, ...toCard(buckets.ifp75) },
-      { key: "camera", label: "카메라 (T1·S1)", icon: Camera, tone: NEUTRAL_TONE, ...toCard(buckets.camera) },
-      { key: "stand", label: "스탠드 (STD1)", icon: Projector, tone: NEUTRAL_TONE, ...toCard(buckets.stand) },
+      { key: "ifp86", label: '86" 전자칠판', ...toCard(buckets.ifp86) },
+      { key: "ifp75", label: '75" 전자칠판', ...toCard(buckets.ifp75) },
+      { key: "camera", label: "카메라 T1·S1", ...toCard(buckets.camera) },
+      { key: "stand", label: "스탠드 STD1", ...toCard(buckets.stand) },
     ]
     const etcSummary =
       buckets.etc.count > 0
@@ -3555,14 +3536,15 @@ export default function HardwareInventoryClient({
               </div>
             </div>
           ) : (
-            <div className="space-y-4" aria-hidden>
-              <div className="grid gap-4 lg:grid-cols-4">
+            <div className="space-y-5" aria-hidden>
+              <div className="h-40 animate-pulse rounded-xl bg-[#F6F5F4] lg:h-32" />
+              <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, index) => (
-                  <div key={index} className="h-32 animate-pulse rounded-xl bg-[#F6F5F4]" />
+                  <div key={index} className="h-48 animate-pulse rounded-xl bg-[#F6F5F4]" />
                 ))}
               </div>
-              <div className="h-14 animate-pulse rounded-xl bg-[#F6F5F4]" />
-              <div className="h-72 animate-pulse rounded-xl bg-[#F6F5F4]" />
+              <div className="h-28 animate-pulse rounded-[10px] bg-[#F6F5F4]" />
+              <div className="h-72 animate-pulse rounded-[10px] bg-[#F6F5F4]" />
             </div>
           )
         ) : (

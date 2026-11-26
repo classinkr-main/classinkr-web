@@ -579,7 +579,7 @@ const DUPLICATE_EVENT_WINDOW_MS = 10_000
 
 /**
  * 방금 같은 대상·같은 내용으로 만들어진 기록이 있는지 짧은 창 안에서만 확인한다.
- * target_type·source_type·title·target_id·body가 전부 일치해야 중복으로 본다 — 우연히 같은
+ * target_type·source_type·source_id·title·target_id·body가 전부 일치해야 중복으로 본다 — 우연히 같은
  * 제목의 서로 다른 메모가 오탐으로 막히지 않게 조건을 좁게 잡았다. 조회 자체가 실패하면
  * (컬럼 부재 등) 막지 않고 그냥 진행한다 — 중복 방지가 저장 자체를 깨뜨리면 안 된다.
  */
@@ -597,6 +597,9 @@ async function findRecentDuplicateEvent(
     .gte("created_at", since)
   query = insert.target_id ? query.eq("target_id", insert.target_id) : query.is("target_id", null)
   query = insert.body ? query.eq("body", insert.body) : query.is("body", null)
+  // 출처 id 가 다르면 다른 기록이다(R9) — 예: 같은 날 닫힌 서로 다른 채널톡 상담(channel:{chatId}). 출처 id 를 보지 않으면
+  // 대상·제목·본문(대개 null)이 같은 두 상담이 10초 창 안에서 하나로 뭉개졌다.
+  query = insert.source_id ? query.eq("source_id", insert.source_id) : query.is("source_id", null)
 
   const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle()
   if (error || !data) return null

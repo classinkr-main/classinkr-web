@@ -4,6 +4,13 @@ import { isCurrentBranchTeam, isLegacyBranchTeam } from "./current-organization"
 
 export const UNMAPPED_BRANCH_MEMBER = "__unmapped_current_user__"
 
+/** 운영 계정의 이름을 장부 기본 담당자로 연결한다. */
+export function ledgerDefaultManager(personalManager: string) {
+  if (personalManager === "classin-admin") return ""
+  if (personalManager === "MOON") return "Junhyuk"
+  return personalManager
+}
+
 export function branchManagerLabel(value: string) {
   return value === UNMAPPED_BRANCH_MEMBER ? "내 담당 · 계정 연결 필요" : value
 }

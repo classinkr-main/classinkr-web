@@ -377,6 +377,10 @@ export interface PartnerQuoteLineItemInput {
   unitPrice?: number
   /** 발행 시 명시한 할인 전 단가. 카탈로그 가격과 독립적으로 보관한다. */
   originalUnitPrice?: number
+  /** 품목 세부 내역 아래에 표시하는 할인 안내 문구. */
+  discountDisplayText?: string
+  discountRateDisplayText?: string
+  discountDisplayBasis?: "line_total"
   quantity?: number
   quantityUnit?: string
   lineSupplyAmount?: number
@@ -428,6 +432,8 @@ export interface PartnerQuoteDetailsInput {
   optionSelections?: Record<string, QuoteOptionSelectionValue | undefined>
   /** 견적 전체 할인(작성자 입력). discountAmount 는 이 값으로 매번 다시 계산되는 결과다. */
   quoteDiscount?: QuoteDiscountInput
+  /** 고객용 공유 화면과 PDF에서 정가와 할인 내역을 표시한다. */
+  showDiscountDetails?: boolean
   pricingSource?: string
   generatedFromVersionId?: string
   generatedFromTemplateVersion?: string

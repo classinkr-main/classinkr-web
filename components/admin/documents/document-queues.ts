@@ -57,6 +57,22 @@ export function getContractSteps(contract: ContractQueueInput) {
   ]
 }
 
+/**
+ * 견적 전환 계약(V2)의 진행 단계 — 전자서명은 보류라 서명 단계 없이 관리자가 체크한다.
+ * 작성 → 발송 → 고객 확인 → 계약 확정. 취소된 계약은 어디까지 갔는지 알 수 없어 작성만 완료로 둔다.
+ */
+export function getConvertedContractSteps(contract: { status: string }) {
+  const reached = { draft: 0, shared: 1, partner_signed: 2, admin_signed: 3, completed: 3, cancelled: 0 }[
+    contract.status as "draft" | "shared" | "partner_signed" | "admin_signed" | "completed" | "cancelled"
+  ] ?? 0
+  return [
+    { label: "작성", done: true },
+    { label: "발송", done: reached >= 1 },
+    { label: "고객 확인", done: reached >= 2 },
+    { label: "계약 확정", done: reached >= 3 },
+  ]
+}
+
 export function groupContracts<T extends ContractQueueInput>(contracts: T[]): Array<QueueGroup<ContractQueueKey, T>> {
   const sorted = [...contracts].sort((a, b) => time(b.updated_at) - time(a.updated_at))
   return CONTRACT_QUEUE_GROUPS.map((group) => ({

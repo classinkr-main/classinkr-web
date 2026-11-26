@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react"
+import { useEffect, useLayoutEffect, useState, type RefObject } from "react"
 
 /*
  * 휴대폰(< 48rem) 대화창을 모달로 다룬다(CX-09·CX-11).
@@ -69,66 +69,114 @@ export function useModalBackground(active: boolean, rootRef: RefObject<HTMLEleme
     }, [active, rootRef])
 }
 
+interface ChatbotHistoryEntryOptions {
+    isActive: () => boolean
+    onBack: () => void
+}
+
+/**
+ * history 항목을 쌓고 걷는 규칙(훅이 effect 로 이어 붙인다).
+ * - 이동·새로고침으로 쌓은 항목이 남으면(token 이 기억에서 사라진 뒤 그 항목에 다시 닿으면) 같은 문서를 가리키는 헛 항목이므로
+ *   history.back() 으로 한 번 더 물러 뒤로가기 한 번이 헛돌지 않게 한다.
+ */
+export function createChatbotHistoryEntry(initial: ChatbotHistoryEntryOptions, win?: Pick<Window, "history">) {
+    let { isActive, onBack } = initial
+    let token: string | null = null
+    // release/정리가 부른 history.back() 의 popstate 를 기다리는 중. 그사이 다시 열면 popstate 뒤에 쌓는다.
+    let pendingBack = false
+    const target = () => win ?? window
+
+    const push = () => {
+        if (token || pendingBack) return
+        const next = makeHistoryToken()
+        try {
+            target().history.pushState({ [HISTORY_STATE_KEY]: next }, "")
+            token = next
+        } catch {
+            // history 를 쓸 수 없는 환경: 뒤로가기 닫기 없이 동작한다.
+        }
+    }
+
+    const stepBackFromStaleEntry = () => {
+        pendingBack = true
+        try {
+            target().history.back()
+        } catch {
+            pendingBack = false
+        }
+    }
+
+    /** 마운트 때: 새로고침으로 남은 옛 token 항목에 서 있으면 그 항목을 걷는다. */
+    const cleanupStale = () => {
+        if (token || pendingBack) return
+        if (readHistoryToken(target().history.state)) stepBackFromStaleEntry()
+    }
+
+    const handlePopState = (state: unknown) => {
+        if (pendingBack) {
+            pendingBack = false
+            if (isActive()) push()
+            return
+        }
+        const eventToken = readHistoryToken(state)
+        if (!token) {
+            // 닫힌 창의 옛 항목(다른 페이지로 떠났다 돌아온 뒤 등)이면 한 번 더 물러선다.
+            if (eventToken && !isActive()) stepBackFromStaleEntry()
+            return
+        }
+        if (eventToken === token) return
+        token = null
+        onBack()
+    }
+
+    const release = () => {
+        if (!token) return
+        const current = token
+        token = null
+        if (readHistoryToken(target().history.state) !== current) return
+        pendingBack = true
+        target().history.back()
+    }
+
+    const abandon = () => {
+        token = null
+    }
+
+    // 훅이 렌더마다 최신 값을 넣는다(컨트롤러는 한 번만 만든다).
+    const setHandlers = (next: ChatbotHistoryEntryOptions) => {
+        isActive = next.isActive
+        onBack = next.onBack
+    }
+
+    return { push, cleanupStale, handlePopState, release, abandon, setHandlers }
+}
+
 /**
  * 휴대폰에서 대화창을 열면 history 항목을 하나 쌓고, 뒤로가기(popstate)로 그 항목을 벗어나면 onBack 을 부른다.
  * - release: 닫기 버튼·Esc·딤으로 닫을 때. 쌓은 항목이 지금 항목이면 history.back() 으로 걷어 낸다(뒤로가기가 한 번 헛돌지 않게).
  * - abandon: 답 안 링크로 다른 페이지로 갈 때. 이동이 그 항목 위에 쌓이므로 걷어 내지 않는다(걷으면 이동이 취소된다).
+ *   남은 항목은 돌아올 때(popstate) 한 번 더 물러서며 정리한다.
  */
 export function useChatbotHistoryEntry({ active, onBack }: { active: boolean; onBack: () => void }) {
-    const tokenRef = useRef<string | null>(null)
-    // release 가 부른 history.back() 의 popstate 를 기다리는 중. 그사이 다시 열면 popstate 뒤에 쌓는다.
-    const pendingBackRef = useRef(false)
-    const activeRef = useRef(active)
-    const onBackRef = useRef(onBack)
+    const [entry] = useState(() => createChatbotHistoryEntry({ isActive: () => false, onBack: () => {} }))
 
     useLayoutEffect(() => {
-        activeRef.current = active
-        onBackRef.current = onBack
+        entry.setHandlers({ isActive: () => active, onBack })
     })
 
-    const push = useCallback(() => {
-        if (tokenRef.current || pendingBackRef.current) return
-        const token = makeHistoryToken()
-        try {
-            window.history.pushState({ [HISTORY_STATE_KEY]: token }, "")
-            tokenRef.current = token
-        } catch {
-            // history 를 쓸 수 없는 환경: 뒤로가기 닫기 없이 동작한다.
-        }
-    }, [])
+    useEffect(() => {
+        entry.cleanupStale()
+    }, [entry])
 
     useEffect(() => {
-        if (active) push()
-    }, [active, push])
+        if (active) entry.push()
+    }, [active, entry])
 
     useEffect(() => {
-        const onPopState = (event: PopStateEvent) => {
-            if (pendingBackRef.current) {
-                pendingBackRef.current = false
-                if (activeRef.current) push()
-                return
-            }
-            const token = tokenRef.current
-            if (!token || readHistoryToken(event.state) === token) return
-            tokenRef.current = null
-            onBackRef.current()
-        }
+        const onPopState = (event: PopStateEvent) => entry.handlePopState(event.state)
         window.addEventListener("popstate", onPopState)
         return () => window.removeEventListener("popstate", onPopState)
-    }, [push])
+    }, [entry])
 
-    const release = useCallback(() => {
-        const token = tokenRef.current
-        if (!token) return
-        tokenRef.current = null
-        if (readHistoryToken(window.history.state) !== token) return
-        pendingBackRef.current = true
-        window.history.back()
-    }, [])
-
-    const abandon = useCallback(() => {
-        tokenRef.current = null
-    }, [])
-
-    return { release, abandon }
+    return { release: entry.release, abandon: entry.abandon }
 }

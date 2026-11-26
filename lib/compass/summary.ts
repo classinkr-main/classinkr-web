@@ -177,28 +177,11 @@ function toSummaryActionRow(row: CompassLeadRow): CompassSummaryActionRow {
   }
 }
 
-export async function buildCompassSummary(
-  periodKey: CompassSummaryPeriodKey,
-  now: Date = new Date(),
-  ownerKeys?: readonly string[],
-): Promise<CompassSummary> {
-  const period = resolveCompassSummaryPeriod(periodKey, now)
-  const generatedAt = now.toISOString()
-  const todayKst = getBusinessDateParts(now).date
-
-  const [slice, bdOpen, todayDemos, upcoming] = await Promise.all([
-    getCompassLeadSliceByInflowRange(period.since, period.until, { maxRows: COMPASS_SUMMARY_MAX_ROWS, ownerKeys }),
-    getCompassBdOpenCount(ownerKeys),
-    getCompassDemos(todayKst, todayKst, ownerKeys),
-    getCompassUpcomingActions(COMPASS_UPCOMING_ACTION_HOURS, ownerKeys),
-  ])
-
-  // 슬라이스가 죽으면 다른 조회가 살아 있어도 숫자를 신뢰하지 않는다 — 즉시 강등.
-  if (slice.down) {
-    return emptyCompassSummary(period, generatedAt, { down: true, truncated: false, error: slice.error })
-  }
-
-  // --- 한 번 순회로 모든 집계를 함께 쌓는다 ---
+/**
+ * 리드 슬라이스 한 묶음을 유입·퍼널·담당별·이탈 사유로 접는다. buildCompassSummary(기간 키)와
+ * buildCompassRangeFunnel(임의 구간·주간 보고)이 같은 규칙을 쓰도록 집계를 한 곳에 둔다.
+ */
+export function aggregateCompassLeadRows(rows: readonly CompassLeadSliceRow[]) {
   const platformCounts = new Map<string, CompassSummaryCount>()
   const stageBuckets = new Array<number>(COMPASS_FUNNEL_STAGES.length).fill(0)
   const careCounts = new Map<string, number>(COMPASS_CARE_STAGES.map((stage) => [stage, 0]))
@@ -208,7 +191,7 @@ export async function buildCompassSummary(
   let neoRegistered = 0
   let won = 0
 
-  for (const row of slice.rows) {
+  for (const row of rows) {
     const isLost = row.stage === "lost"
     const isWon = row.stage === "won"
     if (isLost) lost += 1
@@ -241,7 +224,7 @@ export async function buildCompassSummary(
     }
   }
 
-  const inflowTotal = slice.rows.length
+  const inflowTotal = rows.length
   const byPlatform = sortCountsDesc(platformCounts.values())
   const metaInflow = platformCounts.get("meta")?.count ?? 0
 
@@ -264,6 +247,80 @@ export async function buildCompassSummary(
     .map(([key, count]) => ({ key, label: key, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, COMPASS_SUMMARY_LOST_REASON_LIMIT)
+
+  return { inflowTotal, byPlatform, metaInflow, stages, lost, neoRegistered, won, careStages, byOwner, lostReasons }
+}
+
+/** 임의 구간 퍼널(주간 보고용) — 금액 없음, 보조 조회(오늘 데모·다음 액션) 없음. */
+export interface CompassRangeFunnel {
+  since: string
+  until: string
+  down: boolean
+  error?: string
+  /** 스캔 상한에 닿았다 — 합계를 "N건 이상"으로 읽는다. */
+  truncated: boolean
+  inflowTotal: number
+  stages: CompassSummaryCount[]
+  lost: number
+  won: number
+  neoRegistered: number
+  byOwner: CompassSummaryOwnerRow[]
+  lostReasons: CompassSummaryCount[]
+}
+
+/**
+ * [since, until) 구간에 유입된 리드의 현재 단계 퍼널. rowFilter로 팀·담당 범위를 좁힌다(담당 이름 정규화는
+ * 호출부 몫). 슬라이스가 죽으면 down=true와 0을 돌려준다 — 0을 정상 실적처럼 쓰지 않는다.
+ */
+export async function buildCompassRangeFunnel(
+  range: { since: string; until: string },
+  options: { rowFilter?: (row: CompassLeadSliceRow) => boolean } = {},
+): Promise<CompassRangeFunnel> {
+  const slice = await getCompassLeadSliceByInflowRange(range.since, range.until, { maxRows: COMPASS_SUMMARY_MAX_ROWS })
+  if (slice.down) {
+    const empty = aggregateCompassLeadRows([])
+    return { ...range, down: true, error: slice.error, truncated: false, inflowTotal: 0, stages: empty.stages, lost: 0, won: 0, neoRegistered: 0, byOwner: [], lostReasons: [] }
+  }
+  const rows = options.rowFilter ? slice.rows.filter(options.rowFilter) : slice.rows
+  const agg = aggregateCompassLeadRows(rows)
+  return {
+    ...range,
+    down: false,
+    truncated: slice.truncated,
+    inflowTotal: agg.inflowTotal,
+    stages: agg.stages,
+    lost: agg.lost,
+    won: agg.won,
+    neoRegistered: agg.neoRegistered,
+    byOwner: agg.byOwner,
+    lostReasons: agg.lostReasons,
+  }
+}
+
+export async function buildCompassSummary(
+  periodKey: CompassSummaryPeriodKey,
+  now: Date = new Date(),
+  ownerKeys?: readonly string[],
+): Promise<CompassSummary> {
+  const period = resolveCompassSummaryPeriod(periodKey, now)
+  const generatedAt = now.toISOString()
+  const todayKst = getBusinessDateParts(now).date
+
+  const [slice, bdOpen, todayDemos, upcoming] = await Promise.all([
+    getCompassLeadSliceByInflowRange(period.since, period.until, { maxRows: COMPASS_SUMMARY_MAX_ROWS, ownerKeys }),
+    getCompassBdOpenCount(ownerKeys),
+    getCompassDemos(todayKst, todayKst, ownerKeys),
+    getCompassUpcomingActions(COMPASS_UPCOMING_ACTION_HOURS, ownerKeys),
+  ])
+
+  // 슬라이스가 죽으면 다른 조회가 살아 있어도 숫자를 신뢰하지 않는다 — 즉시 강등.
+  if (slice.down) {
+    return emptyCompassSummary(period, generatedAt, { down: true, truncated: false, error: slice.error })
+  }
+
+  const {
+    inflowTotal, byPlatform, metaInflow, stages, lost, neoRegistered, won, careStages, byOwner, lostReasons,
+  } = aggregateCompassLeadRows(slice.rows)
 
   // 보조 조회는 슬라이스와 달리 부분 실패를 허용한다 — 죽은 것만 0으로 내리고 사유를 남긴다.
   const auxErrors: string[] = []

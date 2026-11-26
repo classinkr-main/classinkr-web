@@ -51,6 +51,100 @@ const isPlannedOutboundBg = (bg: CellFormat | null | undefined): boolean => {
 const OUTBOUND_FIXED_COLUMN_COUNT = 13
 const ORDER_NO_HEADER = /^(오더번호|오더no\.?|orderno\.?|ordernumber)$/i
 
+const LEGACY_OUTBOUND_COLS = {
+  logisticsNo: 0,
+  outboundDate: 1,
+  owner: 2,
+  product: 3,
+  quantity: 4,
+  unitPriceUsd: 5,
+  amountUsd: 6,
+  amountCny: 7,
+  unitPriceKrw: null as number | null,
+  amountKrw: null as number | null,
+  destination: 8,
+  serial: 9,
+  sn: null as number | null,
+  progress: 10,
+  type: 11,
+  paymentStatus: null as number | null,
+  remarks: 12,
+}
+
+type OutboundColumnMap = typeof LEGACY_OUTBOUND_COLS
+
+function normalizeOutboundHeader(value: unknown): string {
+  return (s(value) ?? "").toLowerCase().replace(/\s+/g, "")
+}
+
+const OUTBOUND_HEADER_ALIASES: Record<keyof OutboundColumnMap, string[]> = {
+  logisticsNo: ["물류no.", "물류no", "물류번호", "logisticsno"],
+  outboundDate: ["출고일", "출고일자", "일자", "date"],
+  owner: ["담당자", "담당", "owner"],
+  product: ["제품명", "품목", "product"],
+  quantity: ["수량", "qty", "quantity"],
+  unitPriceUsd: ["단가(usd)", "단가"],
+  amountUsd: ["매출(usd)"],
+  amountCny: ["매출(cny)"],
+  unitPriceKrw: ["단가(krw)"],
+  amountKrw: ["매출(krw)"],
+  destination: ["배송/설치장소", "고객사", "destination", "customer"],
+  serial: ["시리얼번호", "시리얼", "serial"],
+  sn: ["s/n", "sn"],
+  progress: ["진행상태", "진행", "status", "progress"],
+  type: ["유형", "type"],
+  paymentStatus: ["결제여부", "결제"],
+  remarks: ["remarks", "비고", "메모"],
+}
+
+function resolveOutboundColumns(header: readonly FormattedCell[]): {
+  cols: OutboundColumnMap
+  headerRecognized: boolean
+} {
+  const normalized = header.map((cell) => normalizeOutboundHeader(cell?.value))
+  const found: Partial<Record<keyof OutboundColumnMap, number>> = {}
+  let matched = 0
+
+  for (const key of Object.keys(OUTBOUND_HEADER_ALIASES) as Array<keyof OutboundColumnMap>) {
+    const aliases = OUTBOUND_HEADER_ALIASES[key]
+    for (const alias of aliases) {
+      const idx = normalized.findIndex((label) => label === alias)
+      if (idx >= 0) {
+        found[key] = idx
+        matched += 1
+        break
+      }
+    }
+  }
+
+  if (matched < 3) {
+    return { cols: { ...LEGACY_OUTBOUND_COLS }, headerRecognized: false }
+  }
+
+  return {
+    headerRecognized: true,
+    cols: {
+      logisticsNo: found.logisticsNo ?? LEGACY_OUTBOUND_COLS.logisticsNo,
+      outboundDate: found.outboundDate ?? LEGACY_OUTBOUND_COLS.outboundDate,
+      owner: found.owner ?? LEGACY_OUTBOUND_COLS.owner,
+      product: found.product ?? LEGACY_OUTBOUND_COLS.product,
+      quantity: found.quantity ?? LEGACY_OUTBOUND_COLS.quantity,
+      unitPriceUsd: found.unitPriceUsd ?? LEGACY_OUTBOUND_COLS.unitPriceUsd,
+      amountUsd: found.amountUsd ?? LEGACY_OUTBOUND_COLS.amountUsd,
+      amountCny: found.amountCny ?? LEGACY_OUTBOUND_COLS.amountCny,
+      unitPriceKrw: found.unitPriceKrw ?? null,
+      amountKrw: found.amountKrw ?? null,
+      destination: found.destination ?? LEGACY_OUTBOUND_COLS.destination,
+      serial: found.serial ?? LEGACY_OUTBOUND_COLS.serial,
+      sn: found.sn ?? null,
+      progress: found.progress ?? LEGACY_OUTBOUND_COLS.progress,
+      type: found.type ?? LEGACY_OUTBOUND_COLS.type,
+      paymentStatus: found.paymentStatus ?? null,
+      remarks: found.remarks ?? LEGACY_OUTBOUND_COLS.remarks,
+    },
+  }
+}
+
 function columnLetter(index: number): string {
   let n = index + 1
   let letters = ""
@@ -103,8 +197,10 @@ export function parseInbound(grid: FormattedCell[][]): HwInboundParsed[] {
 
 export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
   const out: HwOutboundParsed[] = []
-  const orderNoCol = findOutboundOrderNoColumn(grid[0] ?? [])
-  if (orderNoCol != null && orderNoCol < OUTBOUND_FIXED_COLUMN_COUNT) {
+  const header = grid[0] ?? []
+  const { cols, headerRecognized } = resolveOutboundColumns(header)
+  const orderNoCol = findOutboundOrderNoColumn(header)
+  if (!headerRecognized && orderNoCol != null && orderNoCol < OUTBOUND_FIXED_COLUMN_COUNT) {
     throw new Error(
       `'3.출고 현황'의 오더번호 열이 ${columnLetter(orderNoCol)}열에 있습니다. 기존 열(A~${columnLetter(OUTBOUND_FIXED_COLUMN_COUNT - 1)}) 사이에 끼우면 ` +
         `고객사·진행 상태 값이 한 칸씩 밀리므로, 비고 열 오른쪽(${columnLetter(OUTBOUND_FIXED_COLUMN_COUNT)}열 이후)으로 옮겨 주세요.`
@@ -113,35 +209,48 @@ export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
   let lastDestination: string | null = null
   for (let r = 1; r < grid.length; r++) {
     const row = grid[r] ?? []
-    const product = s(row[3]?.value)
+    const product = s(row[cols.product]?.value)
     if (!product) {
       if (row.every((cell) => !s(cell?.value))) lastDestination = null
       continue
     }
-    const explicitDestination = s(row[8]?.value)
+    const explicitDestination = s(row[cols.destination]?.value)
     const destination = explicitDestination ?? lastDestination
     if (explicitDestination) lastDestination = explicitDestination
-    const plannedByColor = isPlannedOutboundBg(row[10]?.bg)
-    const progress = s(row[10]?.value) ?? (plannedByColor ? "배송 예정" : null)
+    const progressCell = row[cols.progress]
+    const plannedByColor = isPlannedOutboundBg(progressCell?.bg)
+    const progress = s(progressCell?.value) ?? (plannedByColor ? "배송 예정" : null)
+    const serialTokens = Array.from(
+      new Set([
+        ...arr(row[cols.serial]?.value),
+        ...(cols.sn != null ? arr(row[cols.sn]?.value) : []),
+      ])
+    )
+    const unitPriceKrw = cols.unitPriceKrw != null ? n(row[cols.unitPriceKrw]?.value) : null
+    const amountKrw = cols.amountKrw != null ? n(row[cols.amountKrw]?.value) : null
+    const paymentStatus = cols.paymentStatus != null ? s(row[cols.paymentStatus]?.value) : null
     // 손으로 적는 칸이라 대소문자·공백을 정리해 둔다(`ord - 2610-002` → `ORD-2610-002`) — 원장에서 오더와 그대로 맞춘다.
     const orderNo = orderNoCol == null ? null : normalizeOrderNo(s(row[orderNoCol]?.value))
     out.push({
-      logistics_no: s(row[0]?.value), outbound_date: date(row[1]?.value),
-      owner: s(row[2]?.value), product, quantity: n(row[4]?.value) ?? 0,
-      revenue: n(row[6]?.value), destination,
-      serials: arr(row[9]?.value), progress,
-      type: s(row[11]?.value), remarks: s(row[12]?.value),
+      logistics_no: s(row[cols.logisticsNo]?.value), outbound_date: date(row[cols.outboundDate]?.value),
+      owner: s(row[cols.owner]?.value), product, quantity: n(row[cols.quantity]?.value) ?? 0,
+      revenue: n(row[cols.amountUsd]?.value), destination,
+      serials: serialTokens, progress,
+      type: s(row[cols.type]?.value), remarks: s(row[cols.remarks]?.value),
       raw: {
         values: rawValues(row),
         destination,
         destination_cell_value: explicitDestination,
         destination_filled_from_previous: !explicitDestination && Boolean(destination),
         planned_by_color: plannedByColor,
-        progress_cell_bg: row[10]?.bg ?? null,
+        progress_cell_bg: progressCell?.bg ?? null,
         // Revenue USD + CNY (col 7 was previously unread) for recoverMoneyFromRaw.
-        amount_usd: n(row[6]?.value),
-        amount_cny: n(row[7]?.value),
-        unit_price: n(row[5]?.value),
+        amount_usd: n(row[cols.amountUsd]?.value),
+        amount_cny: n(row[cols.amountCny]?.value),
+        unit_price: n(row[cols.unitPriceUsd]?.value),
+        ...(unitPriceKrw != null ? { unit_price_krw: unitPriceKrw } : {}),
+        ...(amountKrw != null ? { amount_krw: amountKrw } : {}),
+        ...(paymentStatus ? { payment_status: paymentStatus } : {}),
         // 오더번호는 값이 있을 때만 싣는다 — 열이 없는 시트·빈 칸은 raw가 예전과 같게 남는다.
         // raw는 가져오기 RPC가 원장(hardware_movements.raw)까지 그대로 옮긴다.
         ...(orderNo ? { order_no: orderNo } : {}),
@@ -258,17 +367,48 @@ export function parseStock(grid: FormattedCell[][]): HwStockParsed[] {
   return out
 }
 
+function parseFiscalYearStart(value: string | null): number | null {
+  if (!value) return null
+  const m = value.match(/^FY\s*(\d{2,4})(?:\s*[-/~]\s*\d{2,4})?$/i)
+  if (!m) return null
+  const num = Number(m[1])
+  if (!Number.isFinite(num)) return null
+  return num < 100 ? 2000 + num : num
+}
+
 export function parseSalesMonthly(grid: FormattedCell[][], refFy: number): HwSalesMonthlyParsed[] {
   if (grid.length === 0) return []
-  const out: HwSalesMonthlyParsed[] = []
+  const header = grid[0] ?? []
+  const aprilCol = header.findIndex((cell) => /^4월?$/i.test(s(cell?.value) ?? ""))
+  // 실 시트('판매대시보드')는 A=FY24-25(병합), B=제품명, C=연간 합계, D..O=4월..3월 구조다.
+  const structuredLayout = aprilCol >= 2
+  const productCol = structuredLayout ? 1 : 0
+  const monthStartCol = structuredLayout ? aprilCol : 1
+
+  const deduped = new Map<string, HwSalesMonthlyParsed>()
+  let currentFy = refFy
   for (let r = 1; r < grid.length; r++) {
     const row = grid[r] ?? []
-    const product = s(row[0]?.value); if (!product) continue
-    for (let c = 1; c < Math.min(13, row.length); c++) {
-      const month = FISCAL_MONTH_ORDER[c - 1]
+    if (structuredLayout) {
+      const fyFromRow = parseFiscalYearStart(s(row[0]?.value))
+      if (fyFromRow != null) currentFy = fyFromRow
+    }
+    const product = s(row[productCol]?.value)
+    if (!product || product === "제품명" || product === "연간 합계") continue
+    const fiscalYear = structuredLayout ? currentFy : refFy
+    for (let i = 0; i < FISCAL_MONTH_ORDER.length; i++) {
+      const c = monthStartCol + i
+      if (c >= row.length) break
+      const month = FISCAL_MONTH_ORDER[i]
       const qty = n(row[c]?.value) ?? 0
-      out.push({ fiscal_year: refFy, fiscal_month: month, product, quantity: qty, raw: { value: row[c]?.value ?? null } })
+      deduped.set(`${fiscalYear}:${month}:${product}`, {
+        fiscal_year: fiscalYear,
+        fiscal_month: month,
+        product,
+        quantity: qty,
+        raw: { value: row[c]?.value ?? null },
+      })
     }
   }
-  return out
+  return Array.from(deduped.values())
 }

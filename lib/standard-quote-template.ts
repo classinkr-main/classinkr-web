@@ -4,6 +4,7 @@ import type {
   QuoteDiscountInput,
   QuoteOptionSelectionValue,
 } from "@/lib/partners-types"
+import { HARDWARE_INSTALL_PRICE_KRW } from "@/lib/billing/hardware-catalog"
 import { getProductBySku } from "@/lib/product-templates"
 
 export type StandardQuoteTemplateId =
@@ -191,7 +192,32 @@ const STANDARD_PRICE_BOARD_86 = getProductBySku("board-86")?.unit_price ?? 6_300
 const STANDARD_PRICE_BOARD_75 = getProductBySku("board-75")?.unit_price ?? 5_400_000
 const STANDARD_PRICE_CAMERA_T1 = getProductBySku("camera-t1")?.unit_price ?? 1_200_000
 const STANDARD_PRICE_STAND = getProductBySku("stand")?.unit_price ?? 500_000
+/** 프로모션 증정품 품목 코드(0원). */
+export const GIFT_CAMERA_T1_ITEM_CODE = "camera-t1-gift"
+export const GIFT_STAND_ITEM_CODE = "stand-gift"
 const STANDARD_PRICE_WALL_MOUNT = getProductBySku("wall-mount")?.unit_price ?? 500_000
+/** "설치비 추가" 옵션의 기본 단가(대당) — 하드웨어 카탈로그의 설치비. 작성 창에서 행 금액을 바로 고친다. */
+export const STANDARD_PRICE_INSTALL_FEE = HARDWARE_INSTALL_PRICE_KRW
+
+/** 설치비를 따로 받는 견적용 행 코드. */
+export const INSTALL_FEE_ITEM_CODE = "install-fee"
+export const INSTALL_FEE_OPTION_ID = "install_fee"
+
+/**
+ * "설치비 추가" — 하드웨어 템플릿 공통 토글(2026-11-24). 켜면 대표 품목 수량만큼 "설치비" 행이 붙고,
+ * 기본 단가는 카탈로그 설치비, 금액은 작성자가 고칠 수 있다(priceLocked: false — 다시 계산해도 고친 값이 남는다).
+ * 기본은 꺼짐이라 기존 견적·프리셋의 합계는 바뀌지 않는다. "설치 방식"(포함/별도 청구/협의)과는 별개다 —
+ * 설치 방식은 설치·교육을 어떻게 안내할지, 이 옵션은 설치비를 금액으로 받을지다.
+ */
+const INSTALL_FEE_OPTION_GROUP: StandardQuoteOptionGroup = {
+  id: INSTALL_FEE_OPTION_ID,
+  label: "배송·설치비",
+  description: "배송·설치비를 견적 합계에 추가합니다. 단가는 작성 창에서 수정할 수 있습니다.",
+  control: "toggle",
+  defaultValue: false,
+  enabledLabel: "추가",
+  disabledLabel: "없음",
+}
 const STANDARD_PRICE_RECORDING_STUDIO =
   getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000
 const STANDARD_PRICE_RECORDING_STUDIO_75 =
@@ -246,6 +272,7 @@ function recordingStudioTemplate(config: {
         enabledLabel: "포함",
         disabledLabel: "별도",
       },
+      INSTALL_FEE_OPTION_GROUP,
     ],
     quickPresets: [
       {
@@ -313,8 +340,10 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
           { value: "included_quote", label: "견적 포함", description: "같은 견적서 합계에 포함합니다." },
           { value: "separate_billing", label: "별도 청구", description: "합계에서는 제외하고 안내만 넣습니다." },
           { value: "tbd", label: "추후 협의", description: "설치 정책이 미정일 때 사용합니다." },
+          { value: "none", label: "제외", description: "카메라 설치 행을 뺍니다." },
         ],
       },
+      INSTALL_FEE_OPTION_GROUP,
       {
         id: "support_package",
         label: "초기 세팅 지원",
@@ -357,7 +386,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         itemType: "hardware",
         itemCode: "board-75",
         itemName: '전자칠판 75"',
-        itemDescription: "중형 전자칠판 패널",
+        itemDescription: "중형 전자칠판 패널 · Windows OPS 포함",
         quantity: 1,
         quantityUnit: "대",
         unitPrice: STANDARD_PRICE_BOARD_75,
@@ -387,8 +416,10 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
           { value: "included_quote", label: "견적 포함", description: "설치 및 교육을 같은 견적에 포함합니다." },
           { value: "separate_billing", label: "별도 청구", description: "설치비는 추후 별도 청구합니다." },
           { value: "tbd", label: "추후 협의", description: "현장 조건 확인 후 확정합니다." },
+          { value: "none", label: "제외", description: "설치 및 교육 행을 뺍니다." },
         ],
       },
+      INSTALL_FEE_OPTION_GROUP,
       {
         id: "mounting_option",
         label: "거치 방식",
@@ -409,6 +440,25 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         defaultValue: false,
         enabledLabel: "추가",
         disabledLabel: "제외",
+      },
+      // 단품 프로모션(FY2026 채널 정책표) — 작성자가 고객별로 직접 켠다. 자동 적용하지 않는다.
+      {
+        id: "gift_t1",
+        label: "T1 증정",
+        description: "프로모션 — 전자칠판 2대 구매 시 T1 카메라 1대 증정(0원 행).",
+        control: "toggle",
+        defaultValue: false,
+        enabledLabel: "증정",
+        disabledLabel: "없음",
+      },
+      {
+        id: "gift_stand",
+        label: "스탠드 증정",
+        description: "프로모션 — 전자칠판 1대 구매 시 이동형 스탠드 1대 증정(0원 행).",
+        control: "toggle",
+        defaultValue: false,
+        enabledLabel: "증정",
+        disabledLabel: "없음",
       },
       {
         id: "support_package",
@@ -456,7 +506,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         itemType: "hardware",
         itemCode: "board-86",
         itemName: '전자칠판 86"',
-        itemDescription: "대형 전자칠판 패널",
+        itemDescription: "대형 전자칠판 패널 · Windows OPS 포함",
         quantity: 1,
         quantityUnit: "대",
         unitPrice: STANDARD_PRICE_BOARD_86,
@@ -486,8 +536,10 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
           { value: "included_quote", label: "견적 포함", description: "설치 및 교육을 같은 견적에 포함합니다." },
           { value: "separate_billing", label: "별도 청구", description: "설치비는 추후 별도 청구합니다." },
           { value: "tbd", label: "추후 협의", description: "현장 조건 확인 후 확정합니다." },
+          { value: "none", label: "제외", description: "설치 및 교육 행을 뺍니다." },
         ],
       },
+      INSTALL_FEE_OPTION_GROUP,
       {
         id: "mounting_option",
         label: "거치 방식",
@@ -508,6 +560,25 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         defaultValue: false,
         enabledLabel: "추가",
         disabledLabel: "제외",
+      },
+      // 단품 프로모션(FY2026 채널 정책표) — 작성자가 고객별로 직접 켠다. 자동 적용하지 않는다.
+      {
+        id: "gift_t1",
+        label: "T1 증정",
+        description: "프로모션 — 전자칠판 2대 구매 시 T1 카메라 1대 증정(0원 행).",
+        control: "toggle",
+        defaultValue: false,
+        enabledLabel: "증정",
+        disabledLabel: "없음",
+      },
+      {
+        id: "gift_stand",
+        label: "스탠드 증정",
+        description: "프로모션 — 전자칠판 1대 구매 시 이동형 스탠드 1대 증정(0원 행).",
+        control: "toggle",
+        defaultValue: false,
+        enabledLabel: "증정",
+        disabledLabel: "없음",
       },
       {
         id: "support_package",
@@ -679,30 +750,12 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       {
         id: "recharge_200",
         label: "200만 기본",
-        description: "최소 기본 충전 금액",
+        // 금액 프리셋은 이것 하나다(2026-11-23). 400만·1,000만 프리셋은 금액을 바꾸지 않아 이름과 합계가
+        // 어긋났다 — 기본 200만으로 고정하고, 금액은 작성 창에서 직접 고친다(위 priceEditable).
+        description: "기본 충전 금액 — 작성 창에서 금액을 직접 수정합니다",
         templateId: "business_recharge",
         optionSelections: {
           credit_validity: "1_year",
-          support_setup: true,
-        },
-      },
-      {
-        id: "recharge_400",
-        label: "400만 패키지",
-        description: "중형 학원 권장 충전",
-        templateId: "business_recharge",
-        optionSelections: {
-          credit_validity: "1_year",
-          support_setup: true,
-        },
-      },
-      {
-        id: "recharge_1000",
-        label: "1,000만 패키지",
-        description: "대형 기관 일괄 충전",
-        templateId: "business_recharge",
-        optionSelections: {
-          credit_validity: "2_year",
           support_setup: true,
         },
       },
@@ -755,20 +808,38 @@ function lineIdentity(item: Pick<PartnerQuoteLineItemInput, "itemCode" | "itemNa
   return item.itemCode?.trim() || item.itemName.trim()
 }
 
-function createGeneratedLine(
-  line: Omit<PartnerQuoteLineItemInput, "sortOrder" | "lineNumber" | "lineSupplyAmount">,
-  index: number
-) {
-  const nextItem: PartnerQuoteLineItemInput = {
-    ...line,
-    sortOrder: index + 1,
-    lineNumber: index + 1,
-  }
+type RebuiltQuoteLine = Omit<PartnerQuoteLineItemInput, "sortOrder" | "lineNumber" | "lineSupplyAmount">
 
-  return {
-    ...nextItem,
-    lineSupplyAmount: computeLineSupplyAmount(nextItem),
-  }
+export function renumberQuoteLines(lines: RebuiltQuoteLine[]): PartnerQuoteLineItemInput[] {
+  return lines.map((line, index) => ({ ...line, sortOrder: index + 1, lineNumber: index + 1 }))
+}
+
+export function moveQuoteLine(items: PartnerQuoteLineItemInput[], from: number, to: number) {
+  if (from === to || !items[from] || !items[to]) return items
+  const reordered = [...items]
+  const [moved] = reordered.splice(from, 1)
+  reordered.splice(to, 0, moved)
+  return renumberQuoteLines(reordered)
+}
+
+function keepQuoteLineOrder(generated: RebuiltQuoteLine[], previous: PartnerQuoteLineItemInput[]) {
+  const newByCode = new Map(generated.map((line) => [lineIdentity(line), line]))
+  const retained = previous.flatMap<RebuiltQuoteLine>((line) => {
+    if (line.isUserAdded) return [line]
+    const code = lineIdentity(line)
+    const regenerated = newByCode.get(code)
+    if (!regenerated) return []
+    newByCode.delete(code)
+    return [regenerated]
+  })
+
+  const retainedLines = new Set(retained)
+  const standardOrder = [...generated, ...previous.filter((line) => line.isUserAdded)]
+  const standardRetainedOrder = standardOrder.filter((line) => retainedLines.has(line))
+  // 편집자가 순서를 바꾼 견적에는 새로 켠 옵션 행만 맨 뒤에 붙인다.
+  return retained.some((line, index) => line !== standardRetainedOrder[index])
+    ? [...retained, ...newByCode.values()]
+    : standardOrder
 }
 
 function finalizeLineItems(lineItems: PartnerQuoteDetailsInput["lineItems"]) {
@@ -791,6 +862,7 @@ function finalizeLineItems(lineItems: PartnerQuoteDetailsInput["lineItems"]) {
 function getExistingLineMap(existingItems: PartnerQuoteDetailsInput["lineItems"]) {
   const map = new Map<string, PartnerQuoteLineItemInput>()
   for (const item of existingItems ?? []) {
+    if (item.isUserAdded) continue
     const key = lineIdentity(item)
     if (key) map.set(key, item)
   }
@@ -832,6 +904,24 @@ export function getStandardQuoteDefaultSelections(templateId?: string | null) {
 export function formatStandardQuoteCurrency(value?: number | null) {
   if (value == null) return "-"
   return value.toLocaleString("ko-KR")
+}
+
+export function formatDefaultQuoteLineDiscount(line: PartnerQuoteLineItemInput) {
+  const { originalUnitPrice, unitPrice, quantityUnit, quantity } = line
+  if (originalUnitPrice == null || unitPrice == null || originalUnitPrice <= unitPrice) return undefined
+  if (line.discountDisplayBasis === "line_total" && quantity != null && quantity > 0) {
+    const originalTotal = Math.round(originalUnitPrice * quantity)
+    const discountTotal = originalTotal - Math.round(unitPrice * quantity)
+    return `정가 합계 ${formatStandardQuoteCurrency(originalTotal)}원 · 할인 합계 −${formatStandardQuoteCurrency(discountTotal)}원`
+  }
+  const original = formatStandardQuoteCurrency(originalUnitPrice)
+  const discount = formatStandardQuoteCurrency(originalUnitPrice - unitPrice)
+  return `정가 ${original}원 · 할인 −${discount}원 / ${quantityUnit || "개"}`
+}
+
+export function getQuoteLineDiscountRate(originalUnitPrice: number | undefined, unitPrice: number | undefined) {
+  if (!originalUnitPrice || unitPrice == null || unitPrice < 0 || originalUnitPrice <= unitPrice) return undefined
+  return Math.round((1 - unitPrice / originalUnitPrice) * 1_000) / 10
 }
 
 export function isPendingQuoteLine(item: Pick<PartnerQuoteLineItemInput, "lineStatus" | "billingMode" | "unitPrice">) {
@@ -884,6 +974,9 @@ export function mergeStandardQuoteLineItems(
       quantityUnit: current?.quantityUnit ?? line.quantityUnit ?? "대",
       unitPrice,
       originalUnitPrice: current?.originalUnitPrice,
+      discountDisplayText: current?.discountDisplayText,
+      discountRateDisplayText: current?.discountRateDisplayText,
+      discountDisplayBasis: current?.discountDisplayBasis,
       vatIncluded: current?.vatIncluded ?? true,
       lineStatus: current?.lineStatus ?? line.lineStatus,
       billingMode: current?.billingMode ?? line.billingMode,
@@ -1029,6 +1122,7 @@ export function finalizeStandardQuoteDetails(
     internalMemo: input?.internalMemo?.trim() || undefined,
     optionSelections: input?.optionSelections,
     quoteDiscount,
+    showDiscountDetails: input?.showDiscountDetails,
     pricingSource: input?.pricingSource?.trim() || undefined,
     generatedFromVersionId: input?.generatedFromVersionId?.trim() || undefined,
     generatedFromTemplateVersion: input?.generatedFromTemplateVersion?.trim() || undefined,
@@ -1061,6 +1155,26 @@ export function buildStandardQuoteDetails(
   )
 }
 
+/** 미리보기와 작성기가 같은 템플릿·빠른 구성·대표 수량으로 시작한다. */
+export function buildStandardQuoteFromPreset(
+  templateId: StandardQuoteTemplateId,
+  presetId?: string | null,
+  baseQuantity = 1,
+  overrides?: Partial<StandardQuoteOptionSelections>,
+) {
+  const preset = getStandardQuoteQuickPresets(templateId).find((item) => item.id === presetId)
+  return buildConfigurableStandardQuoteDetails({
+    templateId,
+    input: { templateId, presetId: preset?.id },
+    optionSelections: {
+      ...getStandardQuoteDefaultSelections(templateId),
+      ...preset?.optionSelections,
+      ...overrides,
+    },
+    baseQuantity: Number.isSafeInteger(baseQuantity) && !isSoftwareQuoteTemplate(templateId) ? baseQuantity : 1,
+  })
+}
+
 export function buildConfigurableStandardQuoteDetails({
   templateId,
   input,
@@ -1091,7 +1205,7 @@ export function buildConfigurableStandardQuoteDetails({
     baseQuantity ?? mainExisting?.quantity ?? mainTemplateLine.quantity ?? 1,
     1
   )
-  const generatedItems: Array<Omit<PartnerQuoteLineItemInput, "sortOrder" | "lineNumber" | "lineSupplyAmount">> = [
+  const generatedItems: RebuiltQuoteLine[] = [
     {
       id: mainExisting?.id,
       itemType: mainTemplateLine.itemType,
@@ -1102,6 +1216,9 @@ export function buildConfigurableStandardQuoteDetails({
       quantityUnit: mainTemplateLine.quantityUnit ?? "대",
       unitPrice: mainExisting?.unitPrice ?? mainTemplateLine.unitPrice,
       originalUnitPrice: mainExisting?.originalUnitPrice,
+      discountDisplayText: mainExisting?.discountDisplayText,
+      discountRateDisplayText: mainExisting?.discountRateDisplayText,
+      discountDisplayBasis: mainExisting?.discountDisplayBasis,
       vatIncluded: mainExisting?.vatIncluded ?? true,
       lineStatus: "priced",
       billingMode: "included_in_quote",
@@ -1144,13 +1261,18 @@ export function buildConfigurableStandardQuoteDetails({
       itemCode: code,
       itemName: (keepEditedText ? existingLine?.itemName : undefined) ?? config.itemName,
       itemDescription: (keepEditedText ? existingLine?.itemDescription : undefined) ?? config.itemDescription,
-      quantity: config.quantity,
+      quantity: config.quantityLocked === false && existingLine?.optionId === config.optionId && existingLine.quantityLocked === false
+        ? existingLine.quantity ?? config.quantity
+        : config.quantity,
       quantityUnit: config.quantityUnit ?? "식",
       unitPrice:
         config.lineStatus === "pending_price" || config.lineStatus === "separate_billing"
           ? undefined
           : existingLine?.unitPrice ?? config.unitPrice,
       originalUnitPrice: keepEditedText ? existingLine?.originalUnitPrice : undefined,
+      discountDisplayText: keepEditedText ? existingLine?.discountDisplayText : undefined,
+      discountRateDisplayText: keepEditedText ? existingLine?.discountRateDisplayText : undefined,
+      discountDisplayBasis: keepEditedText ? existingLine?.discountDisplayBasis : undefined,
       vatIncluded: existingLine?.vatIncluded ?? true,
       lineStatus: config.lineStatus,
       billingMode: config.billingMode,
@@ -1168,6 +1290,25 @@ export function buildConfigurableStandardQuoteDetails({
     "installation_mode",
     readSelectionString(defaultSelections, "installation_mode", "included_quote")
   )
+
+  // "설치비 추가" 토글 — 하드웨어 템플릿 공통. 대표 품목 수량을 따르고, 작성자가 고친 단가는
+  // addOptionalLine 이 기존 행 값으로 살린다.
+  const addInstallFeeLine = (quantityUnit: string) => {
+    if (!readSelectionBoolean(selections, INSTALL_FEE_OPTION_ID, false)) return
+    addOptionalLine(INSTALL_FEE_ITEM_CODE, {
+      itemType: "installation",
+      itemName: "배송·설치비",
+      itemDescription: "납품 및 현장 설치",
+      quantity,
+      quantityUnit,
+      unitPrice: STANDARD_PRICE_INSTALL_FEE,
+      lineStatus: "priced",
+      billingMode: "included_in_quote",
+      optionGroupId: INSTALL_FEE_OPTION_ID,
+      optionId: "enabled",
+      priceLocked: false,
+    })
+  }
 
   if (isRecordingStudioTemplate(resolvedTemplateId)) {
     const paymentPlan = readSelectionString(selections, "payment_plan", "one_time")
@@ -1190,6 +1331,7 @@ export function buildConfigurableStandardQuoteDetails({
       priceLocked: true,
       alwaysRegenerateText: true,
     })
+    addInstallFeeLine("세트")
   } else if (resolvedTemplateId === "online_suite") {
     const contractTerm = readSelectionString(selections, "contract_term", "36_month")
     const includeLanding = readSelectionBoolean(selections, "landing_page", true)
@@ -1270,7 +1412,7 @@ export function buildConfigurableStandardQuoteDetails({
         optionId: installationMode,
         priceLocked: true,
       })
-    } else {
+    } else if (installationMode !== "none") {
       addOptionalLine("camera-install", {
         itemType: "installation",
         itemName: "카메라 설치",
@@ -1284,6 +1426,8 @@ export function buildConfigurableStandardQuoteDetails({
         priceLocked: true,
       })
     }
+
+    addInstallFeeLine("대")
 
     if (readSelectionBoolean(selections, "support_package", false)) {
       addOptionalLine("camera-support", {
@@ -1323,6 +1467,7 @@ export function buildConfigurableStandardQuoteDetails({
         unitPrice: STANDARD_PRICE_STAND,
         optionGroupId: "mounting_option",
         optionId: mountingOption,
+        quantityLocked: false,
       })
     }
 
@@ -1348,7 +1493,7 @@ export function buildConfigurableStandardQuoteDetails({
         optionId: installationMode,
         priceLocked: true,
       })
-    } else {
+    } else if (installationMode !== "none") {
       addOptionalLine("install-training", {
         itemType: "service",
         itemName: "설치 및 교육",
@@ -1362,6 +1507,8 @@ export function buildConfigurableStandardQuoteDetails({
       })
     }
 
+    addInstallFeeLine("대")
+
     if (readSelectionBoolean(selections, "camera_bundle", false)) {
       addOptionalLine("camera-t1", {
         itemType: "hardware",
@@ -1372,6 +1519,36 @@ export function buildConfigurableStandardQuoteDetails({
         unitPrice: STANDARD_PRICE_CAMERA_T1,
         optionGroupId: "camera_bundle",
         optionId: "enabled",
+      })
+    }
+
+    // 증정품: 0원 하드웨어 행. 품목 코드를 따로 두어 총판 원가·고객 누적 대수 구간 계산에 섞이지 않게 하고,
+    // 출고(오더 줄)에서는 같은 재고 품목으로 센다(lib/orders/order-lines.ts).
+    if (readSelectionBoolean(selections, "gift_t1", false)) {
+      addOptionalLine(GIFT_CAMERA_T1_ITEM_CODE, {
+        itemType: "hardware",
+        itemName: "T1 카메라 (증정)",
+        itemDescription: "프로모션 증정 · 전자칠판 2대당 1대",
+        quantity: Math.max(1, Math.floor(quantity / 2)),
+        quantityUnit: "대",
+        unitPrice: 0,
+        optionGroupId: "gift_t1",
+        optionId: "enabled",
+        priceLocked: true,
+      })
+    }
+
+    if (readSelectionBoolean(selections, "gift_stand", false)) {
+      addOptionalLine(GIFT_STAND_ITEM_CODE, {
+        itemType: "hardware",
+        itemName: "이동형 스탠드 (증정)",
+        itemDescription: "프로모션 증정 · 전자칠판 1대당 1대",
+        quantity,
+        quantityUnit: "대",
+        unitPrice: 0,
+        optionGroupId: "gift_stand",
+        optionId: "enabled",
+        priceLocked: true,
       })
     }
 
@@ -1388,19 +1565,13 @@ export function buildConfigurableStandardQuoteDetails({
     }
   }
 
-  // 작성자가 직접 추가한 정보 라인(isUserAdded)은 템플릿 재생성 대상이 아니므로
-  // 옵션/수량을 바꿔도 살아남도록 생성 라인 뒤에 이어 붙인다.
-  const userAddedItems = (existing.lineItems ?? []).filter((item) => item.isUserAdded === true)
-
   return finalizeStandardQuoteDetails(
     {
       ...existing,
       templateId: resolvedTemplateId,
       optionSelections: selections,
       pricingSource: "standard_quote_builder",
-      lineItems: [...generatedItems, ...userAddedItems].map((item, index) =>
-        createGeneratedLine(item, index)
-      ),
+      lineItems: renumberQuoteLines(keepQuoteLineOrder(generatedItems, existing.lineItems ?? [])),
     },
     resolvedTemplateId
   )
@@ -1413,7 +1584,9 @@ export function inferStandardQuoteTemplateId(
     return getStandardQuoteTemplate(quoteDetails.templateId).id as StandardQuoteTemplateId
   }
 
-  const firstItemCode = quoteDetails?.lineItems?.find((item) => item.itemCode)?.itemCode
+  const lines = quoteDetails?.lineItems
+  const firstItemCode = (lines?.find((item) => item.optionGroupId === "main_product" && item.itemCode) ??
+    lines?.find((item) => item.itemCode))?.itemCode
   return inferTemplateIdFromItemCode(firstItemCode)
 }
 
@@ -1549,7 +1722,7 @@ export const QUOTE_NOTE_PRESETS: QuoteNotePreset[] = [
   {
     id: "general_delivery_cost",
     group: "general",
-    label: "배송·설치비",
+    label: "배송·설치 안내",
     text: "설치 및 배송비는 견적 금액에 포함되어 있습니다.",
   },
   {

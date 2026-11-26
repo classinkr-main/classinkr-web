@@ -26,6 +26,15 @@ import {
 } from "lucide-react"
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { ADMIN_NAV } from "@/components/admin/admin-nav"
+import {
+  getPaletteAdminNavItems,
+  normalizeNavOverrides,
+  resolveAdminNavAccess,
+  type NavAccessContext,
+} from "@/components/admin/admin-nav-access"
+import { useAdminNavPreferences } from "@/components/admin/admin-nav-preferences-context"
+import { resolveAdminNavParentHref } from "@/components/admin/admin-nav-routes"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { ADMIN_OPEN_NAV_EDITOR_EVENT } from "@/components/admin/my-nav-preferences"
 import { leadSegment, leadSegmentHref } from "@/lib/crm/lead-segments"
@@ -114,6 +123,29 @@ export const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: R
   },
 ]
 
+const TOP_LEVEL_NAV_HREFS = ADMIN_NAV.map((item) => item.href)
+
+/**
+ * 그 계정에게 보여 줄 "이동" 명령 — 전역 팔레트(AdminCommandPalette.resolveAdminCommands)와 같은 기준.
+ *  - 전체 사이드바 계정: NAV_CMDS 그대로(같은 참조). 사이드바·CRM 하위 탭 숨김으로 거르지 않는다.
+ *  - 간소 사이드바 계정(2026-11-20 D2): 각 명령이 속한 최상위 탭(admin-nav-routes 의 부모 판정)이
+ *    그 계정의 목록에 보일 때만 남긴다. CRM 탭이 숨김이면 CRM 명령이 통째로 빠지고 매출 장부 ·
+ *    하드웨어 재고만 남는다. "내 사이드바 편집"(이벤트 명령)도 뺀다 — 편집 진입점을 목록에 두지 않는다.
+ * 고객 이름 검색은 명령 목록이 아니라 조회 결과라 여기서 거르지 않는다(그 API 의 역할 검사가 막는다).
+ * 숨김은 목록 정리일 뿐이다 — 주소로는 모든 화면이 그대로 열린다.
+ */
+export function resolveCrmPaletteNavCommands(ctx: NavAccessContext): typeof NAV_CMDS {
+  const access = resolveAdminNavAccess(ctx)
+  if (access.fullNav) return NAV_CMDS
+
+  const listed = new Set(getPaletteAdminNavItems(access).map((item) => item.href))
+  return NAV_CMDS.filter((nav) => {
+    if (nav.event) return false
+    const parent = resolveAdminNavParentHref(nav.href.split("?")[0], TOP_LEVEL_NAV_HREFS)
+    return parent !== null && listed.has(parent)
+  })
+}
+
 /**
  * 내비 명령 검색 매칭 — label + sub(부제) + keywords(보강어) 연결 문자열에 대소문자 무시 부분일치.
  * 팔레트 useMemo와 단위 테스트(tests/crm/command-palette-segments.test.tsx)가 같은 함수를 쓴다.
@@ -166,6 +198,12 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const reqId = useRef(0)
+  // 셸 세션(역할·전체 사이드바 지정·개인 배치) — 전역 팔레트가 props 로 받는 값과 같다.
+  const { role, navPreset, navOverrides } = useAdminNavPreferences()
+  const navCommands = useMemo(
+    () => resolveCrmPaletteNavCommands({ role, preset: navPreset, overrides: normalizeNavOverrides(navOverrides) }),
+    [role, navPreset, navOverrides]
+  )
 
   // ⌘K / Ctrl+K 토글. CRM 레이아웃에만 마운트돼 스코프가 CRM으로 한정된다.
   // 리셋은 effect가 아니라 이벤트 핸들러에서(set-state-in-effect 회피).
@@ -239,7 +277,7 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
 
   const items = useMemo<CmdItem[]>(() => {
     const q = query.trim().toLowerCase()
-    const navItems: CmdItem[] = NAV_CMDS.filter((nav) => matchesNavCommand(nav, query)).map((nav) => ({
+    const navItems: CmdItem[] = navCommands.filter((nav) => matchesNavCommand(nav, query)).map((nav) => ({
       kind: "nav",
       id: nav.event ? `nav:event:${nav.event}` : `nav:${nav.href}`,
       label: nav.label,
@@ -262,7 +300,7 @@ export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandP
         }))
       : []
     return [...navItems, ...custItems]
-  }, [query, rows])
+  }, [query, rows, navCommands])
 
   // active는 파생 클램프 — items가 줄어도 effect 없이 안전 범위 유지.
   const activeIndex = items.length === 0 ? 0 : Math.min(active, items.length - 1)

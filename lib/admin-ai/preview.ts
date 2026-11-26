@@ -11,8 +11,48 @@
 // NEXT_PUBLIC_ 값은 next build 때 `process.env.NEXT_PUBLIC_ADMIN_AI_PREVIEW` 글자 그대로를 찾아 값으로
 // 바꿔 넣는다. 변수·대괄호 접근으로 바꾸면 브라우저 번들에서는 늘 undefined 가 되어 서버 판정과 갈린다.
 // 비밀값이 아니라 노출 스위치라 문자열 비교로 충분하다. "1" 만 켠다("true" 등은 꺼짐).
+//
+// 운영 차단(2026-11 점검 R16): 시안은 샘플 데이터라 운영에서는 스위치가 "1" 이어도 켜지지 않는다.
+// VERCEL_ENV 는 서버 전용이라 브라우저 번들에는 없다. 서버·브라우저 판정이 갈리면 hydration 이 깨지므로
+// next.config.ts 의 env 가 같은 값을 NEXT_PUBLIC_ADMIN_AI_ENV 로 구워 넣고, 둘 중 하나라도
+// "production" 이면 막는다. 이 차단은 Vercel(VERCEL_ENV) 기준이다 — Vercel 밖에서 `next start` 로 운영하면
+// VERCEL_ENV 가 없어 막히지 않으니, 그런 배포에서는 NEXT_PUBLIC_ADMIN_AI_PREVIEW 를 켜지 않는다. 실수로 스위치가 운영 환경변수에 들어가도 화면에 시안이 올라가지 않는다.
 export const ADMIN_AI_HREF = "/admin/ai"
 
-export function isAdminAiPreviewEnabled(): boolean {
+/** 운영 배포인지 — 시안(샘플 데이터)을 절대 켜지 않는 환경. */
+export function isAdminAiProductionEnv(): boolean {
+  return (
+    process.env.VERCEL_ENV === "production" ||
+    process.env.NEXT_PUBLIC_ADMIN_AI_ENV === "production"
+  )
+}
+
+/** 시안(샘플 데이터) 스위치 — 운영에서는 늘 꺼짐. */
+export function isAdminAiDemoEnabled(): boolean {
+  if (isAdminAiProductionEnv()) return false
   return process.env.NEXT_PUBLIC_ADMIN_AI_PREVIEW === "1"
+}
+
+// 실제 모드(서버 1단계, 2026-11) — NEXT_PUBLIC_ADMIN_AI_LIVE === "1" 이면 위젯이 서버(POST /api/admin/ai/chat)와 대화한다.
+// 서버 API 도 같은 함수로 켜짐을 본다(꺼져 있으면 404). 시안과 달리 실제 자료라 운영에서도 켤 수 있다 — 켜는 결정은 사용자가 한다
+// (docs/active/admin-ai-structure-worklist-2026-09-29.md "서버 1단계 구현 현황"). 위 글자 그대로 규칙과 같은 이유로 "1" 만 켠다.
+export function isAdminAiLiveEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ADMIN_AI_LIVE === "1"
+}
+
+export type AdminAiMode = "live" | "demo" | "off"
+
+/** 갈매봇 모드 — 시안/실제 전환은 이 함수 한 곳에서만 정한다. 실제 스위치가 시안보다 먼저다. */
+export function adminAiMode(): AdminAiMode {
+  if (isAdminAiLiveEnabled()) return "live"
+  if (isAdminAiDemoEnabled()) return "demo"
+  return "off"
+}
+
+/**
+ * 갈매봇을 화면에 올리는가(셸 런처·내비 항목·/admin/ai). 이름은 시안 시절 그대로 두었다(호출부·시험이 많다) —
+ * 지금 뜻은 "실제 모드이거나, 운영이 아닌 곳의 시안 모드".
+ */
+export function isAdminAiPreviewEnabled(): boolean {
+  return adminAiMode() !== "off"
 }

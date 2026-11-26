@@ -14,6 +14,7 @@ export interface ChannelSettlementRecord {
   settlementDate: string | null
 }
 export const CHANNEL_SETTLEMENT_SHEET = '3. 채널 정산'
+export const CHANNEL_SETTLEMENT_SHEET_FALLBACKS = ['3. 채널 정산(구)'] as const
 const HEADERS = ['EEO Account', 'UID', 'Partner', 'Service Version', 'BD', 'Contract amount (RMB)', '원화 적용 (KRW)', 'fee rate (%)', '수수료 지급액', 'payment date', 'settlement date', 'Note']
 const normalize = (value: string) => value.replace(/\s+/g, ' ').trim()
 function text(cell: SettlementCell | undefined): string {

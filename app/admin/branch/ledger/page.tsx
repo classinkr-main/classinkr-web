@@ -8,6 +8,7 @@ import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
 import { openPrefetchLane } from "@/lib/admin/prefetch-budget"
 import { BRANCH_READ_ADMIN_API_ROLES, hasAdminApiRole } from "@/lib/admin-auth"
 import { resolvePeriodDate } from "@/lib/branch/fiscal"
+import { ledgerDefaultManager } from "@/lib/branch/personal-scope"
 import { readBranchPipelineRows } from "@/lib/branch/pipeline-rows"
 
 export const dynamic = "force-dynamic"
@@ -35,7 +36,7 @@ async function prefetchLedgerRows(manager: string): Promise<BranchPipelineRespon
   if (!admin || !hasAdminApiRole(admin.role, BRANCH_READ_ADMIN_API_ROLES)) return null
 
   const rows = await readBranchPipelineRows({
-    manager,
+    manager: manager || undefined,
     team: INITIAL_TEAM,
     period: INITIAL_PERIOD,
     periodDate: resolvePeriodDate(INITIAL_PERIOD, null),
@@ -45,7 +46,8 @@ async function prefetchLedgerRows(manager: string): Promise<BranchPipelineRespon
 
 async function PersonalSalesLedger() {
   const admin = await getVerifiedAdminContextForPage()
-  const defaultManager = await resolvePersonalBranchManager(admin && hasAdminApiRole(admin.role, BRANCH_READ_ADMIN_API_ROLES) ? admin : null)
+  const personalManager = await resolvePersonalBranchManager(admin && hasAdminApiRole(admin.role, BRANCH_READ_ADMIN_API_ROLES) ? admin : null)
+  const defaultManager = ledgerDefaultManager(personalManager)
   // openPrefetchLane은 run()을 기다리지 않고 즉시 {promise, generatedAt}을 돌려준다 —
   // readBranchPipelineRows 콜드 미스가 아무리 느려도 TTFB에 1ms도 얹지 않는다. 예전
   // settleWithinBudget은 1.2초 예산을 다 기다린 뒤에야 null을 반환했고, 그 null을 받은
@@ -53,7 +55,7 @@ async function PersonalSalesLedger() {
   // (tmp/admin-overhaul-2026-09-10/platform.md §2.0). 이제 그 대기 자체가 없다.
   const lane = openPrefetchLane(() => prefetchLedgerRows(defaultManager))
   const initialPipeline: LedgerPipelinePrefetch = {
-    url: `${INITIAL_PIPELINE_URL}&manager=${encodeURIComponent(defaultManager)}`,
+    url: defaultManager ? `${INITIAL_PIPELINE_URL}&manager=${encodeURIComponent(defaultManager)}` : INITIAL_PIPELINE_URL,
     promise: lane.promise,
     generatedAt: lane.generatedAt,
   }
@@ -70,15 +72,19 @@ async function PersonalSalesLedger() {
   // 한 줄로 드러낸다. 별도 Suspense(fallback 없음)라 첫 바이트·워크벤치 스트리밍을 기다리게 하지 않는다.
   // 바깥 Suspense(기본 export)는 기본 담당자(로그인 사용자) 해석을 기다리는 경계, 안쪽 Suspense는
   // 프리페치 promise 를 푸는 use() 가 띠까지 붙잡지 않게 나눈 경계다(10월 줄기 + 09-25 띠 병합).
+  //
+  // 건별 시트(2026-11-23) — 워크벤치가 data-ledger-sheet 를 내면 이 래퍼가 화면 높이를 잡고(데스크톱), 띠가 있으면
+  // 띠만큼 줄어든 나머지를 표가 채운다. 표는 그 안에서 스크롤하므로 머리·합계 행이 늘 보인다. 시트가 아닌
+  // 렌즈·보기에서는 표식이 없어 지금처럼 본문이 길어지고 셸이 스크롤한다.
   return (
-    <>
+    <div className="flex flex-col lg:has-[[data-ledger-sheet]]:h-dvh">
       <Suspense fallback={null}>
-        <SyncHealthBannerServer sources={["sheets"]} className="bg-[#FAFAF8] px-4 pt-4 sm:px-6 lg:px-9" />
+        <SyncHealthBannerServer sources={["sheets"]} className="shrink-0 bg-[#FAFAF8] px-4 pt-3" />
       </Suspense>
       <Suspense fallback={<AdminRouteLoading />}>
         <SalesLedgerWorkbench initialPipeline={initialPipeline} defaultManager={defaultManager} />
       </Suspense>
-    </>
+    </div>
   )
 }
 

@@ -28,12 +28,14 @@ export interface UpcomingDealClick {
 }
 
 export default function BranchUpcomingDeals({
-  data, loading, error, onDealClick,
+  data, loading, error, onDealClick, limit = 8,
 }: {
   data: BranchMonthlySeries | null
   loading: boolean
   error?: string | null
   onDealClick?: (d: UpcomingDealClick) => void
+  /** 보여 줄 일정 수. 개요 콕핏 오른쪽 레일은 좁아서 줄여 쓴다. */
+  limit?: number
 }) {
   // 에러를 빈 상태/영구 스켈레톤으로 위장하지 않는다(품질 웨이브 5 — 항목 2).
   if (error && !data) return (
@@ -55,7 +57,7 @@ export default function BranchUpcomingDeals({
   ]
     .filter((it) => isFutureOrToday(it.date))
     .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 8)
+    .slice(0, limit)
 
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">

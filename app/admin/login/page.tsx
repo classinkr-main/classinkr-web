@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Lock } from "lucide-react"
 import Image from "next/image"
+import { resolveAdminLandingHref } from "@/components/admin/admin-nav-access"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { getAdminAuthErrorMessage } from "@/lib/admin-auth-errors"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
@@ -72,7 +73,8 @@ export default function AdminLoginPage() {
           sessionStorage.removeItem("admin_branch")
         }
 
-        router.replace("/admin/overview")
+        // 레거시 비밀번호 세션은 admin_profiles 를 거치지 않아 nav_preset 이 없다 — 역할만으로 판정한다.
+        router.replace(resolveAdminLandingHref({ role: data?.role ?? "admin" }))
         router.refresh()
         return
       }
@@ -89,11 +91,22 @@ export default function AdminLoginPage() {
         return
       }
 
-      const { data: profile } = await supabase
+      // nav_preset 은 착지 화면을 고르는 데만 쓴다(전체 사이드바 지정 계정 → Overview).
+      // 20260729 마이그레이션 이전 환경에서는 컬럼이 없어 select 가 실패한다 — AdminShell 과 같은
+      // 규칙으로 3컬럼으로 폴백한다(= preset 없음 = 역할만으로 판정). select 하나로 로그인이 막히면 안 된다.
+      const extended = await supabase
         .from("admin_profiles")
-        .select("display_name, role, status")
+        .select("display_name, role, status, nav_preset")
         .eq("user_id", signInData.user.id)
         .single()
+
+      const { data: profile } = extended.error
+        ? await supabase
+            .from("admin_profiles")
+            .select("display_name, role, status")
+            .eq("user_id", signInData.user.id)
+            .single()
+        : extended
 
       if (!profile) {
         await supabase.auth.signOut()
@@ -120,7 +133,10 @@ export default function AdminLoginPage() {
       sessionStorage.setItem("admin_email", signInData.user.email ?? "")
       sessionStorage.removeItem("admin_branch")
 
-      router.replace("/admin/overview")
+      // 착지 화면은 admin-nav-access 의 함수 하나가 정한다 — 숨김 판정과 같은 파일이라 "로그인하자마자
+      // 사이드바에 없는 화면"이 될 수 없다(2026-09-10 사고의 재발 방지, 그 파일 머리 주석).
+      const navPreset = (profile as { nav_preset?: string | null }).nav_preset ?? null
+      router.replace(resolveAdminLandingHref({ role: profile.role, preset: navPreset }))
       router.refresh()
     } catch (err) {
       console.error("[AdminLogin] 오류:", err)

@@ -14,6 +14,7 @@ import { withCompassOwner, compassOwnerCacheKey } from "@/lib/compass/owner-filt
 //    것은 반복 호출을 접는 것뿐이다(생성 컬럼+인덱스는 Compass 쪽 별도 트랙).
 import "server-only"
 
+import { AsyncLocalStorage } from "node:async_hooks"
 import { createHash } from "node:crypto"
 
 import { compassInflowWindowFilter } from "@/lib/compass/inflow-window"
@@ -209,6 +210,24 @@ const MEMO_MAX_ENTRIES = 200
 const MEMO_DEADLINE_MS = 10_000
 const memoStore = new Map<string, MemoEntry<unknown>>()
 
+// 새로고침(?force=1)이 브리지 메모를 뚫게 한다 (2026-11-23).
+// 예전엔 화면의 「새로고침」이 브라우저 캐시만 건너뛰고 서버에는 force 가 닿지 않아(라우트가 읽지 않음), 같은 인스턴스의
+// 60초 메모가 옛 Compass 값을 그대로 돌려줬다 — Compass 에서 단계를 바꾸고 새로고침해도 1분 동안 그대로("싱크가 안 된다").
+// runWithFreshCompassReads 안에서 부른 조회는 끝난 메모를 다시 쓰지 않고 새로 읽는다(새 결과는 메모에 넣어 다음 조회가 쓴다).
+// 이미 진행 중인 같은 조회는 그대로 공유한다 — 방금 출발한 조회라 충분히 신선하고, 연타가 원격 조회를 늘리지 않게.
+const freshReadScope = new AsyncLocalStorage<boolean>()
+
+/** fn 안의 브리지 조회가 완료된 메모를 건너뛰고 새로 읽게 한다. fresh=false 면 그냥 fn(). */
+export function runWithFreshCompassReads<T>(fresh: boolean, fn: () => T): T {
+  return fresh ? freshReadScope.run(true, fn) : fn()
+}
+
+/** ?force=1 · ?fresh=1 — 화면 새로고침 버튼이 붙이는 쿼리. */
+export function isCompassFreshRequest(url: URL): boolean {
+  const value = url.searchParams.get("force") ?? url.searchParams.get("fresh")
+  return value === "1" || value === "true"
+}
+
 /** 응답이 없는 의존성 때문에 pending 캐시가 영구히 남지 않게 한다. */
 function withMemoDeadline<T>(read: Promise<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -220,7 +239,9 @@ function withMemoDeadline<T>(read: Promise<T>): Promise<T> {
 function memoize<T>(key: string, fn: () => Promise<T>, options: MemoizeOptions<T>): Promise<T> {
   const now = Date.now()
   const existing = memoStore.get(key) as MemoEntry<T> | undefined
-  if (existing && existing.expiresAt > now) {
+  // fresh 범위에서는 끝난 메모(expiresAt 이 유한값)를 버린다. 진행 중(Infinity)은 공유한다.
+  const wantsFresh = freshReadScope.getStore() === true
+  if (existing && existing.expiresAt > now && !(wantsFresh && existing.expiresAt !== Infinity)) {
     return existing.promise.then(options.copy)
   }
 
@@ -288,6 +309,29 @@ function truncateIsoToMinute(iso: string): string {
 const TTL_MS = 60_000
 const TTL_DOWN_MS = 10_000
 
+/** 청크 동시 조회 상한 — 원격 부하를 순차에 가깝게 두면서 메모 마감(10초) 안에 끝나게. */
+const CHUNK_CONCURRENCY = 4
+
+function chunkList<T>(items: readonly T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size))
+  return chunks
+}
+
+/** 청크마다 fn 을 최대 CHUNK_CONCURRENCY 개씩 동시에 돌리고 입력 순서대로 결과를 돌려준다. */
+async function mapChunksConcurrently<C, R>(chunks: readonly C[], fn: (chunk: C) => PromiseLike<R>): Promise<R[]> {
+  const results = new Array<R>(chunks.length)
+  let next = 0
+  const worker = async () => {
+    while (next < chunks.length) {
+      const index = next++
+      results[index] = await fn(chunks[index])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CHUNK_CONCURRENCY, chunks.length) }, worker))
+  return results
+}
+
 /** phone_key 배치 조회 — 리드 보드 칩 오버레이·등록 중복 경고용. 키는 normalizePhoneKey 산출값.
  *  60초 메모(down은 10초) — 키를 정렬·중복 제거해 조인한 문자열로 키를 만들어 순서 무관하게 캐시를 탄다. */
 export async function getCompassLeadsByPhoneKeys(
@@ -341,14 +385,17 @@ export async function getCompassHomeLeadRefs(adminLeadIds: string[]): Promise<Co
       cacheKey,
       async () => {
         const sb = createSupabaseAdminClient()
-        const rows: CompassHomeLeadRefRow[] = []
-        for (let index = 0; index < ids.length; index += HOME_LEAD_REF_CHUNK) {
-          const chunk = ids.slice(index, index + HOME_LEAD_REF_CHUNK)
-          const { data, error } = await sb
+        // 청크를 몇 개씩 동시에 — 순차면 어드민 리드 수천 건(5분 크론의 신규·연락함 전부)에서 청크 수십 개가 메모 마감(10초)을
+        // 넘겨 "Compass read timeout" → 크론 전체가 bridge_down 으로 건너뛰었다.
+        const results = await mapChunksConcurrently(chunkList(ids, HOME_LEAD_REF_CHUNK), (chunk) =>
+          sb
             .from("compass_lead_refs_v")
             .select("lead_id, external_id")
             .eq("system", COMPASS_HOME_LEAD_REF_SYSTEM)
-            .in("external_id", chunk)
+            .in("external_id", chunk),
+        )
+        const rows: CompassHomeLeadRefRow[] = []
+        for (const { data, error } of results) {
           if (error) return downResult(error)
           rows.push(...((data ?? []) as CompassHomeLeadRefRow[]))
         }
@@ -371,10 +418,11 @@ export async function getCompassLeadsByIds(leadIds: number[]): Promise<CompassRe
       cacheKey,
       async () => {
         const sb = createSupabaseAdminClient()
+        const results = await mapChunksConcurrently(chunkList(ids, LEAD_ID_CHUNK), (chunk) =>
+          sb.from("compass_leads_v").select("*").in("id", chunk),
+        )
         const rows: CompassLeadRow[] = []
-        for (let index = 0; index < ids.length; index += LEAD_ID_CHUNK) {
-          const chunk = ids.slice(index, index + LEAD_ID_CHUNK)
-          const { data, error } = await sb.from("compass_leads_v").select("*").in("id", chunk)
+        for (const { data, error } of results) {
           if (error) return downResult(error)
           rows.push(...((data ?? []) as CompassLeadRow[]))
         }
@@ -619,6 +667,64 @@ export async function getCompassActivitiesByLeadIds(
         if (error) return downResult(error)
         const rows = (data ?? []) as CompassActivityRow[]
         return { ...ok(rows), total: count ?? rows.length, truncated: count == null ? rows.length >= limitPerFetch : count > rows.length }
+      },
+      { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
+    )
+  } catch (error) {
+    return downResult(error)
+  }
+}
+
+/** 학원명 후보 조회 행 — KA 진행 서술 초안용(연락처 칼럼은 읽지 않는다). */
+export interface CompassLeadByAcademyRow {
+  id: number
+  academy: string | null
+  stage: string | null
+  care_stage: string | null
+  owner: string | null
+  caller: string | null
+  bd_owner: string | null
+  next_action: string | null
+  next_action_at: string | null
+  updated_at: string | null
+}
+
+const ACADEMY_NAME_CHUNK = 12
+
+/** PostgREST or() 안의 ilike 값 — 공백은 와일드카드로, 따옴표·역슬래시는 이스케이프해 값 전체를 인용한다. */
+function academyIlikeClause(name: string): string | null {
+  const core = name.trim().replace(/[*%_]/g, "").replace(/\s+/g, "*")
+  if (!core) return null
+  const quoted = `*${core}*`.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+  return `academy.ilike."${quoted}"`
+}
+
+/**
+ * 학원명(REV 장부 고객명)으로 Compass 리드 후보를 찾는다 — 부분 일치라 후보가 여럿 나올 수 있고,
+ * 어느 리드를 쓸지는 호출부가 정규화 이름 비교로 고른다. 이름 매칭은 확정 연결이 아니라 서술 초안용 참고다.
+ */
+export async function getCompassLeadsByAcademyNames(names: string[]): Promise<CompassResult<CompassLeadByAcademyRow>> {
+  const unique = [...new Set(names.map((name) => name.trim()).filter(Boolean))].sort()
+  if (unique.length === 0) return ok([])
+  const cacheKey = `leads:byAcademy:${foldLongKey(unique.join("|"))}`
+  try {
+    return await memoize(
+      cacheKey,
+      async () => {
+        const sb = createSupabaseAdminClient()
+        const rows: CompassLeadByAcademyRow[] = []
+        for (let index = 0; index < unique.length; index += ACADEMY_NAME_CHUNK) {
+          const clauses = unique.slice(index, index + ACADEMY_NAME_CHUNK).map(academyIlikeClause).filter((clause): clause is string => clause != null)
+          if (clauses.length === 0) continue
+          const { data, error } = await sb
+            .from("compass_leads_v")
+            .select("id,academy,stage,care_stage,owner,caller,bd_owner,next_action,next_action_at,updated_at")
+            .or(clauses.join(","))
+            .limit(500)
+          if (error) return downResult(error)
+          rows.push(...((data ?? []) as CompassLeadByAcademyRow[]))
+        }
+        return ok(rows)
       },
       { ttlMs: TTL_MS, downTtlMs: TTL_DOWN_MS, isDown: isCompassResultDown, copy: copyCompassResult },
     )

@@ -56,6 +56,7 @@ export default async function SharedQuotePage({ params }: PageProps) {
     customerName: customer_name,
     validUntil: version.valid_until,
   })
+  const showDiscount = version.discount_amount > 0 && quoteDetails?.showDiscountDetails !== false
 
   const deal = await getDeal(document.deal_id).catch(() => null)
   // 어드민에 로그인한 직원이 연 것은 고객 열람이 아니다. 작성기 '미리보기'·상세의 '고객 화면' 버튼이
@@ -133,10 +134,11 @@ export default async function SharedQuotePage({ params }: PageProps) {
           <div>
             <p className="text-xs uppercase tracking-wider text-[#1a1a1a]/45">총 금액</p>
             <p className="mt-1 text-2xl font-semibold text-[#1a1a1a]">{formatKRW(version.total_amount)}</p>
-            {(version.discount_amount > 0 || version.tax_amount > 0) && (
+            {(showDiscount || version.tax_amount > 0) && (
               <p className="mt-1 text-xs text-[#1a1a1a]/50">
-                {version.discount_amount > 0 ? `할인 ${formatKRW(version.discount_amount)} · ` : ""}
-                부가세 {formatKRW(version.tax_amount)}
+                {showDiscount ? `할인 ${formatKRW(version.discount_amount)}` : ""}
+                {showDiscount && version.tax_amount > 0 ? " · " : ""}
+                {version.tax_amount > 0 ? `부가세 ${formatKRW(version.tax_amount)}` : ""}
               </p>
             )}
           </div>

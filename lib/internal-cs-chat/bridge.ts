@@ -84,6 +84,60 @@ export function signInternalCsBridgeBody(rawBody: string, secret: string) {
   return createHmac("sha256", secret).update(rawBody).digest("hex")
 }
 
+// 재전송 방지: 서명 대상에 요청 시각(초, x-internal-cs-timestamp)을 묶는다.
+// 서명 문자열은 `${timestamp}.${rawBody}`. 시각 없는 기존 서명(본문만)은 전환 기간 동안 계속 받는다.
+export const INTERNAL_CS_BRIDGE_TIMESTAMP_TOLERANCE_SECONDS = 5 * 60
+
+export function signInternalCsBridgeTimestamped(rawBody: string, timestamp: string, secret: string) {
+  return createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex")
+}
+
+export type InternalCsBridgeAuthResult =
+  | { ok: true; mode: "timestamped" | "legacy" }
+  | { ok: false; reason: "bad_signature" | "bad_timestamp" | "timestamp_required" }
+
+/**
+ * 웹훅 인증. 시각 헤더가 있으면 시각을 묶은 서명을 검사하고 ±5분 창을 강제한다.
+ * 시각 헤더가 없으면(전환 기간) 본문만 서명한 기존 방식을 받되 mode: "legacy" 로 알려 호출자가 경고를 남기게 한다.
+ * requireTimestamp 가 true 면 시각 없는 요청을 거절한다(전환 종료 후).
+ */
+export function authenticateInternalCsBridgeRequest(input: {
+  rawBody: string
+  signatureHeader: string | null
+  timestampHeader: string | null
+  secret: string
+  now?: number
+  requireTimestamp?: boolean
+}): InternalCsBridgeAuthResult {
+  const timestamp = input.timestampHeader?.trim() ?? ""
+  if (!timestamp) {
+    if (input.requireTimestamp) return { ok: false, reason: "timestamp_required" }
+    return verifyInternalCsBridgeSignature(input.rawBody, input.signatureHeader, input.secret)
+      ? { ok: true, mode: "legacy" }
+      : { ok: false, reason: "bad_signature" }
+  }
+  if (!/^\d{9,13}$/.test(timestamp)) return { ok: false, reason: "bad_timestamp" }
+  // 밀리초(13자리)로 보낸 발신자도 받아 준다.
+  const seconds = timestamp.length >= 13 ? Math.floor(Number(timestamp) / 1000) : Number(timestamp)
+  const nowSeconds = Math.floor((input.now ?? Date.now()) / 1000)
+  if (!verifyHexSignature(input.signatureHeader, signInternalCsBridgeTimestamped(input.rawBody, timestamp, input.secret))) {
+    return { ok: false, reason: "bad_signature" }
+  }
+  if (Math.abs(nowSeconds - seconds) > INTERNAL_CS_BRIDGE_TIMESTAMP_TOLERANCE_SECONDS) {
+    return { ok: false, reason: "bad_timestamp" }
+  }
+  return { ok: true, mode: "timestamped" }
+}
+
+function verifyHexSignature(signatureHeader: string | null, expected: string) {
+  if (!signatureHeader) return false
+  const signature = signatureHeader.trim().replace(/^sha256=/i, "").toLowerCase()
+  if (!/^[0-9a-f]{64}$/.test(signature)) return false
+  const actualBuffer = Buffer.from(signature, "hex")
+  const expectedBuffer = Buffer.from(expected, "hex")
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer)
+}
+
 export function verifyInternalCsBridgeSignature(
   rawBody: string,
   signatureHeader: string | null,

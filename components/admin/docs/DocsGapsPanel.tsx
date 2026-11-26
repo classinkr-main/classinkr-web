@@ -53,6 +53,8 @@ interface GapClusterMetadata {
   // (string & {})로 계약된 리터럴 힌트를 유지하면서 알 수 없는 값도 허용한다.
   source?: "chatbot_mvp_exact_match" | "internal_cs_fallback" | "internal_cs_review" | (string & {})
   internalCs?: GapClusterInternalCsRef[]
+  notHelpfulCount?: number
+  occurrenceCount?: number
 }
 
 interface GapCluster {
@@ -631,6 +633,12 @@ export default function DocsGapsPanel() {
                       </span>
                       {cluster.category && <span>{cluster.category}</span>}
                       <span>샘플 {cluster.sampleCount}건</span>
+                      {typeof cluster.metadata?.notHelpfulCount === "number" &&
+                        cluster.metadata.notHelpfulCount > 0 && (
+                          <span className="rounded-full bg-[#B91C1C]/10 px-2 py-0.5 text-[11px] font-medium text-[#B91C1C]">
+                            부정 피드백 {cluster.metadata.notHelpfulCount}건
+                          </span>
+                        )}
                       <span>·</span>
                       <span>{cluster.status}</span>
                     </div>

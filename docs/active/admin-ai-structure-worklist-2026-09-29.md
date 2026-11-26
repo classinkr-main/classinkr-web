@@ -1,6 +1,6 @@
 # 갈매봇 구조와 작업 리스트 (2026-09-29)
 
-상태: 실행 로드맵. 프론트 1차는 끝났고 서버는 착수 전이다.
+상태: 실행 로드맵. 프론트 1차는 끝났고 **서버 1단계(B6 — 조회·묻기, 쓰기는 미리보기·사람 확인)가 들어왔다(§4.1, 2026-11-25)**. 2026-11-25: 갈매봇 점검 결과로 §1·§2.3·§2.7·§3·작업 순서를 갱신했고, 작업 순서는 S1′→S2에서 **묶음 B1~B7**로 바꿨다(§4 끝). 사용자가 아직 정하지 않은 항목은 "결정 대기"(기획 §9.1)다.
 기준 문서: [갈매봇 위젯·원격 오더 기획](admin-ai-widget-remote-order-plan-2026-09-28.md) — 무엇을·왜는 그 문서가 정본이고, 이 문서는 어떤 구조로·어떤 순서로 만드는지만 다룬다.
 조사 방식: 조회·쓰기 후보 함수, 인증·감사, LLM·스트리밍, 마이그레이션·테스트 관례를 코드에서 대조했다. 확인하지 못한 것은 "확인 못 함"으로 적었다.
 
@@ -12,14 +12,17 @@
 
 ## 1. 지금 있는 것과 없는 것
 
+**선행 사실(2026-11 점검).** 이 문서 이후 **홈 MCP**(`app/api/mcp/route.ts`, `lib/mcp/server.ts`·`tools.ts`, 읽기 8 · 쓰기 2)가 들어왔다. 갈매봇이 쓸 조회 함수와 같은 업무 함수를 이미 외부 AI 클라이언트에 도구로 내놓고 있어서, **S1-2(레지스트리)는 MCP 도구를 `lib/ops-tools/`로 옮겨 정본을 하나로 만드는 일이 선행**이다(기획 §6.5). 그렇지 않으면 등급·권한·마스킹이 두 벌이 된다.
+
 | 층 | 상태 | 위치 |
 |---|---|---|
 | 화면(위젯·탭·카드) | 있음 | `components/admin/ai/`, `app/admin/ai/` |
 | 화면 상태·오더 상태 전이 | 있음 | `lib/admin-ai/store.ts`, `order-state.ts` |
 | 대화 클라이언트 경계 | 있음(시안 구현만) | `lib/admin-ai/client.ts` |
-| 대화 API · 조율기 · LLM 도구 호출 | **없음** | — |
-| 오더 레지스트리 · 핸들러 | **없음** | — |
-| 오더 저장소 · 확인 API | **없음** | — |
+| 대화 API · 조율기 | **있음(B6, 결정형)** — 모델 연결은 인터페이스와 가짜만 | `app/api/admin/ai/chat`, `lib/admin-ai/server/` |
+| 오더 레지스트리 · 핸들러 | **없음** — 단, 홈 MCP가 도구 층 하나를 따로 갖고 있다 | `lib/mcp/tools.ts` |
+| 묻기(지식·담당자·링크) 결정형 함수 | **없음** — 재료는 있다(`escalation-routing.ts`, `context.ts`, `admin-nav.ts`) | B2·B4 |
+| 오더 저장소 · 확인 API | 확인 API는 **있음(B6, DB 표 없이 서명 표)**, 오더 저장소는 없음 | `app/api/admin/ai/orders/confirm`, `lib/admin-ai/server/tickets.ts` |
 
 ## 2. 구조
 
@@ -92,6 +95,8 @@ tests/admin-ai/  tests/api/admin-ai-*.test.ts
 | 메타 | `lib/admin-ai/order-catalog.ts` (공용) | id, 도메인, 이름, 등급, 민감 여부, 되돌리기 방식, 역할 묶음 이름 |
 | 핸들러 | `lib/admin-ai/server/orders/*` (서버) | 입력 스키마, preview, execute, undo |
 
+**갱신(2026-11).** 도구 정의의 정본은 `lib/ops-tools/registry.ts`(신설, server-only)다. 이 표의 "핸들러"는 거기로 모이고, MCP(`lib/mcp/tools.ts`)와 갈매봇이 각각 얇은 어댑터가 된다. R0는 `run` 하나, R1 이상은 `resolveTarget`·`preview`·`execute`·`undo`로 나누며 `run`을 두지 않는다. 오더 id 집합 = MCP ∪ 갈매봇 집합이 레지스트리와 같다는 시험을 둔다. (현재 구현(B3): 레지스트리 등급은 R0 조회 `run`·R1 등록 `preview`/`execute` 둘뿐이고 `resolveTarget`·`undo` 는 아직 없다 — [홈페이지 MCP 운영](home-mcp-operations.md). 카탈로그(`lib/admin-ai/order-catalog.ts`)의 R0~R4 는 확인 단계 척도라 숫자가 다를 수 있다 — 예: `hw_plan_movement` 는 레지스트리 R1, 카탈로그 `hardware.movement.plan` R2. 카탈로그 mcp 칸과 `OPS_TOOLS` 의 이름·조회/쓰기 구분 일치는 `tests/admin-ai/catalog-and-context.test.ts` 가 본다.)
+
 테스트로 고정할 것: 메타에 있는 id 와 핸들러가 등록된 id 가 같은 집합이다. 등급은 메타에만 있고 핸들러는 그것을 읽는다 — 등급이 두 군데에 적히지 않게 한다.
 
 ### 2.4 오더 정의
@@ -143,6 +148,8 @@ interface OrderHandler<Input, Snapshot = unknown> {
 
 ### 2.7 보호
 
+**MCP 토큰의 scope와 계정 결합(결정 1·2 대기).** 외부 입구(MCP)에는 토큰마다 scope(읽기·쓰기)와 만료, 연결된 어드민 계정을 둔다. 1단계는 환경변수 줄 형식 `이름:토큰:scope:만료:adminEmail`, 쓰기 scope는 기본 꺼짐이다. `internal` 플래그는 scope로만 켠다. 토큰이 DB 해시(`mcp_tokens`)로 옮겨 가는 것은 B5 뒤다(퇴사·권한 회수를 바로 반영하려고). 직원 개인 AI 계정으로 고객 연락처가 나가지 않도록 응답 직렬화 직전에 공통 가림을 적용한다(결정 7).
+
 | 항목 | 방식 | 근거 |
 |---|---|---|
 | 인증 | 모든 라우트가 `requireVerifiedAdminContext` | 가드 전수 테스트가 자동 검사 |
@@ -158,6 +165,16 @@ interface OrderHandler<Input, Snapshot = unknown> {
 ## 3. 조사에서 나온 사실
 
 ### 3.1 조회(R0)에 쓸 함수
+
+**묻기 3종(R0, 모델 없이 결정형으로 먼저 낸다).**
+
+| 묻기 | 함수 | 읽는 곳 | 비고 |
+|---|---|---|---|
+| `knowledge.ask`(A) | `buildInternalEvidence()` — `context.ts`에서 export(신설, 기존 코파일럿 출력은 그대로) | 큐레이션 지식·사고 이력·공개 문서·내부 문서 근거를 구조화한 부품 | 답 색인은 참고 칸. 상담 사례는 수만 보인다 |
+| `contact.who`(D) | `resolveContact(text, { customerId? })` — 고객·딜 owner → HQ 도메인 → KR 표(없으면 기본 답) | 담당표(시드 전까지 server-only 상수, 결정 3·5 뒤 DB) | 담당자 이름은 server-only(결정 6) |
+| `link.find`(C) | `lib/admin-ai/links.ts` — 어드민 고정층(`ADMIN_NAV`·팔레트 자식)과 공개 정적 경로·브로셔 URL | 허용 목록(`link_id`)만. 모델은 `link_id`만 고른다 | 고객용은 `SITE_URL` 절대화(결정 9) |
+
+MCP 읽기 도구(견적 조회 `quote.read`·하드웨어 매출 `hardware.sales.read`·사이트 방문 `site.traffic.read`)도 같은 레지스트리의 R0로 들어온다. 쓰기 쪽 `quote.draft.create`는 R1(할인 지시만 받음, 결정 8), 하드웨어 이동 `hw_plan_movement`는 품목 id가 정확히 일치할 때만 동작한다.
 
 | 오더 | 함수 | 기존 역할 묶음 |
 |---|---|---|
@@ -281,21 +298,101 @@ interface OrderHandler<Input, Snapshot = unknown> {
 
 | id | 작업 | 파트 | 선행 | 끝났다는 기준 |
 |---|---|---|---|---|
-| F-1 | 화면이 열린 대상을 알리는 훅 + CRM 고객 상세 · 리드 서랍 · 견적 상세 · 하드웨어 품목에 적용 | 어드민 코어 + 각 도메인 | — | "이 학원" 이 맥락의 대상으로 풀린다 |
+| F-1 | 화면이 열린 대상을 알리는 훅(**B1 골격 구현**: `useAdminAiEntity`) + CRM 고객 상세 · 리드 서랍 · 견적 상세 · 하드웨어 품목에 적용(남음, 각 화면 소유 파트) | 어드민 코어 + 각 도메인 | — | "이 학원" 이 맥락의 대상으로 풀린다 |
 | F-2 | 화면이 우하단 사용량을 알리는 훅(경로 표 대체), 오른쪽 서랍이 열리면 비켜남 | 어드민 코어 | — | `floating-slots.ts` 의 경로 표 삭제 |
 | F-3 | ⌘K 에서 갈매봇으로 넘기는 항목(전역 · CRM 팔레트) | 어드민 코어 | — | 맞는 화면이 없을 때 마지막 줄에 나온다 |
-| F-4 | 모바일 시트의 포커스 가두기, 키보드가 올라올 때 높이 | 어드민 코어 | — | 실제 기기에서 확인 |
-| F-5 | 갈매봇 그림의 디자인 규칙 예외 등재 | 어드민 코어 | 기획 §12-4 | `DESIGN.md` 에 마스코트 항목 |
+| F-4 | 모바일 시트의 포커스 가두기(**B1 구현**), 키보드가 올라올 때 높이(남음) | 어드민 코어 | — | 실제 기기에서 확인 |
+| F-5 | 갈매봇 그림의 디자인 규칙 예외 등재 — "마스코트 그림 한정, 화면 크롬은 불가" 한 줄 | 어드민 코어 | 기획 §12-4, 디자인 문서 소유자 동의 | `DESIGN.md` 에 마스코트 항목(B1에서는 고치지 않음) |
 | F-6 | 단축키 `Ctrl/⌘ + J` 의 브라우저 충돌 확인 | 어드민 코어 | — | Chrome · Edge · Safari |
 
-### 순서
+### 순서 (2026-11 갱신 — 묶음 B1~B7)
+
+점검 결과로 "S1′(테이블 없이 묻기·조회) → S2(티켓)" 순서를 아래 묶음으로 바꿨다. 각 묶음은 모델·DB 의존이 낮은 것부터다.
+
+| 묶음 | 내용 | 모델·DB | 선행 |
+|---|---|---|---|
+| **B1** | 위젯 안전·새 대화·묻기 시안·기획 문서 갱신 — 오더함 카드 경유, 질문형 판정 선행, 운영 차단, 접근성, 새 대화 N1~N5(1단계)·N7·N8, `useAdminAiEntity` 골격 | 없음 | — |
+| B2 | 담당자·지식 근거의 서버 전용화와 정확도 — `escalation-routing` server-only, `resolveContact`, `buildInternalEvidence` | 없음 | — |
+| B3 | 홈 MCP 보강과 공용 도구 레지스트리(`lib/ops-tools`) — scope·만료·가림·멱등 | 없음 | — |
+| B4 | 링크 레지스트리와 묻기 답 카드 3종(`answer`·`links`·`contact`) | 없음 | B1 |
+| B5 | DB 마이그레이션 — 담당표·MCP 토큰·오더·대화 | DB | B2 |
+| B6 | 갈매봇 서버 1단계: 대화 API·조율기·결정형 폴백(조회·묻기, 쓰기 없음), `liveAdminAiClient` | 모델 선택 | B1·B2·B3·B4 |
+| B7 | 쓰기 티켓·확인 API, MCP 쓰기의 티켓화, 오더함·대화 서버 저장(N6) | DB | B3·B5·B6 |
+
+F-1(맥락 훅)은 B1에서 **골격**(`useAdminAiEntity`·등록부)이 들어갔다. 화면 연결은 각 화면 소유 파트의 일로 남는다. F-4(모바일 시트 포커스 가두기)는 B1에서 구현했다.
+기존 S0~S5 표는 작업 단위의 상세로 남긴다. 순서는 위 묶음이 정한다.
 
 ```
-S0 ─▶ S1 ─▶ (운영에서 켜기 가능) ─▶ S2 ─▶ S3 ─▶ S4 ─▶ S5
-F-1 · F-2 · F-3 은 S1 과 나란히 진행할 수 있다. F-1 은 S1-7 의 품질을 올린다.
+B1 ─▶ B4 ─┐
+B2 ─▶ B5 ─┼─▶ B6 ─▶ B7
+B3 ────────┘
 ```
+
+### 4.1 서버 1단계 구현 현황 (B6, 2026-11-25)
+
+**되는 것**
+
+| 영역 | 무엇이 되나 | 코드 |
+|---|---|---|
+| 대화 API | `POST /api/admin/ai/chat` — `requireVerifiedAdminContext`(CRM 스태프 역할: SUPER_ADMIN·ADMIN·BRANCH·EDITOR), 계정별 분당 20회, NDJSON 스트림(step·block·order·done·error), `maxDuration` 60. 본문 `{ messages(최근 12개), pageContext? }` | `app/api/admin/ai/chat/route.ts`, `lib/admin-ai/server/request.ts`, `lib/admin-ai/stream-protocol.ts` |
+| 갈래 | 모델 없는 결정형이 기본. 메시지를 질문 조각(최대 4)으로 나누고 조각마다 묻기·담당자·링크·조회·쓰기·모름으로 가른다. 묻는 대상과 묻는 꼴을 함께 점수로 보며, 쓰기는 문장 끝의 시키는 꼴이 분명할 때만. 요청 갈래 둘이 가까우면 되묻기 카드(후보 2개). 시안의 질문 33·명령 8 표를 서버 시험이 같이 쓴다 | `lib/admin-ai/server/router.ts`, `orchestrator.ts`, `tests/admin-ai/fixtures/intent-table.ts` |
+| 묻기(클래스인 정보) | `answerKnowledge(question, deps)` — 두괄식(결론 한 문장 → 방법 한 단계 한 줄 → 조건·주의), 확정/확인 필요 배지, 근거 출처(링크 목록 id만), 답 색인 상위 카드는 "고객용 문안" 칸(fixed·policy 카드, conf ≥ 0.7, 정책 질문엔 정책 카드만), 근거가 없으면 "근거를 찾지 못했습니다" + 담당자 + 코파일럿 링크 | `lib/admin-ai/server/knowledge.ts`, `deps.ts` |
+| 담당자·링크 | `resolveContact`(열린 고객 먼저)·`findLinks` 를 카드로. 링크 목록에 맞는 화면이 없으면 근거 문서 답으로 넘긴다 | `lib/admin-ai/server/contact.ts` |
+| 조회 | `lib/ops-tools` R0 도구(재고·입출고·판매·딜·견적·방문)를 스태프 행위자로 실행기를 거쳐 부른다. 요약 한 줄(두괄식, 통화·단위) + 표 + 해당 어드민 화면 링크. 도구가 없는 조회(결제·문자 이력·할 일·통화 기록·리드 상태)는 "아직 준비 중 — 화면에서" 카드 | `lib/admin-ai/server/tools.ts`, `actor.ts` |
+| 쓰기 | 견적 초안(`quote_create_draft`)·HW 배송 예정(`hw_plan_movement`)만. 조율기는 **preview 만** 부르고 오더 카드(서버 계산 금액)를 낸다. 실행은 아래 확인 경로에서만 | `lib/admin-ai/server/writes.ts` |
+| 확인 | `POST /api/admin/ai/orders/confirm` — 서명·만료(15분)·행위자 일치 → 역할 재검사 → 실행기(`idempotency_key` = 표 id) → 실행 직전 preview 를 다시 계산해 서명된 요약과 대조 → **표 사용 표시(여러 서버가 함께 보는 저장소에 원자적으로 한 번)** → 실행 → 감사(도구 감사 + `logAdminAudit` `admin_ai.order.confirm`). 표시가 이미 있으면 실행하지 않고 409 "이미 처리된 확인입니다 — 결과는 화면에서 확인하세요"(화면 링크). **이 경로는 모델 어댑터·조율기를 import 하지 않는다**(모듈 그래프 시험) | `lib/admin-ai/server/confirm.ts`, `tickets.ts`, `ticket-claims.ts` |
+| 화면 | `liveAdminAiClient` 가 스트림을 기존 블록·카드로 그린다. 서버 오더의 확인은 서버 답으로만 완료·실패. 답 카드에 방법·주의·고객용 문안 칸 | `lib/admin-ai/client.ts`, `store.ts`, `components/admin/ai/cards/*` |
+
+**스위치·환경변수(사용자가 정하고 넣는다)**
+
+| 이름 | 어디 | 뜻 |
+|---|---|---|
+| `NEXT_PUBLIC_ADMIN_AI_LIVE` | 빌드·서버 | `"1"` 이면 실제 모드 — 위젯이 서버와 대화하고 `/api/admin/ai/chat`·`/orders/confirm` 이 열린다. 아니면 404 이고 위젯은 시안 스위치를 따른다. 판정은 `lib/admin-ai/preview.ts` `adminAiMode()` 한 곳. 운영에서도 켤 수 있다(실제 자료) — 켜는 결정은 사용자 몫 |
+| `NEXT_PUBLIC_ADMIN_AI_PREVIEW` | 빌드 | 기존 시안 스위치. 실제 스위치가 꺼져 있고 운영이 아닐 때만 시안 |
+| `ADMIN_AI_TICKET_SECRET` | 서버 비밀(32자 이상) | 쓰기 확인 표 서명. **없으면 쓰기는 미리보기까지만**이고 카드는 확인 버튼 대신 "화면에서 직접 등록" 링크다. 바꾸면 발급된 표가 모두 무효가 된다 |
+| `UPSTASH_REDIS_REST_URL`·`UPSTASH_REDIS_REST_TOKEN` | 서버 비밀 | 표 일회용 판정 저장소 — 분산 요청 제한(`lib/server/rate-limit.ts`)과 같은 연결(`lib/server/upstash.ts`). **없으면 로컬 개발·시험 말고는 쓰기 확인을 열지 않는다**(표를 발급하지 않고 카드는 "화면에서 직접 등록", 확인 경로는 503 `claim_store_missing`). Vercel 운영·미리보기, 자체 호스팅 `next build && next start`, `NODE_ENV` 가 없거나 다른 값인 곳이 모두 닫힌다. 인스턴스 메모리로 대신하는 곳은 `NODE_ENV` 가 `development`·`test` 이고 `VERCEL_ENV` 가 `production`·`preview` 가 아닐 때뿐이다(값은 앞뒤 공백·대소문자를 다듬어 비교, `allowsMemoryClaims`). 그때는 응답(`claimStore: "memory"`)·로그에 표시한다 |
+
+**배포(운영·미리보기·자체 호스팅)에서 쓰기(확인 버튼)를 여는 조건**: `ADMIN_AI_TICKET_SECRET` + `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` 셋 다(그리고 `NEXT_PUBLIC_ADMIN_AI_LIVE=1`). 판정은 `lib/admin-ai/server/ticket-claims.ts` `readConfirmSetup()` 한 곳 — 대화 쪽 카드의 표 발급과 확인 라우트가 같이 쓴다.
+
+역할: 대화·조회는 CRM 스태프 역할, 견적 초안은 견적 API 와 같은 역할 묶음, HW 배송 예정은 HW 출고 등록 API 와 같은 역할 묶음(`lib/admin-ai/server/actor.ts`). 연락처 원문은 SUPER_ADMIN·ADMIN 화면에만, 모델 입력은 늘 가린다.
+
+**쓰기 확인 방식과 한계(DB 표 없음)**
+
+- 표 = `{표 id, 도구, 인자, 인자 지문, 미리보기 요약 해시, 만료, 행위자}` 를 HMAC-SHA256 으로 서명한 문자열. 카드에 싣고 확인 때 그대로 돌려받는다. 인자는 서명만 하고 암호화하지 않는다(본인이 방금 미리본 값).
+- **표는 한 번만 쓴다(2026-11-25, 사용자 결정 "지금 막기")** — 확인 때 실행 직전에 표 id 를 Upstash 에 `SET admin-ai:ticket-used:<표 id> 1 NX PX 1200000`(표 만료 15분 + 여유 5분)으로 적는다. 적기에 성공한 요청만 실행한다. 이미 있으면(다른 서버·같은 서버·동시 요청) 실행하지 않고 409 `already_processed` — 같은 결과를 다시 돌려주지 않는다. 카드는 "이미 처리됨 · 결과는 화면에서 확인하세요" + 화면 링크로 바뀐다.
+- 저장소 오류(연결 실패·시간 초과)면 실행하지 않고 503 `claim_store_unavailable` — 실패하면 닫힌다.
+- **실행이 실패해도 표시는 그대로 둔다** — 같은 표를 다시 보내면 409 다(다시 누르면 중복 위험). 실패 답은 `consumed: true` 이고 카드는 "새 미리보기로 다시 확인"을 안내한다. 사용자는 다시 요청해 새 미리보기(새 표)를 받아 확인한다.
+- 표시 앞의 검사(서명·만료·계정·역할·미리보기 대조)에서 걸리면 표시는 남지 않는다. 오더함은 새로고침하면 사라진다(서버 이력 없음).
+- 되돌리기는 이번 범위가 아니다 — 카드에 "되돌리기는 화면에서".
+- 문자 발송·결제 확정·금액 변경·리드 변경·할 일·삭제 등 다른 오더는 "아직 준비 중 — 화면에서" 카드다.
+
+**검토 고침(2026-11-25, 서버 1단계 검토)**
+
+| 무엇 | 어떻게 | 코드·시험 |
+|---|---|---|
+| 결론이 질문에 대한 답인가 | 1순위 근거와 결론 문장을 질문 낱말(조사·어미를 덜고, 일반어는 반만)과 겹치는 정도로 고른다. 정리 지식을 무조건 앞세우지 않는다. 겹침이 질문 무게의 60% 미만이면 "근거를 찾지 못했습니다" | `knowledge.ts`, `tests/admin-ai/server/knowledge-relevance.test.ts`(실제 정리 지식) |
+| 질문 둘이면 둘 다 | 쉼표 없는 "…알려 주고 …", "…등록하고 … 만들어 줘", "A 목록이랑 B 목록 보여 줘"를 끊는다(양쪽 꼴을 본 뒤에만). 앞 조각은 원형 꼬리로 되돌린다("설명해 주고" → "설명해 줘"). 조각 4개를 넘으면 "나머지는 다시 물어봐 주세요" 한 줄. 쓰기 둘이면 둘째는 "한 번에 하나" | `router.ts`, `orchestrator.ts`, `router-recall.test.ts`, `orchestrator-compound.test.ts` |
+| 조회 재현율·미끼 | "몇 명", "뭐야", 명사로 끝나는 조회(재고·품목·현황…), "출고된", "주문 권장"을 조회로. "…만드는 법"은 지식, "누가 …했는지"는 담당자가 아니다. "화면·페이지 어디 있어"는 링크 | `router.ts` |
+| 링크 | "화면·메뉴·페이지"는 어드민 링크 먼저, "공개·고객용"은 공개 주소 먼저. 낱말 절반 이상이 맞아야 낸다. 링크를 청했으면 지식과 같은 점수일 때 링크 | `contact.ts`, `router.ts` |
+| 기간 말 | 오늘·어제·이번/지난 주·이번/지난달·올해·최근 N일(KST). 입출고는 기간으로 거른다(100건 안). 견적 목록은 기간을 거르지 못해 기간을 물으면 합계를 결론으로 내지 않는다. 방문 비교는 화면으로 | `tools.ts`, `tools-period.test.ts` |
+| 끊김·시간 | 클라이언트: done 없이 끝나거나 연결이 끊기면 받은 블록 + "답이 중간에 끊겼습니다", 전체 45초 상한. 조율기: 조각마다 15초 상한 → "시간이 넘었습니다 — 화면에서" 카드 | `client.ts`, `orchestrator.ts`, `live-client.test.tsx` |
+| 겉모양 | 한 턴 안에서 같은 담당자·코파일럿 카드는 한 번. 뒤 조각이 담당자를 물으면 앞 조각의 담당자 카드는 뺀다. 표의 상태 코드는 한국어 이름표 | `orchestrator.ts`, `tools.ts` |
+| 실제 모드 첫 화면 | 시안 시나리오 문장(표본 기관 이름) 대신 실제로 되는 일만, 기관 이름 없는 문장으로 추천. 사이드바 "시안" 배지는 실제 모드에서 뺀다 | `suggestions.ts`, `AdminAiHome.tsx`, `admin-nav.ts`, `live-suggestions.test.ts` |
+| 확인 경로의 import | 공용 레지스트리 대신 쓰기 정의만 담은 표(`write-tools.ts`). 그래프 시험이 `lib/chatbot/llm`·`service`·`internal-cs-chat/gemini`·레지스트리를 금지 | `confirm/route.ts`, `writes-confirm.test.ts` |
+| 입력 | 화면 맥락 경로의 `..`·`//`·역슬래시 거절, 연락처 꼴 이름표는 비움, 본문 64KB 넘으면 413. 계정 id 없는 세션의 행위자 키는 출처·역할·이름 해시 | `request.ts`, `chat/route.ts`, `actor.ts`, `input-guards.test.ts` |
+
+**검토 안전-2(같은 표 동시 실행) — 닫음(2026-11-25)**: 사용자 결정 "지금 막기"로 위 일회용 판정을 넣었다. 로컬 개발·시험이 아닌 모든 곳에서 쓰기를 열려면 표 비밀과 분산 저장소가 둘 다 있어야 하고(위 조건), 하나라도 없으면 확인 버튼이 나오지 않는다. 반박 확인 고침: 처음에는 `VERCEL_ENV === "production"` 한 값만 닫아서 자체 호스팅 운영(`NODE_ENV=production`, `VERCEL_ENV` 없음)·Vercel 미리보기·`" production"` 같은 어긋난 값이 메모리로 열렸다 — 이제 메모리를 허용할 곳(로컬 `next dev`·시험)을 좁게 적고 나머지는 닫는다. 시험: `tests/admin-ai/server/writes-confirm.test.ts`(동시 두 번 → 실행 1회·409, 순서대로 두 번 → 둘째 409, 저장소 없음 + Vercel 운영·미리보기·자체 호스팅 운영·값 없음·어긋난 값 → 표 없음·503, 저장소 있으면 운영·미리보기 모두 분산, 로컬 개발·시험 → 메모리, 저장소 오류 → 503, 실행 실패 뒤 → 409), `tests/admin-ai/live-client.test.tsx`(카드 "이미 처리됨").
+
+**아직인 것**
+
+- 모델 연결(Vertex·Claude): `lib/admin-ai/server/llm/adapter.ts` 인터페이스(`route`·`pick`)와 시험용 가짜만 있다. `getAdminAiModelAdapter()` 는 늘 null — 키·공급자 결정(기획 §9.1 결정 11) 뒤에 붙인다.
+- 답 색인 doc 카드(문서 문장 조립)·howto 카드는 고객용 문안으로 쓰지 않는다(공개 챗봇 서비스 조립 함수가 필요하다). 상담 사례 건수는 deps 칸만 있고 기본 연결은 꺼져 있다(임베딩 검색 비용·R17 범위 결정 전).
+- CRM 조회(고객 360·오늘 후속조치)·화면 이동 도구·장애 화면(S1-7·S1-10·S1-13), 위컴 방 어댑터(조율기는 화면과 무관한 `runTurn`·`collectTurn` 이라 그대로 부를 수 있다).
+- B7: 오더 저장소·취소·되돌리기·MCP 쓰기의 표 통일·오더함 서버 영속.
 
 ## 5. 아직 정해지지 않은 것
+
+2026-11 점검에서 새로 생긴 결정 13개는 기획 [§9.1](admin-ai-widget-remote-order-plan-2026-09-28.md#91-갈매봇-점검-결정-대기-2026-11-25)에 질문·선택지·추천과 함께 모았다(**결정 대기**). 이 표의 항목과 겹치는 것은 D4·D6 정도다.
 
 | 질문 | 막는 작업 |
 |---|---|

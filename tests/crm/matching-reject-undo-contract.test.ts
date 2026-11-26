@@ -9,6 +9,11 @@ const client = readFileSync(
   "utf8"
 )
 const repository = readFileSync(join(process.cwd(), "lib/repositories/crm-source-links.ts"), "utf8")
+// 확정·제외·되돌리기 상태·잠금은 매출시트와 공용 훅으로 옮겼다(P2) — 잠금 계약은 훅에서 본다.
+const actionsHook = readFileSync(
+  join(process.cwd(), "components/admin/crm/matching/useSourceLinkActions.ts"),
+  "utf8"
+)
 
 describe("매칭 인박스 — 제외 되돌리기", () => {
   it("rejected 행도 되돌리기(stale) 액션을 렌더한다", () => {
@@ -18,9 +23,11 @@ describe("매칭 인박스 — 제외 되돌리기", () => {
   })
 
   it("행별 Set 잠금을 유지한다 — 스칼라 잠금으로 되돌아가지 않는다", () => {
-    expect(client).toContain("useState<Set<string>>(() => new Set())")
+    expect(client).toContain("useSourceLinkActions<CrmMatchingRow>(")
+    expect(actionsHook).toContain("useState<Set<string>>(() => new Set())")
     expect(client).toContain("disabled={pendingLinkIds.has(row.linkId as string)}")
     expect(client).not.toContain("pendingLinkId ===")
+    expect(actionsHook).not.toContain("pendingLinkId ===")
   })
 
   it("서버 stale 액션은 rejected 에도 상태 가드 없이 적용된다", () => {

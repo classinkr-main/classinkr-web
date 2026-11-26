@@ -202,9 +202,12 @@ describe("admin command palette — 2026-09-25 탭 정리", () => {
   })
 })
 
-// 불변식 — 사이드바 배치·숨김(기본 숨김 포함)은 ⌘K 도달성을 절대 줄이지 않는다.
-// 팔레트는 getAccessibleAdminNavItems 를 거치고, 그 함수는 항상 ADMIN_NAV 전체를 돌려줘야 한다.
-describe("admin command palette — 숨긴 탭도 ⌘K 에서 검색된다", () => {
+// 불변식(전체 사이드바 계정) — 사이드바 배치·숨김(기본 숨김 포함)은 ⌘K 도달성을 줄이지 않는다.
+// getAccessibleAdminNavItems 는 어느 계정에서든 항상 ADMIN_NAV 전체를 돌려줘야 한다.
+// 2026-11-20 부터 간소 사이드바 계정의 ⌘K 는 숨긴 탭을 뺀다 — 아래 "간소 사이드바 계정" describe.
+const FULL_ROLE = "SUPER_ADMIN"
+
+describe("admin command palette — 전체 계정은 숨긴 탭도 ⌘K 에서 검색된다", () => {
   const allNavHrefs = ADMIN_NAV.map((item) => item.href)
   const everyItem = (value: string) =>
     normalizeNavOverrides(Object.fromEntries(allNavHrefs.map((href) => [href, value])))
@@ -225,8 +228,13 @@ describe("admin command palette — 숨긴 탭도 ⌘K 에서 검색된다", () 
   })
 
   it.each(cases)("⌘K 명령 목록은 %s 에서도 설정 없는 목록과 같다", (_name, overrides) => {
-    const baseline = resolveAdminCommands({ role: "ADMIN", overrides: {} })
-    const commands = resolveAdminCommands({ role: "ADMIN", overrides })
+    const baseline = resolveAdminCommands({ role: FULL_ROLE, overrides: {} })
+    const commands = resolveAdminCommands({ role: FULL_ROLE, overrides })
+
+    // 정적 인벤토리(ADMIN_COMMANDS)와도 같다 — 전체 계정의 목록은 2026-11-20 이전 그대로다.
+    expect(baseline).toEqual(ADMIN_COMMANDS)
+    // 역할을 올리지 않은 지정 계정(nav_preset "super")도 같은 목록을 받는다.
+    expect(resolveAdminCommands({ role: "ADMIN", preset: "super", overrides })).toEqual(baseline)
 
     expect(commands).toEqual(baseline)
     expect(commands.map((cmd) => cmd.href)).toEqual(expect.arrayContaining(allNavHrefs))
@@ -241,7 +249,7 @@ describe("admin command palette — 숨긴 탭도 ⌘K 에서 검색된다", () 
 describe("admin command palette access parity", () => {
   const commandsFor = (overrides: Partial<NavAccessContext> = {}) =>
     resolveAdminCommands({
-      role: "ADMIN",
+      role: FULL_ROLE,
       overrides: {},
       ...overrides,
     })
@@ -268,11 +276,94 @@ describe("admin command palette access parity", () => {
     expect(hrefs).toContain("/admin/cs-chatbot")
   })
 
-  it("모든 역할이 같은 명령 목록을 받는다", () => {
-    for (const role of ["EDITOR", "VIEWER", "BRANCH", "ADMIN", "SUPER_ADMIN"]) {
-      expect(hrefsFor({ role }), role).toContain("/admin/settings")
-      expect(hrefsFor({ role }), role).toContain("/admin/overview")
+  // 2026-11-19 까지는 "모든 역할이 같은 명령 목록을 받는다"였다. 지금은 전체 사이드바 계정
+  // (SUPER_ADMIN · 지정 계정)끼리 같고, 역할은 그 밖의 어떤 차이도 만들지 않는다.
+  it("전체 사이드바 계정은 역할과 무관하게 같은 명령 목록을 받는다", () => {
+    for (const role of ["EDITOR", "VIEWER", "BRANCH", "ADMIN"]) {
+      expect(hrefsFor({ role, preset: "super" }), role).toContain("/admin/settings")
+      expect(hrefsFor({ role, preset: "super" }), role).toContain("/admin/overview")
+      expect(hrefsFor({ role, preset: "super" }), role).toEqual(hrefsFor({ role: "SUPER_ADMIN" }))
     }
-    expect(hrefsFor({ role: "EDITOR" })).toEqual(hrefsFor({ role: "SUPER_ADMIN" }))
+  })
+})
+
+// 2026-11-20 D2 — ⌘K 명령 목록도 "눈에 보이는 목록"이다. 간소 계정은 숨긴 최상위 탭과 그 자식
+// 명령이 빠진다. 거르는 곳은 팔레트(getPaletteAdminNavItems)이고 주소 진입은 그대로다.
+describe("admin command palette — 간소 사이드바 계정", () => {
+  const simpleCommands = (over: Partial<NavAccessContext> = {}) =>
+    resolveAdminCommands({ role: "ADMIN", overrides: {}, ...over })
+
+  it("기본 목록은 공통 업무 메뉴 네 개와 견적의 자식 명령이다", () => {
+    expect(simpleCommands().map((cmd) => cmd.href)).toEqual([
+      "/admin/overview",
+      "/admin/branch/ledger",
+      "/admin/quotes",
+      "/admin/quotes?tab=hardware&action=new",
+      "/admin/quotes?tab=hardware&action=recording_studio",
+      // 하드웨어 재고(2026-11-23 간소 상시) — 자기 자식 명령은 없다. 위 둘은 견적·문서의 자식이다.
+      "/admin/hardware",
+    ])
+    expect(new Set(simpleCommands().map((cmd) => cmd.group))).toEqual(new Set(["홈", "영업·매출"]))
+  })
+
+  it.each(["EDITOR", "VIEWER", "BRANCH", "PARTNER", "admin"])("%s 도 같은 간소 목록을 받는다", (role) => {
+    expect(simpleCommands({ role })).toEqual(simpleCommands())
+  })
+
+  it.each(["staff", "sales", "marketing", "cs", "lead", "branch", ""])(
+    'nav_preset "%s" 는 전체 목록을 주지 않는다',
+    (preset) => {
+      expect(simpleCommands({ preset })).toEqual(simpleCommands())
+    }
+  )
+
+  it("숨긴 최상위 탭과 그 자식 명령이 없다 — CRM·설정·CS 콘솔", () => {
+    const hrefs = simpleCommands().map((cmd) => cmd.href)
+    for (const href of [
+      "/admin/crm",
+      "/admin/crm/customers/leads",
+      "/admin/settings",
+      "/admin/settings?tab=members",
+      "/admin/chatbot",
+      "/admin/docs",
+      "/admin/events",
+      "/admin/analytics?tab=visitors",
+    ]) {
+      expect(hrefs, href).not.toContain(href)
+    }
+  })
+
+  it("'내 사이드바 편집' 명령이 없다 — 편집 진입점을 목록에 두지 않는다", () => {
+    expect(simpleCommands().some((cmd) => cmd.event)).toBe(false)
+    expect(simpleCommands().map((cmd) => cmd.label)).not.toContain("내 사이드바 편집")
+    // 탭을 되살려 받은 간소 계정에게도 편집 명령은 없다.
+    expect(
+      simpleCommands({ overrides: { "/admin/crm": "primary" } }).map((cmd) => cmd.label)
+    ).not.toContain("내 사이드바 편집")
+  })
+
+  it("개인 예외로 되살린 탭은 자식 명령과 함께 돌아온다", () => {
+    const hrefs = simpleCommands({ overrides: { "/admin/chatbot": "folded" } }).map((cmd) => cmd.href)
+    expect(hrefs).toEqual(expect.arrayContaining(["/admin/chatbot", "/admin/docs", "/admin/channel-talk"]))
+    expect(hrefs).not.toContain("/admin/crm")
+  })
+
+  it("보이는 탭을 숨기면 그 자식 명령도 함께 빠진다", () => {
+    const hrefs = simpleCommands({ overrides: { "/admin/quotes": "hidden" } }).map((cmd) => cmd.href)
+    expect(hrefs).toEqual(["/admin/overview", "/admin/branch/ledger", "/admin/hardware"])
+    expect(
+      simpleCommands({ overrides: { "/admin/quotes": "hidden", "/admin/hardware": "hidden" } }).map((cmd) => cmd.href)
+    ).toEqual(["/admin/overview", "/admin/branch/ledger"])
+  })
+
+  it("getAccessibleAdminNavItems 는 간소 계정에서도 ADMIN_NAV 전체다 — 팔레트 쪽에서만 거른다", () => {
+    const access = resolveAdminNavAccess({ role: "ADMIN", overrides: {} })
+    expect(getAccessibleAdminNavItems(access).map((item) => item.href)).toEqual(
+      ADMIN_NAV.map((item) => item.href)
+    )
+    const source = readFileSync(join(process.cwd(), "components/admin/AdminCommandPalette.tsx"), "utf8")
+    expect(source).toContain("getPaletteAdminNavItems(access)")
+    expect(source).toContain("includeActions: access.fullNav")
+    expect(source).toContain("preset: navPreset")
   })
 })

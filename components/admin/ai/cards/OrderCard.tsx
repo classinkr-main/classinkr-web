@@ -29,7 +29,9 @@ import {
   type OrderAction,
 } from "@/lib/admin-ai/order-state"
 import type { OrderField, OrderTicket } from "@/lib/admin-ai/types"
-import { AiButton, aiButtonClass, CardNote, CardShell, type CardTone } from "./CardShell"
+import { isRegisteredInternalHref } from "@/lib/admin-ai/links"
+import { adminAiStore } from "@/lib/admin-ai/store"
+import { AiButton, aiButtonClass, CardNote, CardShell, PreviewBand, type CardTone } from "./CardShell"
 
 function toneOf(order: OrderTicket): CardTone {
   if (order.state === "failed") return "danger"
@@ -183,7 +185,7 @@ function MetaLine({ order }: { order: OrderTicket }) {
     parts.push(
       <span key="cap" className="inline-flex items-center gap-1">
         <Lock className="h-[11px] w-[11px]" aria-hidden="true" />
-        권한 · {order.capabilityLabel}
+        필요 권한 · {order.capabilityLabel}
       </span>
     )
   }
@@ -215,9 +217,11 @@ function MetaLine({ order }: { order: OrderTicket }) {
 }
 
 function OpenLink({ order }: { order: OrderTicket }) {
-  if (!order.openLabel || !order.target.href) return null
+  // 링크 목록(lib/admin-ai/links)에 있는 주소만 그린다 — 서버 오더가 붙어 target.href 에 임의 값이 와도 막힌다.
+  const href = order.target.href
+  if (!order.openLabel || !href || !isRegisteredInternalHref(href)) return null
   return (
-    <Link href={order.target.href} className={aiButtonClass("secondary")}>
+    <Link href={href} className={aiButtonClass("secondary")}>
       {order.openLabel}
     </Link>
   )
@@ -227,9 +231,11 @@ function OpenLink({ order }: { order: OrderTicket }) {
 function OrderCardEditor({
   order,
   onAction,
+  preview,
 }: {
   order: OrderTicket
   onAction: (action: OrderAction) => void
+  preview: boolean
 }) {
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(order.fields.filter((field) => field.editable).map((f) => [f.key, f.value]))
@@ -274,6 +280,7 @@ function OrderCardEditor({
         </>
       }
     >
+      {preview ? <PreviewBand /> : null}
       <AmountBlock order={order} muted={false} />
       {order.fields.length > 0 ? (
         <dl className="flex flex-col border-t border-[#F0F0EC]">
@@ -301,25 +308,42 @@ function OrderCardEditor({
   )
 }
 
+/** 서버 오더의 "화면에서 직접" 링크 — 링크 목록에 있는 어드민 주소만 그린다. */
+function DirectLink({ order, variant }: { order: OrderTicket; variant: "primary" | "secondary" | "ghost" }) {
+  const href = order.server?.directHref
+  if (!href || !isRegisteredInternalHref(href)) return null
+  return (
+    <Link href={href} className={aiButtonClass(variant)}>
+      {order.server?.directLabel ?? "화면에서 직접"}
+    </Link>
+  )
+}
+
 const CLOSED_LABEL: Partial<Record<OrderTicket["state"], string>> = {
   cancelled: "취소됨 · 아무것도 바뀌지 않았습니다",
   undone: "되돌림 · 원래대로 돌렸습니다",
   aborted: "발송 취소됨 · 나간 메시지 없음",
   expired: "만료됨 · 15분 동안 확인하지 않음",
+  processed: "이미 처리됨 · 결과는 화면에서 확인하세요",
 }
 
 export function OrderCard({
   order,
   now,
   onAction,
+  preview = adminAiStore.mode === "demo",
 }: {
   order: OrderTicket
   now: number
   onAction: (action: OrderAction) => void
+  /** 시안(샘플 데이터) 카드인지. 기본은 스토어의 모드를 따른다. */
+  preview?: boolean
 }) {
   if (order.state === "editing") {
     // key 로 수정 세션마다 입력값을 새로 시작한다.
-    return <OrderCardEditor key={`${order.id}-edit`} order={order} onAction={onAction} />
+    return (
+      <OrderCardEditor key={`${order.id}-edit`} order={order} onAction={onAction} preview={preview} />
+    )
   }
 
   const closed = isClosedOrderState(order.state)
@@ -334,12 +358,19 @@ export function OrderCard({
         </StatusLine>
         <div className="flex flex-wrap gap-1.5">
           {/* 확인 버튼에 자동 포커스를 주지 않는다 — Enter 연타로 실행되는 것을 막는다. */}
-          <AiButton
-            variant={order.risk === "R3" ? "danger" : "primary"}
-            onClick={() => onAction({ type: "confirm" })}
-          >
-            {order.confirmLabel}
-          </AiButton>
+          {order.server && !order.server.ticket ? (
+            // 서명 비밀이 없는 서버 오더 — 여기서 실행하지 않고 화면으로 보낸다.
+            <DirectLink order={order} variant="primary" />
+          ) : (
+            <AiButton
+              variant={order.risk === "R3" ? "danger" : "primary"}
+              onClick={() => onAction({ type: "confirm" })}
+              disabled={order.submitting}
+              aria-busy={order.submitting || undefined}
+            >
+              {preview ? "시안 확인" : order.submitting ? "실행 중…" : order.confirmLabel}
+            </AiButton>
+          )}
           {canEditOrder(order) ? (
             <AiButton onClick={() => onAction({ type: "edit" })}>
               {order.message ? "문구 수정" : "수정"}
@@ -375,9 +406,9 @@ export function OrderCard({
     footer = (
       <>
         <StatusLine tone="ok" icon={<Check className="h-[13px] w-[13px]" aria-hidden="true" />}>
-          완료 · {order.doneText}
+          {preview ? "시안 완료 · 실제로는 실행되지 않았습니다" : `완료 · ${order.doneText}`}
         </StatusLine>
-        {undoable || (order.openLabel && order.target.href) ? (
+        {undoable || (order.openLabel && isRegisteredInternalHref(order.target.href)) ? (
           <div className="flex flex-wrap gap-1.5">
             <OpenLink order={order} />
             {undoable ? (
@@ -404,7 +435,7 @@ export function OrderCard({
     footer = (
       <>
         <StatusLine tone="ok" icon={<Check className="h-[13px] w-[13px]" aria-hidden="true" />}>
-          발송됨
+          {preview ? "시안 발송됨 · 실제로는 나가지 않았습니다" : "발송됨"}
         </StatusLine>
         <p className="text-[11px] text-[#A39E98]">되돌릴 수 없음</p>
       </>
@@ -420,9 +451,13 @@ export function OrderCard({
         </StatusLine>
         <div className="flex flex-wrap gap-1.5">
           <OpenLink order={order} />
-          <AiButton variant="ghost" onClick={() => onAction({ type: "redraft" })}>
-            다시 작성
-          </AiButton>
+          {order.server ? (
+            <DirectLink order={order} variant="ghost" />
+          ) : (
+            <AiButton variant="ghost" onClick={() => onAction({ type: "redraft" })}>
+              다시 작성
+            </AiButton>
+          )}
         </div>
       </>
     )
@@ -442,7 +477,12 @@ export function OrderCard({
           {CLOSED_LABEL[order.state]}
         </StatusLine>
         <div className="flex flex-wrap gap-1.5">
-          <AiButton onClick={() => onAction({ type: "redraft" })}>다시 작성</AiButton>
+          {/* 서버 오더는 확인 표가 일회용이라 다시 작성하지 않는다 — 다시 요청하거나 화면에서 한다. */}
+          {order.server ? (
+            <DirectLink order={order} variant="secondary" />
+          ) : (
+            <AiButton onClick={() => onAction({ type: "redraft" })}>다시 작성</AiButton>
+          )}
         </div>
       </>
     )
@@ -459,6 +499,7 @@ export function OrderCard({
       muted={closed}
       footer={footer}
     >
+      {preview ? <PreviewBand /> : null}
       <AmountBlock order={order} muted={closed} />
       {order.fields.length > 0 ? (
         <dl className="flex flex-col border-t border-[#F0F0EC]">

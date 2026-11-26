@@ -95,8 +95,10 @@ describe("CS Copilot Approval Gate in ChatPanel", () => {
     )
 
     // 승인 필요 배너 확인
-    expect(html).toContain("담당자 검토·승인(허가) 후")
-    expect(html).toContain("검토·승인 열기")
+    // IC-01·IC-15: 승인 문구는 '허가'가 아니라 '검토 열기' 하나다. 같은 상태를 알리는 하단 배너는 없앴다(상태는 머리 배지와 레일 두 가지).
+    expect(html).toContain("검토 열기")
+    expect(html).not.toContain("즉시")
+    expect(html).not.toContain("AI 초안 — 고객에게 보내려면")
 
     // 소통 초안 복사 버튼 잠금(disabled) 확인
     expect(html).toContain("승인 필요")
@@ -156,8 +158,8 @@ describe("CS Copilot Approval Gate in ChatPanel", () => {
     )
 
     // 승인 완료 뱃지 확인
-    expect(html).toContain("담당자 검토·승인 완료")
-    expect(html).toContain("허가")
+    expect(html).toContain("담당자 승인 완료")
+    expect(html).toContain("확정")
 
     // 소통 초안 복사 버튼 활성화 확인
     expect(html).toContain("복사")

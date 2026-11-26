@@ -7,8 +7,8 @@ import { CheckCircle2, Copy, Check, FileText, Loader2, ReceiptText, ShieldCheck 
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { trackEvent } from "@/lib/analytics"
 import { formatKrw } from "@/lib/billing/plans"
+import { trackPurchaseOnce } from "@/lib/billing/purchase-tracking"
 
 type ConfirmState =
   | { kind: "loading" }
@@ -23,8 +23,6 @@ type ConfirmState =
       conversionEventId?: string
     }
   | { kind: "error"; message: string }
-
-const PURCHASE_TRACKED_KEY_PREFIX = "classinkr.purchaseTracked."
 
 export function CheckoutSuccessClient() {
   const searchParams = useSearchParams()
@@ -121,19 +119,13 @@ export function CheckoutSuccessClient() {
   useEffect(() => {
     if (state.kind !== "success") return
     if (trackedOrderRef.current === state.orderId) return
-    if (localStorage.getItem(`${PURCHASE_TRACKED_KEY_PREFIX}${state.orderId}`) === "1") {
-      trackedOrderRef.current = state.orderId
-      return
-    }
 
     trackedOrderRef.current = state.orderId
-    trackEvent("purchase", {
-      transaction_id: state.orderId,
-      event_id: state.conversionEventId ?? `purchase:${state.orderId}`,
-      value: state.amount,
-      currency: "KRW",
+    trackPurchaseOnce({
+      orderId: state.orderId,
+      amount: state.amount,
+      conversionEventId: state.conversionEventId,
     })
-    localStorage.setItem(`${PURCHASE_TRACKED_KEY_PREFIX}${state.orderId}`, "1")
   }, [state])
 
   return (

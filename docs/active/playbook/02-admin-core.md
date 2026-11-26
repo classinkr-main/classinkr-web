@@ -38,7 +38,18 @@ Admin Core는 `/admin`의 셸·로그인·공통 내비와 관리자 인증/권�
 
 ### 내비 배치와 보안 경계
 
-사이드바는 2026-09-10부터 전원 동일하다. `admin-nav-access.ts`의 `DEFAULT_PRIMARY_HREFS`가 상시 탭을 정하고(나머지는 범주별 접힘 묶음, 순서·범주는 `ADMIN_NAV` 선언, 개수는 상수 위 주석이 정본), `nav_overrides`가 사람별로 그 자리만 바꾼다(`nav_preset`은 레거시 컬럼). 2026-09-25부터 개인 숨김(`hidden`)과 전원 기본 숨김(`DEFAULT_HIDDEN_HREFS`, CRM 하위 탭은 `crm:<href>` 키)이 있지만 접근 통제가 아니다 — 숨긴 탭도 ⌘K·주소로 열리고 `getAccessibleAdminNavItems`는 항상 전체를 돌려준다. 어떤 배치도 API 접근권한을 부여하지 않는다 — API는 반드시 role/capability를 독립적으로 검증해야 한다.
+사이드바의 기본값은 2026-11-20부터 전체 / 간소 둘이다. 판정은 `admin-nav-access.ts`의 `hasFullAdminNav` 하나다 — `SUPER_ADMIN` 역할이거나 `nav_preset`이 `super`인 지정 계정이면 전체, 그 밖은 간소다. 사이드바·모바일 메뉴·⌘K(전역·CRM 팔레트)·화면 안 탭이 이 함수만 쓰고, 역할이나 프리셋을 직접 비교하지 않는다.
+
+- 전체 사이드바: `DEFAULT_PRIMARY_HREFS`가 상시 탭을 정하고 `DEFAULT_HIDDEN_HREFS`가 기본 숨김, 나머지는 범주별 접힘 묶음이다(순서·범주는 `ADMIN_NAV` 선언, 개수는 상수 위 주석이 정본).
+- 간소 사이드바: `SIMPLE_NAV_PRIMARY_HREFS`(매출 장부 · 견적·문서 · 하드웨어 재고 — 하드웨어는 2026-11-23 추가)만 상시이고 나머지는 전부 기본 숨김이다. 탭을 다시 꺼낼 때 이 상수에 더한다.
+- `nav_overrides`는 그 위에서 사람별로 자리와 숨김을 바꾼다(CRM 하위 탭은 `crm:<href>` 키). 개인 예외는 간소 기본값도 이긴다.
+- `nav_preset`은 `super` 한 값만 뜻이 있다(전체 사이드바 지정). 지정 계정의 역할을 `SUPER_ADMIN`으로 올리지 않는다 — 역할은 API 권한이다. 설정 › 회원의 사이드바 배치에서 `SUPER_ADMIN`이 켜고 끈다.
+
+숨김은 접근 통제가 아니다. 메뉴와 눈에 보이는 목록(사이드바·모바일 메뉴/하단 바로가기·접힘·"숨긴 탭 N"·⌘K 명령 목록)에서만 적용되고, 주소로 들어가면 모든 화면이 열린다. `getAccessibleAdminNavItems`는 간소 계정에서도 항상 전체를 돌려준다(active 판정·모바일 헤더 라벨이 의존) — ⌘K 목록은 팔레트가 `getPaletteAdminNavItems`로 따로 거른다. "차단(deny)" 배치를 되살리지 않는다.
+
+착지 화면은 숨김 판정과 같은 파일에서 정한다. 로그인과 `/admin`은 `resolveAdminLandingHref`만 부르고(전체 → Overview, 간소 → 매출 장부), 그 계정의 착지 화면은 숨길 수 없다(`isNavHideable`). 착지 경로를 다른 파일에 글자로 적지 않는다 — 2026-09-10에 로그인 착지와 차단 목록이 따로 움직여 "로그인 직후 막힌 화면"이 났다.
+
+어떤 배치도 API 접근권한을 부여하지 않는다 — API는 반드시 role/capability를 독립적으로 검증해야 한다.
 
 ## 4. 공통 구현 규약
 

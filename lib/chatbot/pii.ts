@@ -5,6 +5,10 @@
  *   (lib/chatbot/service.ts 가 다시 내보낸다), 위젯은 대화를 탭 저장소에 복원용으로 남기기 전에 같은 규칙을 쓴다.
  * - sanitizeChatbotPageUrl: 챗봇 요청 context.pageUrl 과 채널톡 setPage 에 싣는 주소. 쿼리의 토큰·이메일이
  *   챗봇 서버와 상담 수신함으로 가지 않게 한다(CX-04·쿠키 점검 C4).
+ * - chatbotRequestReferrer: 위젯의 챗봇 fetch 에 주는 referrer. 같은 출처 요청은 기본 정책이면 Referer 헤더에
+ *   주소 전체(쿼리 포함)가 실리고, 서버는 그 헤더를 chat_sessions.referrer 로 저장한다.
+ * - sanitizeChatbotUtm·sanitizeChatSessionAttribution: 요청 context.utm 과 chat_sessions 의 referrer·utm.
+ *   위젯이 한 번, 서버가 저장 직전에 한 번 더 같은 규칙으로 거른다(옛 위젯·직접 호출 대비).
  */
 import { isTrackingExcludedPath, sanitizeTrackingUrl } from "@/lib/tracking-paths"
 
@@ -25,4 +29,99 @@ export function sanitizeChatbotPageUrl(href: string | null | undefined, base?: s
   if (!cleaned) return undefined
   const url = new URL(cleaned)
   return isTrackingExcludedPath(url.pathname) ? `${url.origin}${url.pathname}` : cleaned
+}
+
+/**
+ * 위젯의 챗봇 fetch(query/stream·feedback·recommended-questions)에 `referrer` 로 넘긴다. context.pageUrl 과 같은 정화를 거친
+ * 같은 출처 주소라 Referer 헤더에도 그 주소만 실린다. 해석할 수 없으면 "" — Referer 를 보내지 않는다.
+ * (lib/analytics.ts 의 /api/track/event 요청과 같은 방식이다.)
+ */
+export function chatbotRequestReferrer(
+  href: string | null | undefined = typeof window === "undefined" ? undefined : window.location.href
+): string {
+  return sanitizeChatbotPageUrl(href) ?? ""
+}
+
+const CHATBOT_UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"] as const
+const CHATBOT_UTM_VALUE_MAX_LENGTH = 200
+
+// utm 값에서 개인정보로 보고 버리는 것은 이메일과 휴대전화 꼴뿐이다. redactPii 의 사업자·카드·일반 전화 규칙은 숫자로만 된
+// 광고·캠페인 ID(Meta 18자리, Google Ads 10~11자리 등)를 전화번호로 오인해 귀속을 지웠다. 휴대전화 꼴은 01[016789] 로
+// 시작하는 10~11자리(구분자 -·.·공백 허용, 앞뒤가 숫자가 아닐 때)로 좁힌다. 캠페인 ID 가 우연히 이 꼴이면 버려지는 것은 받아들인다.
+const UTM_EMAIL_RE = /[A-Z0-9._%+-]+\s?@\s?[A-Z0-9.-]+\.[A-Z]{2,}/i
+// 국가번호(+82·82, 뒤에 (0) 허용)로 쓴 꼴도 같은 휴대전화다. 0 으로 시작하는 꼴은 앞이 숫자가 아니어야 한다.
+const UTM_MOBILE_RE = /(?<!\d)(?:\+?82[-.\s]?(?:0[-.\s]?)?|0)1[016789][-.\s]?\d{3,4}[-.\s]?\d{4}(?!\d)/
+// 검사 대상은 자르기(200자) 전의 값이라야 경계에 걸친 이메일·번호가 앞부분만 남지 않는다. 비용은 이 길이로 묶는다.
+const UTM_PII_SCAN_MAX_LENGTH = 2000
+
+// 우회 표기를 접는다: 전각(＠·０１０)은 NFKC, %40 같은 퍼센트 인코딩은 디코드, 괄호는 공백, 여러 종류의 대시는 -, 연속 구분자는 하나로.
+function normalizeForPiiScan(value: string): string {
+  let text = value.slice(0, UTM_PII_SCAN_MAX_LENGTH).normalize("NFKC")
+  try {
+    text = decodeURIComponent(text)
+  } catch {
+    // 깨진 퍼센트 인코딩은 원문 그대로 검사한다.
+  }
+  return text
+    .replace(/[()]/g, " ")
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/([-.\s])[-.\s]+/g, "$1")
+}
+
+function looksLikeUtmPii(value: string): boolean {
+  const raw = value.slice(0, UTM_PII_SCAN_MAX_LENGTH)
+  const folded = normalizeForPiiScan(value)
+  return [raw, folded].some((text) => UTM_EMAIL_RE.test(text) || UTM_MOBILE_RE.test(text))
+}
+
+function readParam(source: unknown, key: string): unknown {
+  if (source instanceof URLSearchParams) return source.get(key)
+  if (source && typeof source === "object" && !Array.isArray(source)) return (source as Record<string, unknown>)[key]
+  return undefined
+}
+
+/**
+ * 챗봇 요청 context.utm 과 chat_sessions.utm 에 싣는 광고 귀속 값. utm 다섯 키의 문자열만 남긴다.
+ * 개인정보처럼 보이는 값(이메일·휴대전화 꼴 — 메일 캠페인이 utm_term 에 수신자를 박는 사고)은 버리고 숫자·문자 ID 는 남기며, 추적 제외 경로(/unsubscribe·/share·/account 등)에서는 아무것도 남기지 않는다(sanitizeChatbotPageUrl 과 같은 경계).
+ * source 는 주소 쿼리(URLSearchParams)나 요청 본문의 객체다.
+ */
+export function sanitizeChatbotUtm(source: unknown, pathname?: string | null): Record<string, string> {
+  if (isTrackingExcludedPath(pathname)) return {}
+  const utm: Record<string, string> = {}
+  for (const key of CHATBOT_UTM_KEYS) {
+    const raw = readParam(source, key)
+    if (typeof raw !== "string") continue
+    const full = raw.trim()
+    if (!full || looksLikeUtmPii(full)) continue
+    utm[key] = full.slice(0, CHATBOT_UTM_VALUE_MAX_LENGTH)
+  }
+  return utm
+}
+
+function pathnameOf(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const raw = value.trim()
+  if (!raw) return null
+  if (raw.startsWith("/")) return raw.split(/[?#]/, 1)[0] || "/"
+  try {
+    return new URL(raw).pathname
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 서버가 chat_sessions 에 저장하기 직전에 거르는 referrer·utm(CX-04·C4). Referer 헤더는 위젯이 보낸 정화 주소여야 하지만
+ * 옛 위젯·직접 호출은 주소 전체를 싣는다 — pageUrl 과 같은 규칙으로 다시 정화한다. utm 은 요청 경로(context.path)·pageUrl·
+ * 리퍼러 가운데 하나라도 추적 제외 경로면 버린다.
+ */
+export function sanitizeChatSessionAttribution(input: {
+  referrer?: string | null
+  utm?: unknown
+  path?: unknown
+  pageUrl?: unknown
+}): { referrer: string | null; utm: Record<string, string> } {
+  const referrer = sanitizeChatbotPageUrl(input.referrer) ?? null
+  const excluded = [input.path, input.pageUrl, input.referrer].some((value) => isTrackingExcludedPath(pathnameOf(value)))
+  return { referrer, utm: excluded ? {} : sanitizeChatbotUtm(input.utm) }
 }

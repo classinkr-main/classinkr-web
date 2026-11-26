@@ -19,12 +19,9 @@ import {
   Columns3,
   Database,
   FileSpreadsheet,
-  Gauge,
   LayoutDashboard,
-  LayoutList,
   ListChecks,
   Pencil,
-  Plus,
   RefreshCw,
   RotateCcw,
   Search,
@@ -36,6 +33,7 @@ import {
   X,
 } from "lucide-react"
 import { adminFetchJson, clearBranchRequestCache, postBranchSync, useBranchJson, type BranchJsonState, type BranchSyncResponseBody } from "./client-api"
+import { hwActiveLowCount, hwChipLabel, hwChipTitle, hwTotalsOf, type BranchHwResponse } from "@/lib/branch/hw-summary"
 import { describeSyncOutcome } from "@/lib/admin/sync-outcome"
 import { useVisibleInterval } from "./use-visible-interval"
 // 서버 입력 큐 훅(초안 CRUD·적용·되돌리기·로컬 폴백·낙관적 잠금)은 ledger/useLedgerDraftQueue로
@@ -53,7 +51,27 @@ import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { revLinkedTargetHref } from "@/lib/crm/rev-sync-health"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import LedgerSimpleView from "./ledger/LedgerSimpleView"
-import type { LedgerCellEditApi } from "./ledger/LedgerSimpleEdit"
+import { ApprovalBar, type LedgerCellEditApi } from "./ledger/LedgerSimpleEdit"
+import LedgerTopBar, { SegmentedButtons, type LedgerFilterChip } from "./ledger/LedgerTopBar"
+import { LEDGER_TABLE_VIEWS, ledgerTableViewFromParam, lensTabOf, visibleLensTabIds, type LedgerTableView, type LensTabId } from "./ledger/ledger-lens-tabs"
+import {
+  buildSheetColumns,
+  buildSheetRowView,
+  clearSheetFilter,
+  describeSheetFilters,
+  filterSheetRows,
+  NO_SHEET_FILTERS,
+  parseSheetFilters,
+  sameSheetFilters,
+  serializeSheetFilters,
+  sheetEditableCells,
+  sortSheetRows,
+  sumSheetRows,
+  type SheetColumnFilters,
+} from "./ledger/ledger-sheet-logic"
+import { chipKey, rowMatchesChips, SIMPLE_FILTER_CHIPS } from "./ledger/ledger-simple-logic"
+import { hasFullAdminNav } from "@/components/admin/admin-nav-access"
+import { useAdminNavPreferences } from "@/components/admin/admin-nav-preferences-context"
 // REV 시트 쓰기(ADR-011) — 초안 baseline·칸 아래 힌트·이중 집계 제외의 순수 헬퍼.
 import {
   cellSheetWriteHint,
@@ -91,6 +109,18 @@ import type { DshGridView } from "./ledger/DshNumericGrid"
 // 없다 — shared.tsx 차트 dynamic과 동일 관례(ssr:false + LoadingPanel 스켈레톤)로 지연 로드해
 // 첫 로드 번들에서 청크를 제외한다. lens 전환(URL ?lens=dsh 포함)은 마운트 후 상태 변경이라
 // 서버 렌더 산출물은 원래도 REV 렌즈 — 동작 무변경.
+// 장부 건별 시트(기본 화면). 주차 칸 컴포넌트가 ledger/RevMatrix 에 있어, 정적으로 import 하면 그 파일 전체가
+// 메인 청크로 딸려 온다(품질 감사 2026-09-10 #2 의 분리가 무효) — 다른 매트릭스 조각과 같은 지연 로드로 둔다.
+// 결과 줄 칩 이름 — 접힌 패널의 제품·계약·경로 칩(SW · 신규 · 채널 …)에 시트 열 이름을 붙인다("제품 HW").
+const LEDGER_CHIP_DIMENSION_LABEL: Record<(typeof SIMPLE_FILTER_CHIPS)[number]["dimension"], string> = {
+  product: "제품",
+  contract: "계약",
+  channel: "경로",
+}
+const LedgerSheet = dynamic(() => import("./ledger/LedgerSheet"), {
+  ssr: false,
+  loading: () => <div role="status" className="min-h-[240px] flex-1 border-t border-[#E8E8E4] bg-white px-4 py-10 text-[13px] text-[#615D59]">장부를 불러오는 중입니다.</div>,
+})
 const DshNumericGrid = dynamic(() => import("./ledger/DshNumericGrid").then((m) => m.DshNumericGrid), {
   ssr: false,
   loading: () => <LoadingPanel label="DSH 수치 그리드를 불러오는 중" />,
@@ -371,7 +401,7 @@ import {
   handleRovingTabKeyDown,
   isDraftOperation,
   LEDGER_VIEWS,
-  LENS_TABS,
+  LENSES,
   loadStoredRevDbImport,
   MATRIX_TOAST_MAX,
   metadataNumberString,
@@ -453,11 +483,24 @@ export default function SalesLedgerWorkbench({
   const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
   // 첫 렌더부터 딥링크 렌즈(?lens=rev 등)로 — 기본 장부 화면이 한 번 그려졌다가 바뀌지 않게.
   const [lens, setLens] = useState<LedgerLens>(() => lensFromParam(searchParams.get("lens")))
+  // 장부 탭 안 보기(2026-11-23) — 건별 시트가 기본, 기관별·매니저별은 조회용. URL `view`.
+  const [ledgerView, setLedgerView] = useState<LedgerTableView>(() => ledgerTableViewFromParam(searchParams.get("view")))
+  // 건별 시트의 열 필터 — 열 안 OR · 열끼리 AND(필터 기획 F-1). 생략 = 기본("이번 달 계 · 값 있음"). URL `cf`.
+  // 열 머리 메뉴가 열고 닫히는 상태는 표(LedgerSheet) 안에 있다 — 주소에 싣지 않는다.
+  const [sheetFilters, setSheetFilters] = useState<SheetColumnFilters>(() => parseSheetFilters(searchParams.get("cf")))
+  // 지난달 고정 — 켜면 지난달을 회색 묶음 한 열로(기존 "지난달 펼치기"의 반대). URL `past=open` 이 꺼짐.
+  const [pastPinned, setPastPinned] = useState(() => searchParams.get("past") !== "open")
+  // 요약·필터 펼치기 — 상태 줄·요약 띠·묶기·칩·범례·설명은 이 뒤에 있다. 들어올 때는 늘 접힘.
+  const [ledgerFoldOpen, setLedgerFoldOpen] = useState(false)
+  // 제품·계약·경로 칩 — 건별 시트와 기관별·매니저별 표가 같은 칩으로 거른다(예전엔 월 요약 화면 안 상태였다).
+  const [ledgerChips, setLedgerChips] = useState<Set<string>>(() => new Set())
+  // 보드·콕핏 탭은 전체 사이드바 계정에게만 보인다(사이드바와 같은 판정). 주소(?lens=)로는 누구에게나 열린다.
+  const { role: navRole, navPreset } = useAdminNavPreferences()
+  const fullNav = hasFullAdminNav({ role: navRole, preset: navPreset })
   // DSH 수치 그리드의 Goal/Status/Gap 토글 — 렌즈 로컬 상태.
   const [dshGridView, setDshGridView] = useState<DshGridView>("goal")
   const lensPanelRef = useRef<HTMLDivElement | null>(null)
   // 두 tablist(렌즈 전환, 빠른 작업 보기 전환)의 롤빙 tabIndex 포커스 대상.
-  const lensTabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const railTabRefs = useRef<Array<HTMLButtonElement | null>>([])
   // Source(원천) 스트립 상대 시간 표기용 tick — SyncStatusBar와 동일하게 1분마다 갱신.
   // visibility-aware 공용 훅(코덱스 감사 #15) — 백그라운드 탭에서는 멈추고 복귀 즉시 따라잡는다.
@@ -466,7 +509,7 @@ export default function SalesLedgerWorkbench({
   const [query, setQuery] = useState("")
   // 품질 웨이브 7 — 항목 3: 단일 select → MultiSelect(Set) 전환. 빈 Set === "전체"(기존 "ALL"과
   // 동일 의미) — 필터 로직·URL 직렬화·크로스링크 모두 Set 기준으로 다시 쓴다.
-  const [managerFilter, setManagerFilter] = useState<Set<string>>(() => new Set([defaultManager]))
+  const [managerFilter, setManagerFilter] = useState<Set<string>>(() => new Set(defaultManager ? [defaultManager] : []))
   const [regionFilter, setRegionFilter] = useState<Set<string>>(() => new Set())
   const [productFilter, setProductFilter] = useState<RevProductCategory>("all")
   const [revStatusFilter, setRevStatusFilter] = useState("ALL")
@@ -810,6 +853,10 @@ export default function SalesLedgerWorkbench({
       return
     }
     setLens(lensFromParam(lensParam))
+    setLedgerView(ledgerTableViewFromParam(params.get("view")))
+    const nextSheetFilters = parseSheetFilters(params.get("cf"))
+    setSheetFilters((current) => (sameSheetFilters(current, nextSheetFilters) ? current : nextSheetFilters))
+    setPastPinned(params.get("past") !== "open")
     const monthParam = params.get("month")
     setSelectedMonth(
       monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : defaultMonthRef.current,
@@ -848,6 +895,10 @@ export default function SalesLedgerWorkbench({
     if (!urlReady) return
     const params = new URLSearchParams()
     if (lens !== "ledger") params.set("lens", lens)
+    if (ledgerView !== "deals") params.set("view", ledgerView)
+    const sheetFilterParam = serializeSheetFilters(sheetFilters)
+    if (sheetFilterParam) params.set("cf", sheetFilterParam)
+    if (!pastPinned) params.set("past", "open")
     if (selectedMonth !== defaultMonthRef.current) params.set("month", selectedMonth)
     if (period !== "Q") params.set("period", period)
     if (team !== "ALL") params.set("team", team)
@@ -876,6 +927,9 @@ export default function SalesLedgerWorkbench({
   }, [
     urlReady,
     lens,
+    ledgerView,
+    sheetFilters,
+    pastPinned,
     selectedMonth,
     period,
     team,
@@ -936,7 +990,7 @@ export default function SalesLedgerWorkbench({
     setLens(nextLens)
     if (nextLens === "cockpit" && lens !== "cockpit") {
       setTeam("ALL")
-      setManagerFilter(new Set([defaultManager]))
+      setManagerFilter(new Set(defaultManager ? [defaultManager] : []))
     }
 
     if (typeof window === "undefined") return
@@ -960,7 +1014,7 @@ export default function SalesLedgerWorkbench({
 
   const resetRevFilters = useCallback(() => {
     setQuery("")
-    setManagerFilter(new Set([defaultManager]))
+    setManagerFilter(new Set(defaultManager ? [defaultManager] : []))
     setRegionFilter(new Set())
     setProductFilter("all")
     setRevStatusFilter("ALL")
@@ -1107,6 +1161,9 @@ export default function SalesLedgerWorkbench({
     "/api/admin/hardware?scope=customer-links",
     refreshKey
   )
+  // 장부 머리 HW 칩 — 최근 30일 출고 · 창고 재고 · 출고 예정(주요 품목 합계). 동기화 후 refreshKey로 다시 읽는다.
+  const hwSummary = useBranchJson<BranchHwResponse>("/api/admin/branch/hw", refreshKey)
+  const hwChip = useMemo(() => (hwSummary.data ? { label: hwChipLabel(hwTotalsOf(hwSummary.data)), title: hwChipTitle(hwSummary.data), low: hwActiveLowCount(hwSummary.data) > 0 } : null), [hwSummary.data])
   const hardwareCustomerKeys = useMemo(() => {
     const set = new Set<string>()
     for (const customer of hardware.data?.customers ?? []) {
@@ -1845,10 +1902,31 @@ export default function SalesLedgerWorkbench({
     return map
   }, [cellLookupRows])
 
+  // ── 장부 건별 시트(2026-11-23) — 기준 달·다음 달만 주차로 편 평면 표. 행·필터·합계는 순수 함수
+  // (ledger/ledger-sheet-logic.ts)가 정하고, 여기서는 범위·검색 필터가 반영된 filteredRows 를 넘기기만 한다.
+  // 다른 렌즈·보기에서는 계산하지 않는다(빈 배열) — 행 수 × 12개월 분해를 화면에 없을 때 돌리지 않는다.
+  const sheetActive = lens === "ledger" && ledgerView === "deals"
+  const sheetColumns = useMemo(() => buildSheetColumns(matrixMonths, selectedMonth, pastPinned), [matrixMonths, selectedMonth, pastPinned])
+  const sheetAllViews = useMemo(() => {
+    if (!sheetActive) return []
+    const chipRows = ledgerChips.size === 0 ? filteredRows : filteredRows.filter((row) => rowMatchesChips(row, ledgerChips))
+    return sortSheetRows(chipRows).map((row) => buildSheetRowView(row, sheetColumns, editRowOverrideMonths.get(row.id) ?? null))
+  }, [sheetActive, filteredRows, ledgerChips, sheetColumns, editRowOverrideMonths])
+  const sheetViews = useMemo(() => filterSheetRows(sheetAllViews, sheetFilters), [sheetAllViews, sheetFilters])
+  const sheetTotals = useMemo(() => sumSheetRows(sheetViews, sheetColumns), [sheetViews, sheetColumns])
+  const sheetActiveFilters = useMemo(() => describeSheetFilters(sheetFilters, sheetColumns), [sheetFilters, sheetColumns])
+  // 열 머리 클릭은 필터 메뉴를 연다(D2) — 적용 · 이 열만 보기 · 풀기는 표(LedgerSheet)가 순수 함수로 계산해
+  // 이 setter 로 넘긴다. 기본 필터는 다른 열을 걸어도 자동으로 풀지 않는다(D3 — "이 열만 보기"가 명시적인 길).
+  const removeSheetFilter = useCallback((key: string) => {
+    setSheetFilters((current) => clearSheetFilter(current, key))
+  }, [])
+
   // 편집가능 셀 좌표(렌더 순서: 행 위→아래, 월 좌→우, 확장월은 w1→w5). 잠금 셀은 제외.
   // 방향키/Tab 순회의 단일 소스. matrixMonths는 4→3 회계연도 순.
   // 확장된 편집가능 월은 주차 5칸으로 분해(Tab이 w1→…→w5→다음 월로 흐름), 비확장 월은 월 요약 셀 1칸.
+  // 건별 시트에서는 보이는 행의 주차 칸(기준 달·다음 달)이 그 순서다.
   const editableCells = useMemo<MatrixCellCoord[]>(() => {
+    if (sheetActive) return sheetEditableCells(sheetViews)
     const cells: MatrixCellCoord[] = []
     for (const row of visibleDealRows) {
       const correctedMonths = editRowOverrideMonths.get(row.id)
@@ -1862,7 +1940,7 @@ export default function SalesLedgerWorkbench({
       }
     }
     return cells
-  }, [visibleDealRows, matrixMonths, expandedRevMonths, editRowOverrideMonths])
+  }, [sheetActive, sheetViews, visibleDealRows, matrixMonths, expandedRevMonths, editRowOverrideMonths])
 
   // 미검수(draft|checked) 초안 → 셀 낙관적 표시. drafts에서 파생(별도 버퍼 없음).
   // 매칭: 초안 sourceDealId == 행 sourceDealId(또는 id) && 초안 month == 셀 month.
@@ -2639,7 +2717,8 @@ export default function SalesLedgerWorkbench({
       if (canRunAdminOperations) {
         // 응답을 결과 계약으로 읽는다 — 예전엔 다른 동기화가 잠금을 잡아 건너뛴 200 { skipped }도
         // 아무 말 없이 새로고침만 해서 "눌렀는데 그대로"로 보였고, 부분 실패(500)는 본문을 버렸다.
-        const { status, body } = await postBranchSync(["rev"])
+        // REV와 HW(하드웨어 시트)를 함께 동기화한다(2026-11-25) — KR Team 머리줄의 실행 버튼을 장부로 모았다.
+        const { status, body } = await postBranchSync(["rev", "hw"])
         applySyncRevImport(body)
         const outcome = describeSyncOutcome(body, { httpStatus: status })
         if (outcome.tone === "error") setSyncError(outcome.message)
@@ -3016,11 +3095,250 @@ export default function SalesLedgerWorkbench({
     saveDraft,
   }
 
+  // ── 장부 머리 두 줄(ledger/LedgerTopBar)·접힌 패널에 넘기는 값 ───────────────────────────────
+  // 탭 줄: [DSH | 장부] 순서(기본 렌즈는 장부 그대로). 보드·콕핏은 전체 사이드바 계정만, 단 지금 그 렌즈면 줄에 남긴다.
+  const lensTabs = visibleLensTabIds({ fullNav, activeLens: lens }).map((id) => {
+    const item = LENSES.find((entry) => entry.id === id)
+    return { id, label: item?.label ?? id, title: item?.description }
+  })
+  // 주차 검수(rev) 보기에서 장부 탭을 누르면 건별 시트로 돌아간다 — 탭이 곧 "장부 첫 화면"이다.
+  const selectLensTab = (id: LensTabId) => selectLens(id)
+  const ledgerViewOptions = [
+    ...LEDGER_TABLE_VIEWS.map((view) => ({ id: view.id as string, label: view.label, title: view.description })),
+    // 주차 검수는 접힌 패널의 버튼(또는 ?lens=rev)으로 연다. 그 보기 중에는 현재 위치가 보이게 칸을 하나 더 둔다.
+    ...(lens === "rev" ? LEDGER_VIEWS.filter((view) => view.id === "rev").map((view) => ({ id: view.id as string, label: view.label, title: view.description })) : []),
+  ]
+  const selectLedgerView = (id: string) => {
+    if (id === "rev") {
+      setLens("rev")
+      return
+    }
+    setLedgerView(ledgerTableViewFromParam(id))
+    if (lens !== "ledger") setLens("ledger")
+  }
+  const ledgerMonthLabel = (ym: string) =>
+    matrixMonths.includes(ym) ? `${fyLabel.slice(0, 4)} · ${Number(ym.slice(5, 7))}월` : formatMonthLabel(ym)
+  // 월 이동은 회계연도 안에서만(예전 주차 검수의 이전/다음 달 버튼과 같은 규칙).
+  const stepSelectedMonth = (delta: -1 | 1) =>
+    setSelectedMonth((month) => {
+      const first = matrixMonths[0]
+      const last = matrixMonths[matrixMonths.length - 1]
+      if (matrixMonths.includes(month)) return shiftMonth(month, delta)
+      return delta < 0 ? (month < first ? first : last) : (month > last ? last : first)
+    })
+  const teamPeriodControls = (
+    <>
+      <SegmentedButtons
+        label="팀 필터"
+        value={team}
+        options={TEAMS.map((value) => ({ id: value, label: branchTeamLabel(value) }))}
+        onChange={(value) => { setTeam(value); setManagerFilter(new Set()) }}
+      />
+      <SegmentedButtons label="기간 필터" value={period} options={PERIODS.map((value) => ({ id: value, label: value }))} onChange={setPeriod} />
+    </>
+  )
+  // 숫자가 틀리거나 빠질 수 있는 상황 — 접지 않고 표 위에 그대로 보인다.
+  const ledgerNotices = [
+    queueError ?? (ledgerHealth?.ok === false ? ledgerHealth.message ?? "내부 원본 준비 필요" : null),
+    correctionTargets.unresolved.length > 0
+      ? `장부에서 반영한 수정 ${correctionTargets.unresolved.length}건의 원래 시트 행을 찾지 못했습니다 — 시트에서 행이 지워졌거나 고객명·상품이 바뀌었을 수 있어, 이 수정은 원래 금액과 따로 더해져 보입니다. 체크 큐에서 확인하세요.`
+      : null,
+  ].filter((notice): notice is string => Boolean(notice))
+  // 시트 행 memo 가 타이핑마다 깨지지 않게 참조를 고정한다.
+  const openLedgerRow = useCallback((row: LedgerRevenueRow) => void loadDealDetail(row), [loadDealDetail])
+  // ── 결과 줄의 걸린 필터(필터 기획 F-2 — 숨은 필터 0) ─────────────────────────────────────────
+  // 장부 탭에서 행을 줄이는 것은 전부 칩으로 보인다: 열 필터(건별 시트만) · 접힌 패널의 제품·계약·경로 칩 · 팀 ·
+  // 상품군 · 지역 · 주차 검수 표에서 건 상태·유형·원천·검수 필터(장부에도 그대로 걸린다) · 검색어 · 버튼으로 못 나타내는
+  // 담당자 선택. [내 담당 | 전체 담당자] 자체는 1줄 토글이 보여 칩으로 만들지 않는다.
+  const customManagerSelection = managerFilter.size > 0 && scopedManager !== defaultManager
+  const sheetColumnChips: LedgerFilterChip[] = sheetActive
+    ? sheetActiveFilters.map((chip) => ({
+        key: `cf:${chip.key}`,
+        label: chip.label,
+        onRemove: () => removeSheetFilter(chip.key),
+        inactive: !chip.applies,
+        title: chip.applies ? undefined : `${chip.label} — 이 달에는 그 열이 없어 지금은 거르지 않습니다. 누르면 풉니다`,
+      }))
+    : []
+  const ledgerRowFilterChips: LedgerFilterChip[] = lens !== "ledger" ? [] : [
+    ...SIMPLE_FILTER_CHIPS.filter((chip) => ledgerChips.has(chipKey(chip))).map((chip) => {
+      const key = chipKey(chip)
+      return {
+        key: `chip:${key}`,
+        label: `${LEDGER_CHIP_DIMENSION_LABEL[chip.dimension]} ${chip.label}`,
+        onRemove: () => setLedgerChips((current) => {
+          const next = new Set(current)
+          next.delete(key)
+          return next
+        }),
+      }
+    }),
+    ...(team !== "ALL" ? [{ key: "team", label: `팀 ${branchTeamLabel(team)}`, onRemove: () => setTeam("ALL") }] : []),
+    ...(productFilter !== "all" ? [{ key: "prod", label: `상품군 ${productCategoryMeta(productFilter).label}`, onRemove: () => setProductFilter("all") }] : []),
+    ...Array.from(regionFilter).map((name) => ({
+      key: `region:${name}`,
+      label: `지역 ${name}`,
+      onRemove: () => setRegionFilter((current) => {
+        const next = new Set(current)
+        next.delete(name)
+        return next
+      }),
+    })),
+    ...(revStatusFilter !== "ALL" ? [{ key: "status", label: `상태 ${revStatusFilter}`, onRemove: () => setRevStatusFilter("ALL") }] : []),
+    ...(revDealTypeFilter !== "ALL" ? [{ key: "type", label: `유형 ${revDealTypeFilter}`, onRemove: () => setRevDealTypeFilter("ALL") }] : []),
+    ...(revOriginFilter !== "all"
+      ? [{ key: "origin", label: REV_ORIGIN_FILTERS.find((item) => item.id === revOriginFilter)?.label ?? "원천", onRemove: () => setRevOriginFilter("all") }]
+      : []),
+    ...(revForecastFilter !== "all"
+      ? [{ key: "fc", label: REV_FORECAST_FILTERS.find((item) => item.id === revForecastFilter)?.label ?? "검수", onRemove: () => setRevForecastFilter("all") }]
+      : []),
+    ...(query.trim() ? [{ key: "q", label: `검색: ${query.trim()}`, onRemove: () => setQuery("") }] : []),
+  ]
+  // 담당자 칩은 [모두 풀기]가 건드리지 않는다(범위는 1줄 토글의 일) — × 를 누르면 전체 담당자로.
+  const managerChips: LedgerFilterChip[] = lens === "ledger" && customManagerSelection
+    ? [{
+        key: "mgr",
+        label: `담당 ${Array.from(managerFilter).map(branchManagerLabel).join(", ")}`,
+        title: "버튼으로 나타낼 수 없는 담당자 선택입니다 — 누르면 전체 담당자로 돌아갑니다",
+        onRemove: () => setManagerFilter(new Set()),
+      }]
+    : []
+  const ledgerFilterChips = [...sheetColumnChips, ...ledgerRowFilterChips, ...managerChips]
+  const canClearLedgerFilters = sheetColumnChips.length + ledgerRowFilterChips.length > 0
+  // 0행 안내 옆 [모두 풀기]는 풀어서 행이 돌아올 수 있을 때만 — 열 필터 전 행이 있는데 열 필터가 0을 만들었거나,
+  // 검색·속성 필터가 행을 줄였을 때. 범위 자체가 비었으면(이번 회계연도 매출 없음 · 담당자 미연결) 풀어도 0행이고
+  // 기본 필터만 꺼져 주소에 cf=none 으로 남는다. 결과 줄의 [모두 풀기]는 그대로 canClearLedgerFilters 를 따른다.
+  const emptySheetCanClear =
+    scopedManager !== UNMAPPED_BRANCH_MEMBER &&
+    ((sheetAllViews.length > 0 && sheetColumnChips.length > 0) || ledgerRowFilterChips.length > 0)
+  // [모두 풀기] — 열 필터(건별 시트일 때) · 속성 칩 · 팀 · 상품군 · 지역 · 검수 필터 · 검색어. 내 담당 · 전체 담당자 범위는 그대로.
+  // 다른 보기(기관별 · 매니저별)에서는 열 필터가 보이지도 걸리지도 않으므로 건드리지 않는다.
+  const clearLedgerFilters = () => {
+    if (sheetActive) setSheetFilters(NO_SHEET_FILTERS)
+    setLedgerChips(new Set())
+    setTeam("ALL")
+    setProductFilter("all")
+    setRegionFilter(new Set())
+    setRevStatusFilter("ALL")
+    setRevDealTypeFilter("ALL")
+    setRevOriginFilter("all")
+    setRevForecastFilter("all")
+    setQuery("")
+  }
+  // 기관별·매니저별 표와, 건별 시트의 접힌 요약(요약 띠·칩)이 같은 값을 쓴다.
+  const ledgerSimpleProps = {
+    notices: ledgerNotices,
+    rows: filteredRows,
+    months: matrixMonths,
+    currentMonth: defaultMonthRef.current,
+    monthlyGoals: revGoalComparable ? new Map(monthlySeriesRows.map((row) => [row.month, row.goal])) : null,
+    loading: (pipeline.loading && rows.length === 0) || (summary.loading && !summary.data),
+    edit: ledgerCellEdit,
+    pendingDrafts: openDrafts.filter((draft) =>
+      scopedManager ? branchManagerMatches(draft.manager, scopedManager) : team === "ALL" || draft.team === team,
+    ),
+    serverQueue: queueMode === "server",
+    sheetWriteMode: sheetWrite.mode,
+    sheetWriteHealthMessage: sheetWrite.healthMessage,
+    onCheckDrafts: checkDrafts,
+    onApplyDrafts: applyDrafts,
+    onShowQueue: () => selectRailView("queue"),
+    personal: managerFilter.size === 1,
+    managerGoals: ledgerManagerGoals,
+    onOpenRow: openLedgerRow,
+    // 매니저별 표에서 이름을 누르면 그 사람의 건별 시트로 간다.
+    onOpenManager: (manager: string) => { setManagerFilter(new Set([manager])); setLedgerView("deals") },
+    chips: ledgerChips,
+    onChipsChange: setLedgerChips,
+  }
+
   return (
-    <div className="min-h-screen bg-[#FAFAF8] pb-24 text-[#111110]">
-      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-5 sm:px-6 lg:px-9">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0">
+    <div
+      data-ledger-sheet={sheetActive ? "" : undefined}
+      className={sheetActive ? "flex min-h-0 flex-1 flex-col bg-[#FAFAF8] text-[#111110]" : "min-h-screen bg-[#FAFAF8] pb-24 text-[#111110]"}
+    >
+      {/* 머리 두 줄(2026-11-23) — 표 위는 이 두 줄이 전부다. 예전 머리줄(브레드크럼·제목·설명)·범위 줄·상태 줄·
+          렌즈 탭 줄·요약 띠·묶기·칩·범례는 지우지 않고 "요약·필터 펼치기" 뒤로 접었다. */}
+      <LedgerTopBar
+        tabs={lensTabs}
+        activeTab={lensTabOf(lens)}
+        onSelectTab={selectLensTab}
+        month={{
+          value: selectedMonth,
+          label: ledgerMonthLabel(selectedMonth),
+          options: monthOptions.map((option) => ({ value: option.value, label: ledgerMonthLabel(option.value), current: option.current })),
+          canPrev: matrixMonths.indexOf(selectedMonth) !== 0,
+          canNext: matrixMonths.indexOf(selectedMonth) !== matrixMonths.length - 1,
+        }}
+        onMonthChange={setSelectedMonth}
+        onMonthStep={stepSelectedMonth}
+        sheet={sheetActive ? {
+          pastPinned,
+          onTogglePastPinned: () => setPastPinned((value) => !value),
+          hasPast: sheetColumns.pastMonths.length > 0,
+          result: {
+            shown: sheetViews.length,
+            total: sheetAllViews.length,
+            monthLabel: `${sheetColumns.blocks[0]?.label ?? `${Number(sheetColumns.anchor.slice(5, 7))}월`} 계`,
+            sum: sheetTotals.blocks[0]?.bucket.total ?? 0,
+          },
+        } : null}
+        filterLine={lens === "ledger" ? { chips: ledgerFilterChips, onClearAll: canClearLedgerFilters ? clearLedgerFilters : null } : null}
+        refreshing={refreshing}
+        onRefresh={() => void onRefresh()}
+        hw={hwChip}
+        onNewEntry={lens !== "cockpit" ? () => selectRailView("input") : null}
+        scope={{
+          mine: Boolean(defaultManager) && scopedManager === defaultManager,
+          all: managerFilter.size === 0,
+          // 장부 탭에서는 버튼으로 못 나타내는 담당자 선택이 결과 줄 칩("담당 …")으로 보여 여기서는 다른 렌즈만 적는다.
+          hint: scopedManager === UNMAPPED_BRANCH_MEMBER
+            ? "로그인 계정의 담당자 연결이 필요합니다."
+            : lens !== "ledger" && customManagerSelection
+              ? Array.from(managerFilter).map(branchManagerLabel).join(", ")
+              : null,
+        }}
+        onScopeMine={defaultManager ? () => { setTeam("ALL"); setManagerFilter(new Set([defaultManager])) } : undefined}
+        onScopeAll={() => setManagerFilter(new Set())}
+        tableViews={lens === "ledger" || lens === "rev" ? ledgerViewOptions : null}
+        tableView={lens === "ledger" ? ledgerView : lens === "rev" ? "rev" : null}
+        onTableViewChange={selectLedgerView}
+        query={query}
+        onQueryChange={setQuery}
+        lensControls={lens === "ledger" ? undefined : teamPeriodControls}
+        foldOpen={ledgerFoldOpen}
+        onToggleFold={() => setLedgerFoldOpen((value) => !value)}
+        foldPanelId="sales-ledger-fold"
+      />
+
+      {/* 오류·경고는 접지 않는다(동기화가 멈췄을 때의 띠는 page.tsx 의 SyncHealthBannerServer 가 이 위에 그린다). */}
+      {(syncError || summary.error || kpi.error || pipeline.error) && (
+        <div
+          role="alert"
+          className="mx-4 mb-1.5 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-2 text-[12px] font-semibold text-[#8F2C2C]"
+        >
+          <span>{syncError ?? summary.error ?? kpi.error ?? pipeline.error}</span>
+          <button
+            type="button"
+            onClick={() => void onRefresh()}
+            disabled={refreshing}
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            다시 시도
+          </button>
+        </div>
+      )}
+      {isLegacyBranchTeam(team) ? <p role="status" className="mx-4 mb-1.5 shrink-0 text-[12px] text-[#A8741A]">이전 조직 CSM의 장부 이력입니다. 현재 조직은 BD · MKT이며 기존 팀 귀속은 보존됩니다.</p> : null}
+
+      {ledgerFoldOpen && (
+        <div
+          id="sales-ledger-fold"
+          role="region"
+          aria-label="요약·필터"
+          className={`shrink-0 space-y-3 border-t border-[#E8E8E4] bg-[#FAFAF8] px-4 py-3 ${sheetActive ? "max-h-[48dvh] overflow-y-auto" : ""}`}
+        >
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[#615D59]">
               <Link
                 href="/admin/branch"
@@ -3034,181 +3352,61 @@ export default function SalesLedgerWorkbench({
               {/* 구 IA 시절 영문 라벨("Sales Ledger") 잔재 — 현재 admin-nav 섹션 라벨(sales="영업·매출")로 정정. */}
               <span>영업·매출</span>
             </div>
-            <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
-              매출시트
-            </h1>
-            <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[#615D59]">
+            <p className="text-[12.5px] text-[#615D59]">
               월별 금액을 비교하고, 선택한 매출을 확인·입력합니다. 통화 ¥ · 본사 보고 기준.
             </p>
-            {isLegacyBranchTeam(team) ? <p role="status" className="mt-2 text-[12px] text-[#A8741A]">이전 조직 CSM의 장부 이력입니다. 현재 조직은 BD · MKT이며 기존 팀 귀속은 보존됩니다.</p> : null}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/admin/branch"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] shadow-2xs transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
-            >
-              <LayoutDashboard className="h-3.5 w-3.5 text-[#615D59]" />
-              대시보드
-            </Link>
-            <div className="inline-flex items-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5 shadow-2xs" role="group" aria-label="팀 필터">
-              {TEAMS.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => { setTeam(value); setManagerFilter(new Set()) }}
-                  className={`rounded-md px-3 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 ${
-                    team === value ? "bg-white text-[#111110] shadow-xs" : "text-[#615D59] hover:text-[#111110]"
-                  }`}
-                >
-                  {branchTeamLabel(value)}
-                </button>
-              ))}
-            </div>
-            <div className="inline-flex items-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5 shadow-2xs" role="group" aria-label="기간 필터">
-              {PERIODS.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setPeriod(value)}
-                  className={`rounded-md px-3 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 ${
-                    period === value ? "bg-white text-[#111110] shadow-xs" : "text-[#615D59] hover:text-[#111110]"
-                  }`}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-            {period === "M" && (
-              <select
-                value={selectedMonth}
-                onChange={(event) => setSelectedMonth(event.target.value)}
-                className="h-9 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#111110] shadow-2xs outline-none transition hover:border-[#084734]/40 focus:border-[#084734] focus-visible:ring-2 focus-visible:ring-[#084734]/25"
-                aria-label="월 선택"
-              >
-                {monthOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}{option.current ? " · 현재" : ""}
-                  </option>
-                ))}
-              </select>
-            )}
-            {lens !== "cockpit" && (
+            <span className="flex-1" />
+            {lens === "ledger" ? teamPeriodControls : null}
+            {lens === "ledger" ? (
               <button
                 type="button"
-                onClick={() => selectRailView("input")}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#084734] px-3.5 text-[12px] font-bold text-white shadow-2xs transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                title={LEDGER_VIEWS.find((view) => view.id === "rev")?.description}
+                onClick={() => selectLens("rev")}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#E8E8E4] bg-white px-3 text-[12.5px] text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734]"
               >
-                <Plus className="h-4 w-4" />
-                매출 입력
+                <Table2 className="h-3.5 w-3.5 text-[#615D59]" />
+                주차 검수 표 열기
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => void onRefresh()}
-              disabled={refreshing}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] shadow-2xs transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+            ) : null}
+            <Link
+              href="/admin/branch"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#E8E8E4] bg-white px-3 text-[12.5px] text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#084734]"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              동기화
-            </button>
+              <LayoutDashboard className="h-3.5 w-3.5 text-[#615D59]" />
+              KR Team 대시보드
+            </Link>
           </div>
+          {/* 상태 한 줄(2026-09-14) — 동기화·정합 체크·CRM 연결을 칸 하나씩, 누른 칸만 아래로 펼친다.
+              예전엔 정합 스트립·CRM 싱크 스트립·동기화 배너가 각자 한 줄씩 쌓여 표보다 먼저 세 줄을 읽어야 했다. */}
+          <LedgerStatusRail
+            syncHealth={summary.data?.sync_health?.rev}
+            lastSyncAttemptLabel={relativeTimeFromNow(summary.data?.lastSync, sourceStripNow)}
+            now={sourceStripNow}
+            crmCoverage={{ data: crmCoverage.data, loading: crmCoverage.loading, error: crmCoverage.error }}
+            refreshKey={refreshKey}
+            canRunAdminOperations={canRunAdminOperations}
+          />
+          {sheetActive ? (
+            <>
+              <LedgerSimpleView {...ledgerSimpleProps} view="none" />
+              <p className="text-[12px] text-[#615D59]">
+                <span>
+                  주차 칸을 누르고 숫자를 친 뒤 Enter 로 저장합니다(E·H·C 확도, Tab·방향키 이동, Esc 취소). 자물쇠 칸은 확정이라 잠겼고, 밑줄 친 칸은 아직 반영 전입니다.
+                  월 계·주차 열 머리를 누르면 필터 메뉴가 열립니다 — 값 있음 · 확도 · 값 없음을 골라 [적용](다른 열과 겹침)하거나 [이 열만 보기]. # 은 시트 행 번호이고, 고객 이름은 상세를 엽니다.
+                </span>
+              </p>
+            </>
+          ) : null}
         </div>
-
-        {(syncError || summary.error || kpi.error || pipeline.error) && (
-          <div
-            role="alert"
-            className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12px] font-semibold text-[#8F2C2C]"
-          >
-            <span>{syncError ?? summary.error ?? kpi.error ?? pipeline.error}</span>
-            <button
-              type="button"
-              onClick={() => void onRefresh()}
-              disabled={refreshing}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              다시 시도
-            </button>
-          </div>
-        )}
-      </header>
-      <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-4 py-3 sm:px-6 lg:px-9" role="group" aria-label="장부 데이터 범위">
-        <button type="button" aria-pressed={scopedManager === defaultManager} onClick={() => { setTeam("ALL"); setManagerFilter(new Set([defaultManager])) }} className="min-h-11 rounded-lg border border-black/[0.08] px-3 text-xs font-semibold text-[#084734]">내 담당</button>
-        <button type="button" aria-pressed={managerFilter.size === 0} onClick={() => setManagerFilter(new Set())} className="min-h-11 rounded-lg border border-black/[0.08] px-3 text-xs font-semibold text-[#615D59]">전체 담당자</button>
-        <span className="text-xs text-[#615D59]">{scopedManager === UNMAPPED_BRANCH_MEMBER ? "로그인 계정의 담당자 연결이 필요합니다." : managerFilter.size ? `${Array.from(managerFilter).map(branchManagerLabel).join(", ")} · 개인 목표와 데이터` : "선택한 팀·전체 데이터"}</span>
-      </div>
+      )}
 
       {/* Desktop: table and sticky detail/input pane share a grid. Smaller screens keep
           the existing floating panel; cockpit has its own editor, except when the queue opens. */}
       <main
-        className={`grid grid-cols-1 items-start gap-x-6 px-4 pt-5 sm:px-6 lg:px-9${!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") ? " xl:grid-cols-[minmax(0,1fr)_360px]" : ""}`}
+        className={`grid grid-cols-1 gap-x-6${sheetActive ? " min-h-0 flex-1 grid-rows-[minmax(0,1fr)]" : " items-start px-4 pt-5 sm:px-6 lg:px-9"}${!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") ? " xl:grid-cols-[minmax(0,1fr)_360px]" : ""}`}
       >
-        <div className="min-w-0 space-y-5">
-        {/* 상태 한 줄(2026-09-14) — 동기화·정합 체크·CRM 연결을 칸 하나씩, 누른 칸만 아래로 펼친다.
-            예전엔 정합 스트립·CRM 싱크 스트립·동기화 배너가 각자 한 줄씩 쌓여 표보다 먼저 세 줄을 읽어야 했다. */}
-        <LedgerStatusRail
-          syncHealth={summary.data?.sync_health?.rev}
-          lastSyncAttemptLabel={relativeTimeFromNow(summary.data?.lastSync, sourceStripNow)}
-          now={sourceStripNow}
-          crmCoverage={{ data: crmCoverage.data, loading: crmCoverage.loading, error: crmCoverage.error }}
-          refreshKey={refreshKey}
-          canRunAdminOperations={canRunAdminOperations}
-        />
-        <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-1 self-start">
-          <div className="inline-flex flex-wrap gap-3 self-start border-b border-[rgba(0,0,0,0.08)]" role="tablist" aria-label="장부 렌즈 전환">
-            {LENS_TABS.map((item, index) => {
-              // REV(rev 렌즈)는 장부 탭 안의 "주차 검수" 보기라, 그 보기에서도 장부 탭이 선택돼 보인다.
-              const tabActive = lens === item.id || (item.id === "ledger" && lens === "rev")
-              return (
-              <button
-                key={item.id}
-                type="button"
-                id={`sales-ledger-lens-${item.id}`}
-                role="tab"
-                aria-selected={tabActive}
-                aria-controls="sales-ledger-lens-panel"
-                title={item.description}
-                tabIndex={tabActive ? 0 : -1}
-                ref={(node) => { lensTabRefs.current[index] = node }}
-                onClick={() => selectLens(item.id === "ledger" && lens === "rev" ? "rev" : item.id)}
-                onKeyDown={(event) => handleRovingTabKeyDown(event, index, LENS_TABS, lensTabRefs, (nextItem) => selectLens(nextItem.id))}
-                className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-2 py-2 text-[13px] font-semibold transition ${
-                  tabActive ? "border-[#084734] text-[#084734]" : "border-transparent text-[#615D59] hover:text-[#111110]"
-                }`}
-              >
-                <span className={`flex h-6 w-6 items-center justify-center rounded-md ${
-                  tabActive ? "text-[#084734]" : "text-[#615D59]"
-                }`}>
-                  {item.id === "ledger" ? <FileSpreadsheet className="h-3.5 w-3.5" /> : item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : item.id === "board" ? <Columns3 className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
-                </span>
-                {item.label}
-              </button>
-              )
-            })}
-          </div>
-          {lens === "ledger" || lens === "rev" ? (
-            // 장부·REV 통합(2026-10-26): 탭은 하나, 보기만 바꾼다. 스크롤 이동 없이 렌즈만 바꾼다(selectLens 는 패널로 스크롤).
-            <div role="group" aria-label="장부 보기" className="mt-2 inline-flex self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-0.5">
-              {LEDGER_VIEWS.map((view) => (
-                <button
-                  key={view.id}
-                  type="button"
-                  aria-pressed={lens === view.id}
-                  title={view.description}
-                  onClick={() => setLens(view.id)}
-                  className={`min-h-9 rounded-md px-3.5 text-[12.5px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 ${
-                    lens === view.id ? "bg-[#111110] text-white" : "text-[#615D59] hover:text-[#111110]"
-                  }`}
-                >
-                  {view.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          </div>
-
+        <div className={sheetActive ? "flex min-h-0 min-w-0 flex-col" : "min-w-0 space-y-5"}>
+        <aside className={lens === "ledger" ? "hidden" : "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}>
           {lens !== "cockpit" && lens !== "ledger" && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[11px] text-[#615D59]">
               <span className="flex items-center gap-1.5 font-bold text-[#111110]">
@@ -3280,7 +3478,7 @@ export default function SalesLedgerWorkbench({
           )}
         </aside>
 
-        <section className="min-w-0 space-y-5">
+        <section className={sheetActive ? "flex min-h-0 min-w-0 flex-1 flex-col" : "min-w-0 space-y-5"}>
           {lens === "ledger" ? null : lens === "rev" ? (
             <div className="border-b border-[rgba(0,0,0,0.08)] py-3.5 space-y-3.5" aria-label="선택 월 매출 확도 요약">
               {/* 회계월 이동 스위처 바 */}
@@ -3462,35 +3660,59 @@ export default function SalesLedgerWorkbench({
             role="tabpanel"
             aria-labelledby={`sales-ledger-lens-${lens === "rev" ? "ledger" : lens}`}
             tabIndex={-1}
-            className="scroll-mt-24 space-y-5 focus:outline-none"
+            className={sheetActive ? "relative flex min-h-0 flex-1 flex-col focus:outline-none" : "scroll-mt-24 space-y-5 focus:outline-none"}
           >
-            {lens === "ledger" && (
+            {sheetActive && (
+              <>
+                {ledgerNotices.length > 0 ? (
+                  <div role="status" className="mx-4 mb-1.5 shrink-0 space-y-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-4 py-2 text-[12.5px] font-semibold text-[#7A520F]">
+                    {ledgerNotices.map((notice) => <p key={notice}>⚠ {notice}</p>)}
+                  </div>
+                ) : null}
+                <LedgerSheet
+                  columns={sheetColumns}
+                  views={sheetViews}
+                  allViews={sheetAllViews}
+                  totals={sheetTotals}
+                  filters={sheetFilters}
+                  onFiltersChange={setSheetFilters}
+                  currentMonth={defaultMonthRef.current}
+                  // 표는 장부 행만 있으면 그린다 — 목표(요약 띠)를 기다리지 않는다.
+                  loading={pipeline.loading && rows.length === 0}
+                  emptyText={
+                    scopedManager === UNMAPPED_BRANCH_MEMBER
+                      ? "로그인 계정에 담당자가 연결돼 있지 않아 내 담당 행이 없습니다 — [전체 담당자]로 바꿔 보세요."
+                      : sheetAllViews.length > 0
+                        ? "걸린 필터에 맞는 행이 없습니다."
+                        : ledgerRowFilterChips.length > 0
+                          ? "검색·필터에 맞는 행이 없습니다."
+                          : "이 범위에 이번 회계연도 매출이 없습니다."
+                  }
+                  onClearFilters={emptySheetCanClear ? clearLedgerFilters : undefined}
+                  activeRowId={selectedRow?.id ?? null}
+                  onOpenRow={openLedgerRow}
+                  editor={matrixEditor}
+                  pendingByCell={pendingByCell}
+                />
+                {/* 변경 대기 줄 — 대기 중인 변경이 있을 때만 표 아래에 한 줄(표를 가리지 않는다). 오른쪽은 빠른 작업 버튼 자리라 비운다. */}
+                <div className={`shrink-0 px-4 empty:hidden [&>*]:my-1.5${sidePanelCollapsed ? " sm:pr-52" : ""}`}>
+                  <ApprovalBar
+                    drafts={ledgerSimpleProps.pendingDrafts}
+                    serverQueue={ledgerSimpleProps.serverQueue}
+                    sheetWriteMode={sheetWrite.mode}
+                    onCheck={checkDrafts}
+                    onApply={applyDrafts}
+                    onShowAll={ledgerSimpleProps.onShowQueue}
+                  />
+                </div>
+              </>
+            )}
+
+            {lens === "ledger" && !sheetActive && (
               <LedgerSimpleView
-                notices={[
-                  queueError ?? (ledgerHealth?.ok === false ? ledgerHealth.message ?? "내부 원본 준비 필요" : null),
-                  correctionTargets.unresolved.length > 0
-                    ? `장부에서 반영한 수정 ${correctionTargets.unresolved.length}건의 원래 시트 행을 찾지 못했습니다 — 시트에서 행이 지워졌거나 고객명·상품이 바뀌었을 수 있어, 이 수정은 원래 금액과 따로 더해져 보입니다. 체크 큐에서 확인하세요.`
-                    : null,
-                ].filter((notice): notice is string => Boolean(notice))}
-                rows={filteredRows}
-                months={matrixMonths}
-                currentMonth={defaultMonthRef.current}
-                monthlyGoals={revGoalComparable ? new Map(monthlySeriesRows.map((row) => [row.month, row.goal])) : null}
-                loading={(pipeline.loading && rows.length === 0) || (summary.loading && !summary.data)}
-                edit={ledgerCellEdit}
-                pendingDrafts={openDrafts.filter((draft) =>
-                  scopedManager ? branchManagerMatches(draft.manager, scopedManager) : team === "ALL" || draft.team === team,
-                )}
-                serverQueue={queueMode === "server"}
-                sheetWriteMode={sheetWrite.mode}
-                sheetWriteHealthMessage={sheetWrite.healthMessage}
-                onCheckDrafts={checkDrafts}
-                onApplyDrafts={applyDrafts}
-                onShowQueue={() => selectRailView("queue")}
-                personal={managerFilter.size === 1}
-                managerGoals={ledgerManagerGoals}
-                onOpenRow={(row) => void loadDealDetail(row)}
-                onOpenManager={(manager) => setManagerFilter(new Set([manager]))}
+                {...ledgerSimpleProps}
+                view={ledgerView === "managers" ? "managers" : "accounts"}
+                chrome={ledgerFoldOpen}
               />
             )}
 
@@ -4490,8 +4712,10 @@ export default function SalesLedgerWorkbench({
         </div>
         {/* M3: 콕핏은 플로팅 레일·FAB를 숨기지만, 헤더 "체크 큐" 버튼으로 연 큐(railView==="queue")만
             예외로 이 패널을 허용한다 — 큐 진입은 헤더 버튼으로 일원화하고 FAB(위)는 계속 콕핏에서 숨긴다. */}
+        {/* 큐 보기는 레일을 flex 열로 둔다 — 레일 높이 안에서 큐 패널이 줄고 큐 목록 혼자 스크롤한다(머리 · 상태 탭 ·
+            일괄 띠는 고정, DraftQueue 주석). 상세 · 입력 보기는 예전처럼 레일 전체가 스크롤한다. */}
         {!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") && (
-        <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(440px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)] xl:sticky xl:inset-auto xl:top-6 xl:z-10 xl:col-start-2 xl:row-start-1 xl:max-h-[calc(100dvh-3rem)] xl:w-full xl:rounded-none xl:border-0 xl:border-l xl:bg-white xl:p-2.5 xl:shadow-none" aria-label="선택 매출 작업면">
+        <aside className={`${railView === "queue" ? "flex flex-col " : ""}fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(440px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)] xl:sticky xl:inset-auto xl:z-10 xl:col-start-2 xl:row-start-1 xl:w-full ${sheetActive ? "xl:top-0 xl:max-h-full xl:self-stretch" : "xl:top-6 xl:max-h-[calc(100dvh-3rem)]"} xl:rounded-none xl:border-0 xl:border-l xl:bg-white xl:p-2.5 xl:shadow-none`} aria-label="선택 매출 작업면">
           <>
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1.5">
             <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
@@ -4923,37 +5147,29 @@ export default function SalesLedgerWorkbench({
             id="ledger-rail-panel-queue"
             role="tabpanel"
             aria-labelledby="ledger-rail-tab-queue"
-            className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
+            className="flex min-h-0 flex-col rounded-lg border border-[rgba(0,0,0,0.08)] bg-white"
           >
-            <div className="flex items-center justify-between border-b border-[rgba(0,0,0,0.08)] px-3 py-2 bg-[#FAFAF8]">
-              <p className="flex items-center gap-1.5 text-[12px] font-bold text-[#111110]">
-                <AlertTriangle className="h-3.5 w-3.5 text-[#A8741A]" />
-                체크 큐
-              </p>
-              <span className="text-[11px] font-semibold text-[#615D59]">
-                {openDrafts.length > 0 ? `대기 ${openDrafts.length}건` : "대기 없음"}
-              </span>
-            </div>
-            <div className="p-2.5">
-              <DraftQueue
-                drafts={drafts}
-                mode={queueMode}
-                loading={queueLoading}
-                error={queueError}
-                reversedDraftIds={reversedDraftIds}
-                recordErrors={recordErrors}
-                sheetWrites={sheetWrites}
-                onReload={() => void reloadDrafts()}
-                onEdit={editDraft}
-                onToggle={toggleDraft}
-                onApply={applyDraft}
-                onCancel={cancelDraft}
-                onDelete={deleteDraft}
-                onReverse={handleReverseEntry}
-                onBulkCheck={checkDrafts}
-                onBulkApply={applyDrafts}
-              />
-            </div>
+            {/* 체크 큐 컴팩트(P0-5): "체크 큐 N" · 검색 · 새로고침 머리 한 줄과 여백은 DraftQueue가 그린다 —
+                여기서 머리 줄을 한 번 더 그리지 않는다(줄 구분선이 패널 가장자리까지 닿게 안쪽 여백도 두지 않는다). */}
+            <DraftQueue
+              drafts={drafts}
+              mode={queueMode}
+              loading={queueLoading}
+              error={queueError}
+              reversedDraftIds={reversedDraftIds}
+              recordErrors={recordErrors}
+              sheetWrites={sheetWrites}
+              sheetWriteMode={sheetWrite.mode}
+              onReload={() => void reloadDrafts()}
+              onEdit={editDraft}
+              onToggle={toggleDraft}
+              onApply={applyDraft}
+              onCancel={cancelDraft}
+              onDelete={deleteDraft}
+              onReverse={handleReverseEntry}
+              onBulkCheck={checkDrafts}
+              onBulkApply={applyDrafts}
+            />
           </section>
           )}
           </>

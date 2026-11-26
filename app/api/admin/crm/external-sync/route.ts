@@ -1,20 +1,19 @@
 import { after, NextRequest, NextResponse } from "next/server"
-import { revalidateTag } from "next/cache"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext, verifyAdmin } from "@/lib/admin-auth"
-import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
-import { invalidateNeoCrmCustomersCache } from "@/lib/admin-crm-customers-neo"
-import { invalidateCrmRegionMapCache } from "@/lib/repositories/crm-region-map"
+import { expireExternalCrmSyncCaches } from "@/lib/external-crm/sync-cache"
 import {
   notifyExternalCrmSyncOutcome,
   runExternalCrmSyncChain,
 } from "@/lib/external-crm/sync-chain"
-import {
-  getExternalCrmSyncHttpStatus,
-  hasFreshExternalCrmSyncData,
-} from "@/lib/external-crm/sync-result"
+import { getExternalCrmSyncHttpStatus } from "@/lib/external-crm/sync-result"
+import { expireSyncCacheTags } from "@/lib/server/sync-cache-tags"
 import { getXiaoshouyiSyncRuntimePreflight } from "@/lib/external-crm/xiaoshouyi-sync"
 import { refreshCrmNeoCustomerSnapshotsFromExternalRecords } from "@/lib/repositories/crm-neo-customer-snapshots"
+
+// 동기화는 객체·페이지마다 외부 API 왕복이라 길다. 체인 안의 시간 예산(lib/external-crm/xiaoshouyi-sync.ts
+// XIAOSHOUYI_SYNC_TIME_BUDGET_MS)이 이 상한 안에서 끝내고 잠금을 스스로 푼다 — 상한을 바꾸면 예산도 같이 본다.
+export const maxDuration = 300
 
 // 읽기(GET preflight)는 CRM 스태프 롤 매트릭스, 쓰기(POST sync 트리거)는 기본롤 유지.
 export async function GET(req: NextRequest) {
@@ -71,11 +70,10 @@ export async function POST(req: NextRequest) {
     // external_crm_records 에 이미 있는 원본으로 읽기모델을 최신화하기 위한 경로다.
     if (refreshSnapshotsOnly) {
       const snapshots = await refreshCrmNeoCustomerSnapshotsFromExternalRecords()
-      revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
       // NEO 고객 스냅샷(crm_neo_customer_snapshots)을 다시 계산했다 — admin-crm-customers-neo.ts의
-      // Data Cache와 region-map의 "고객" 레이어(region_label 원천)가 이 값을 물고 있다(§3.2·§3.3).
-      invalidateNeoCrmCustomersCache()
-      invalidateCrmRegionMapCache()
+      // Data Cache, region-map의 "고객" 레이어(region_label 원천), 그 값을 품은 바깥 캐시까지 즉시 만료한다
+      // (lib/server/sync-cache-tags.ts neoSync).
+      expireSyncCacheTags("neoSync")
       return NextResponse.json({
         ok: true,
         refreshSnapshotsOnly: true,
@@ -96,15 +94,8 @@ export async function POST(req: NextRequest) {
       candidates: chain.candidates ?? null,
       candidatesError: chain.candidatesError ?? null,
     }
-    if (hasFreshExternalCrmSyncData(chain.sync)) {
-      revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
-    }
-    // chain.neoCustomerSnapshots는 체인 내부에서 refreshCrmNeoCustomerSnapshotsFromExternalRecords가
-    // 성공했을 때만 채워진다(lib/external-crm/sync-chain.ts) — 그때만 무효화한다.
-    if (chain.neoCustomerSnapshots) {
-      invalidateNeoCrmCustomersCache()
-      invalidateCrmRegionMapCache()
-    }
+    // 새 데이터가 있을 때만(잠김·최근 결과 재사용·건너뜀이면 그대로) 즉시 만료 — 크론과 같은 규칙(lib/external-crm/sync-cache.ts).
+    expireExternalCrmSyncCaches(chain)
     after(() => notifyExternalCrmSyncOutcome(chain, "manual"))
     return NextResponse.json(result, { status: getExternalCrmSyncHttpStatus(chain.sync) })
   } catch (error) {

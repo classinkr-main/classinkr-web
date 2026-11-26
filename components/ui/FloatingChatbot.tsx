@@ -539,6 +539,7 @@ export function FloatingChatbot() {
                                 draftStore={draftStore}
                                 inputRef={inputRef}
                                 messagesContainerRef={messagesContainerRef}
+                                isVisible={isPanelVisible}
                                 cooldownSeconds={cooldownSeconds}
                                 isSending={isSending}
                                 isStreaming={isStreaming}

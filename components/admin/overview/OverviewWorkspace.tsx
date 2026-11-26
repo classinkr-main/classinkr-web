@@ -5,7 +5,9 @@ import Link from "next/link"
 import { ArrowUpRight, RotateCw } from "lucide-react"
 import { compassLeadUrl } from "@/lib/compass/normalize"
 import type { OverviewOperationsSummary } from "@/lib/admin/overview/operations-summary"
+import type { PartnerSettlementSummary } from "@/lib/partner-settlement"
 import { SectionSkeleton } from "@/components/admin/viz"
+import { man, snapshotTime, won } from "@/components/admin/documents/partner-settlement/format"
 
 const BORDER = "border-[rgba(0,0,0,0.08)]"
 const TONES = { neutral: "text-[#615D59]", success: "text-[#084734]", warning: "text-[#A8741A]", danger: "text-[#B43E3E]" }
@@ -121,6 +123,25 @@ export function OverviewOperationsPanels({ leads, leadState, onLeadRetry, operat
           <span className="min-w-0"><span className="block truncate text-sm font-semibold text-[#111110]">{row.customer || "도착지 미정"}</span><span className="mt-0.5 block truncate text-xs text-[#615D59]">{row.product} · {row.owner || "담당 미지정"}</span></span><span className="shrink-0 text-right"><span className="block text-sm font-semibold tabular-nums text-[#111110]">{row.quantity}대</span><span className={`text-[11px] ${row.overdue ? TONES.warning : TONES.neutral}`}>{row.date ? `${row.date}${row.overdue ? " · 경과" : ""}` : "날짜 미지정"}</span></span>
         </Link>) : <p className="py-6 text-sm text-[#615D59]">미확정 출고 예정이 없습니다.</p>}</div>
       </> : <div role="status" className="py-7 text-sm text-[#615D59]">설치·배송 조회 실패 · 0건이 아닙니다.<div><Retry label="설치·배송" onRetry={onRetry} /></div></div>}
+    </Panel>
+  </div>
+}
+
+/** 쿼드러닝 계정 잔액 — 정산 스냅샷 기준. 스냅샷이 없거나 권한이 없으면 부르는 쪽이 그리지 않는다. */
+export function OverviewPartnerSettlement({ summary }: { summary: PartnerSettlementSummary }) {
+  const rows: Array<[string, number]> = [
+    ["청구", summary.billed],
+    ["− 쿼드 이체", summary.transfers],
+    ["− 고객 카드", summary.card],
+    ...(summary.ledger ? [["− 장부 기준", summary.ledger] as [string, number]] : []),
+  ]
+  return <div className="mb-10 grid gap-5 xl:grid-cols-3">
+    <Panel title="쿼드러닝 정산 잔액" href="/admin/quotes?tab=receivables" note={`스냅샷 ${snapshotTime(summary.generatedAt)} · 양수는 쿼드러닝이 더 보내야 할 돈입니다.`}>
+      <p className="text-[32px] font-bold tracking-[-0.04em] tabular-nums text-[#111110]">{man(summary.balance)}<span className="ml-2 text-xs font-normal tracking-normal text-[#615D59]">원</span></p>
+      <dl className="mt-4 space-y-1.5 text-xs text-[#615D59]">
+        {rows.map(([label, value]) => <div key={label} className="flex justify-between gap-3"><dt>{label}</dt><dd className="tabular-nums text-[#111110]">{won(value)}</dd></div>)}
+        <div className={`flex justify-between gap-3 border-t ${BORDER} pt-1.5 font-semibold text-[#111110]`}><dt>= 잔액</dt><dd className="tabular-nums">{won(summary.balance)}</dd></div>
+      </dl>
     </Panel>
   </div>
 }

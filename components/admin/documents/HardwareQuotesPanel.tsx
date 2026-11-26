@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertCircle,
   Check,
@@ -17,11 +17,18 @@ import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import { useQuoteWorkspacePreferences } from "@/components/admin/quote-templates/useQuoteWorkspacePreferences"
 import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
+  type QuickQuoteDistributorQuoteOption,
+  type QuickQuoteDraft,
   type QuickQuoteManagerOption,
   type QuickQuotePrefill,
   type QuickQuoteTeamTemplate,
 } from "@/components/portal/quotes/QuickQuoteComposer"
-import { adminFetchJson } from "@/lib/admin-client"
+import { adminFetchJson, clearAdminRequestCache } from "@/lib/admin-client"
+import {
+  DEFAULT_HARDWARE_DISTRIBUTOR,
+  FY2026_CHANNEL_SUPPLY_PRICE_RULES,
+  type DistributorPriceTemplate,
+} from "@/lib/distributor-settlements"
 import type { PartnerQuoteDetailsInput } from "@/lib/partners-types"
 import {
   quoteDetailsToTeamTemplateInput,
@@ -32,11 +39,12 @@ import type { QuoteTemplateCatalogResponse } from "@/lib/repositories/quote-team
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { describeQuoteVat, resolveQuoteVatIncluded } from "@/lib/portal/quote-vat"
-import type { PartnerDocumentListItem } from "@/lib/portal/types"
+import type { Deal, PartnerDocumentListItem, QuoteDocument, QuoteDocumentVersion } from "@/lib/portal/types"
 import {
   DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
   isQuoteNoteLine,
   resolveQuoteProductLine,
+  STANDARD_QUOTE_SUPPLIER,
   type QuoteProductLine,
   type StandardQuoteTemplateId,
 } from "@/lib/standard-quote-template"
@@ -49,6 +57,7 @@ import {
   type QuoteQueueKey,
 } from "./quote-queue"
 import DistributorSettlementSection from "./DistributorSettlementSection"
+import QuoteTemplatePicker, { type QuoteTemplatePickerSelection } from "./QuoteTemplatePicker"
 
 type HardwareQuoteRow = {
   id: string
@@ -92,10 +101,9 @@ type SharePayload = {
 }
 
 type ViewerPayload = {
-  version?: {
-    structured_json: Record<string, unknown> | null
-    valid_until: string | null
-  }
+  document?: QuoteDocument
+  version?: QuoteDocumentVersion
+  deal?: Deal | null
   error?: string
 }
 
@@ -115,6 +123,10 @@ type HardwareQuotesPanelProps = {
   onQuickActionConsumed?: () => void
   /** 딜/고객 컨텍스트에서 진입한 프리필 대상(있으면 작성기가 기존 고객·거래를 자동 선택). */
   prefill?: QuickQuotePrefill | null
+  /** "templates" = 견적서 탭(템플릿 목록·미리보기), "history" = 히스토리 탭(저장한 견적 목록·상세). 작성기는 둘 다에 있다. */
+  view?: "templates" | "history"
+  /** 작성기가 견적을 저장했다 — 그 견적은 이미 선택돼 있고, 페이지가 히스토리 탭으로 넘긴다. */
+  onQuoteCreated?: (quoteId: string) => void
 }
 
 const PRODUCT_LINE_OPTIONS: Array<{ key: QuoteProductLine | "all"; label: string }> = [
@@ -338,15 +350,19 @@ function getTimeline(quote: HardwareQuoteRow) {
   }))
 }
 
-async function fetchQuoteDetail(quoteId: string): Promise<QuoteDetail> {
+async function fetchQuoteViewer(quoteId: string) {
   const response = await portalFetch(`/api/portal/quotes/${quoteId}?include=viewer`)
   const payload = (await response.json().catch(() => null)) as ViewerPayload | null
   if (!response.ok || !payload?.version) {
     throw new Error(payload?.error ?? "견적 상세를 불러오지 못했습니다.")
   }
+  return { ...payload, version: payload.version }
+}
 
-  const details = getQuoteDetailsFromStructuredJson(payload.version.structured_json, {
-    validUntil: payload.version.valid_until,
+async function fetchQuoteDetail(quoteId: string): Promise<QuoteDetail> {
+  const { version } = await fetchQuoteViewer(quoteId)
+  const details = getQuoteDetailsFromStructuredJson(version.structured_json, {
+    validUntil: version.valid_until,
   })
   const lines = (details?.lineItems ?? []).map((line, index) => {
     // 조건·할부 안내 같은 금액 없는 행은 고객 문서처럼 수량·금액을 비운다("0원"으로 보이지 않게).
@@ -364,7 +380,7 @@ async function fetchQuoteDetail(quoteId: string): Promise<QuoteDetail> {
   return {
     lines,
     supplier: details?.supplierBusinessName ?? null,
-    validUntil: formatDay(payload.version.valid_until),
+    validUntil: formatDay(version.valid_until),
   }
 }
 
@@ -391,12 +407,16 @@ export default function HardwareQuotesPanel({
   quickAction = null,
   onQuickActionConsumed,
   prefill = null,
+  view = "history",
+  onQuoteCreated,
 }: HardwareQuotesPanelProps) {
   const { preferences, updatePreferences, storageError } = useQuoteWorkspacePreferences()
   const [composerOpen, setComposerOpen] = useState(false)
-  const [composerTemplateId, setComposerTemplateId] = useState<StandardQuoteTemplateId>(
-    DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID
-  )
+  const [composerTemplate, setComposerTemplate] = useState<QuoteTemplatePickerSelection>({
+    templateId: DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
+    presetId: null,
+    quantity: 1,
+  })
   const [quotes, setQuotes] = useState<HardwareQuoteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -412,6 +432,8 @@ export default function HardwareQuotesPanel({
   const [showDeleted, setShowDeleted] = useState(false)
   const [changingDeletionId, setChangingDeletionId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, DetailState>>({})
+  const [composerDraft, setComposerDraft] = useState<QuickQuoteDraft | null>(null)
+  const [resumeQuoteId, setResumeQuoteId] = useState<string | null>(null)
   const handledQuickActionKeyRef = useRef<string | null>(null)
   const quoteLoadSequenceRef = useRef(0)
 
@@ -500,6 +522,102 @@ export default function HardwareQuotesPanel({
     })
     await loadTeamTemplates()
   }
+
+  // 총판 공급가 원천 — 어드민 원가 템플릿(총판 정산 화면에서 고친다)이 정본이다. 템플릿이 하나도 없을 때만
+  // 코드의 FY2026 정책표 값을 쓰고, 그 값을 템플릿으로 저장하는 버튼을 보여 준다(그 뒤로는 화면에서 고친다).
+  const [priceTemplates, setPriceTemplates] = useState<DistributorPriceTemplate[] | null>(null)
+  const [priceTemplateId, setPriceTemplateId] = useState<string | null>(null)
+  const [seedingPriceTemplate, setSeedingPriceTemplate] = useState(false)
+
+  async function loadPriceTemplates(preferId?: string) {
+    try {
+      const payload = await adminFetchJson<{ templates?: DistributorPriceTemplate[] }>("/api/admin/distributor-price-templates", {
+        cache: "no-store",
+      })
+      // 최근에 고친 템플릿을 기본으로 고른다.
+      const templates = [...(payload.templates ?? [])].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      setPriceTemplates(templates)
+      setPriceTemplateId((current) => {
+        const wanted = preferId ?? current
+        return wanted && templates.some((template) => template.id === wanted) ? wanted : templates[0]?.id ?? null
+      })
+    } catch {
+      // 원가 템플릿을 못 읽어도 정책표 기본값으로 계속 쓴다.
+      setPriceTemplates([])
+    }
+  }
+
+  useEffect(() => {
+    if (composerOpen) void loadPriceTemplates()
+  }, [composerOpen])
+
+  async function seedPriceTemplate() {
+    setSeedingPriceTemplate(true)
+    try {
+      const payload = await adminFetchJson<{ template?: DistributorPriceTemplate }>("/api/admin/distributor-price-templates", {
+        method: "POST",
+        body: JSON.stringify({
+          name: "FY2026 채널 공급가",
+          rules: FY2026_CHANNEL_SUPPLY_PRICE_RULES,
+          notes: "FY2026 채널 유통 가격 정책표 — ClassIn KR → 퀴드러닝 채널공급가(VAT 포함)",
+        }),
+      })
+      await loadPriceTemplates(payload.template?.id)
+    } catch (seedError) {
+      window.alert(seedError instanceof Error ? seedError.message : "원가 템플릿을 저장하지 못했습니다.")
+    } finally {
+      setSeedingPriceTemplate(false)
+    }
+  }
+
+  const selectedPriceTemplate = priceTemplates?.find((template) => template.id === priceTemplateId) ?? null
+
+  /**
+   * 고객 HW 견적 저장 때 총판(퀴드러닝)용 견적서 초안을 같이 만든다 — 기존 총판 정산 저장 API(C방식, 고객 동의 시 발행).
+   * 발행된 정산은 API 가 409 로 막는다(작성기가 오류 토스트로 알린다).
+   */
+  const distributorQuote = useMemo<QuickQuoteDistributorQuoteOption>(
+    () => ({
+      rules: selectedPriceTemplate?.rules ?? FY2026_CHANNEL_SUPPLY_PRICE_RULES,
+      distributorLabel: `${DEFAULT_HARDWARE_DISTRIBUTOR.distributorName} · 대표 ${STANDARD_QUOTE_SUPPLIER.representativeName} · 참조 ${DEFAULT_HARDWARE_DISTRIBUTOR.distributorContactName}`,
+      priceSource: {
+        label: selectedPriceTemplate ? `원가 템플릿 「${selectedPriceTemplate.name}」` : "FY2026 정책표(기본값)",
+        options: (priceTemplates ?? []).map((template) => ({ id: template.id, label: `원가 템플릿 「${template.name}」` })),
+        selectedId: priceTemplateId,
+        onSelect: setPriceTemplateId,
+        seedAction:
+          priceTemplates && priceTemplates.length === 0
+            ? { label: "정책표를 원가 템플릿으로 저장(이후 화면에서 수정)", busy: seedingPriceTemplate, onClick: () => void seedPriceTemplate() }
+            : undefined,
+      },
+      onSave: async ({ quoteDocumentId, lines }) => {
+        await adminFetchJson(`/api/admin/quotes/${quoteDocumentId}/distributor-settlement`, {
+          method: "PUT",
+          body: JSON.stringify({
+            ...DEFAULT_HARDWARE_DISTRIBUTOR,
+            fulfillmentMode: "C",
+            issueTrigger: "on_accept",
+            autoEmail: true,
+            priceTemplateId: selectedPriceTemplate?.id ?? null,
+            lines,
+            vatIncluded: true,
+            // notes 는 총판 견적서 특약사항으로 찍히므로 비워 둔다.
+            notes: null,
+          }),
+        })
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [priceTemplates, priceTemplateId, seedingPriceTemplate, selectedPriceTemplate]
+  )
+
+  const loadCustomerUnits = useCallback(async (customerId: string) => {
+    const payload = await adminFetchJson<{ units?: Record<string, number> }>(
+      `/api/admin/hardware/customer-units?customerId=${encodeURIComponent(customerId)}`,
+      { cache: "no-store" }
+    )
+    return payload.units ?? {}
+  }, [])
 
   async function handleDeleteTemplate(id: string) {
     await adminFetchJson(`${QUOTE_TEMPLATES_API}/${id}`, { method: "DELETE" })
@@ -598,6 +716,8 @@ export default function HardwareQuotesPanel({
         throw new Error(payload?.error ?? "계약 전환에 실패했습니다.")
       }
 
+      // 계약서 탭 목록(/api/admin/contracts)이 방금 만든 계약을 바로 읽도록 캐시를 비운다.
+      clearAdminRequestCache("/api/admin/contracts")
       const contractNumber = payload?.contract?.contract_number
       setNotice({
         tone: "success",
@@ -624,7 +744,7 @@ export default function HardwareQuotesPanel({
   // id 별 캐시라 응답이 늦게 와도 다른 견적에 섞이지 않는다 — 취소 없이 한 번만 받는다.
   const selectedQuoteId = selectedQuote?.id ?? null
   useEffect(() => {
-    if (showDeleted || !selectedQuoteId || details[selectedQuoteId]) return
+    if (view === "templates" || showDeleted || !selectedQuoteId || details[selectedQuoteId]) return
     setDetails((current) => ({ ...current, [selectedQuoteId]: { status: "loading" } }))
     fetchQuoteDetail(selectedQuoteId)
       .then((detail) => {
@@ -634,17 +754,45 @@ export default function HardwareQuotesPanel({
         const message = error instanceof Error ? error.message : "견적 상세를 불러오지 못했습니다."
         setDetails((current) => ({ ...current, [selectedQuoteId]: { status: "error", message } }))
       })
-  }, [selectedQuoteId, details, showDeleted])
+  }, [selectedQuoteId, details, showDeleted, view])
 
   useEffect(() => {
     if (!quickAction) return
     if (handledQuickActionKeyRef.current === quickAction.key) return
 
     handledQuickActionKeyRef.current = quickAction.key
-    setComposerTemplateId(templateIdFromQuickAction(quickAction.action))
+    setComposerDraft(null)
+    setComposerTemplate({ templateId: templateIdFromQuickAction(quickAction.action), presetId: null, quantity: 1 })
     setComposerOpen(true)
     onQuickActionConsumed?.()
   }, [onQuickActionConsumed, quickAction])
+
+  function openComposerWithTemplate(selection: QuoteTemplatePickerSelection) {
+    if (composerDraft) setComposerDraft(null)
+    setComposerTemplate(selection)
+    setComposerOpen(true)
+  }
+
+  async function handleResumeDraft(quote: HardwareQuoteRow) {
+    if (resumeQuoteId) return
+    setResumeQuoteId(quote.id)
+    setNotice(null)
+    try {
+      const { document, version, deal } = await fetchQuoteViewer(quote.id)
+      if (document?.status !== "draft") throw new Error("견적 상태가 변경됐습니다. 목록을 새로고침해 주세요.")
+      const details = getQuoteDetailsFromStructuredJson(version.structured_json, {
+        validUntil: version.valid_until,
+        customerName: quote.customerName,
+      })
+      if (!deal || !details?.lineItems?.length) throw new Error("편집할 견적 구성을 불러오지 못했습니다.")
+      setComposerDraft({ document, version, deal, details, customerName: quote.customerName })
+      setComposerOpen(true)
+    } catch (error) {
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "견적 초안을 불러오지 못했습니다." })
+    } finally {
+      setResumeQuoteId(null)
+    }
+  }
 
   async function handleCreated(payload: QuickQuoteCreatedPayload) {
     const nextQuote: HardwareQuoteRow = {
@@ -661,7 +809,7 @@ export default function HardwareQuotesPanel({
         getQuoteDetailsFromStructuredJson(payload.version.structured_json)?.vatIncluded,
         payload.version.tax_amount
       ),
-      status: payload.share ? "shared" : payload.document.status,
+      status: payload.document.status,
       shareCount: payload.share ? 1 : 0,
       // 작성 창에서 다시 저장하면 같은 견적의 다음 버전이 온다(v2, v3 …).
       versionCount: payload.version.version_number,
@@ -682,12 +830,11 @@ export default function HardwareQuotesPanel({
     }
 
     setQuotes((current) => {
-      // 같은 견적의 다음 버전이면 이미 있는 공유·열람 기록은 이어받는다(저장만 한 v2 가 공유 상태를 지우지 않게).
+      // 같은 견적의 후속 버전이면 이미 있는 공유·열람 기록은 이어받는다.
       const previous = current.find((item) => item.id === payload.document.id)
       const merged: HardwareQuoteRow = previous
         ? {
             ...nextQuote,
-            status: payload.share ? "shared" : previous.status,
             shareCount: Math.max(previous.shareCount, nextQuote.shareCount),
             shareUrl: nextQuote.shareUrl ?? previous.shareUrl,
             latestShareCreatedAt: nextQuote.latestShareCreatedAt ?? previous.latestShareCreatedAt,
@@ -699,7 +846,13 @@ export default function HardwareQuotesPanel({
         : nextQuote
       return [merged, ...current.filter((item) => item.id !== payload.document.id)]
     })
+    setDetails((current) => {
+      const next = { ...current }
+      delete next[payload.document.id]
+      return next
+    })
     setSelectedId(payload.document.id)
+    onQuoteCreated?.(payload.document.id)
   }
 
   async function ensureShareUrl(quote: HardwareQuoteRow) {
@@ -772,7 +925,9 @@ export default function HardwareQuotesPanel({
   function handleSelect(quote: HardwareQuoteRow) {
     // 좁은 화면에는 상세 패널이 없다 — 기존 직접 보기로 연다.
     if (typeof window !== "undefined" && !window.matchMedia(DESKTOP_QUERY).matches) {
-      if (!showDeleted) openAdminQuoteView(quote.id)
+      if (showDeleted) return
+      if (quote.status === "draft") void handleResumeDraft(quote)
+      else openAdminQuoteView(quote.id)
       return
     }
     setSelectedId(quote.id)
@@ -835,6 +990,12 @@ export default function HardwareQuotesPanel({
     return (
       <>
         {viewButton}
+        {quote.status === "draft" && (
+          <button type="button" onClick={() => void handleResumeDraft(quote)} disabled={Boolean(resumeQuoteId)} className={OUTLINE_STRONG_BUTTON}>
+            {resumeQuoteId === quote.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            이어서 편집
+          </button>
+        )}
         {copyButton}
       </>
     )
@@ -1022,6 +1183,10 @@ export default function HardwareQuotesPanel({
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4 sm:px-6 sm:py-5">
+      {view === "templates" ? (
+        <QuoteTemplatePicker hiddenTemplateIds={preferences.hiddenTemplateIds} onCompose={openComposerWithTemplate} />
+      ) : (
+      <div className="space-y-4">
       <button type="button" className={GHOST_BUTTON} aria-pressed={showDeleted} onClick={() => {
         const next = !showDeleted
         setShowDeleted(next)
@@ -1062,10 +1227,7 @@ export default function HardwareQuotesPanel({
           {!showDeleted && <><p className="mt-1 text-xs text-[#78736D]">견적서를 만들면 여기서 다음 할 일 순서로 정리됩니다.</p>
           <button
             type="button"
-            onClick={() => {
-              setComposerTemplateId("board_86")
-              setComposerOpen(true)
-            }}
+            onClick={() => openComposerWithTemplate({ templateId: DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID, presetId: null, quantity: 1 })}
             className={`${SOLID_BUTTON} mt-4`}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -1201,19 +1363,29 @@ export default function HardwareQuotesPanel({
           </div>
         </div>
       )}
+      </div>
+      )}
 
       <QuickQuoteComposer
         open={composerOpen}
-        onOpenChange={setComposerOpen}
+        onOpenChange={(open) => {
+          setComposerOpen(open)
+          if (!open) setComposerDraft(null)
+        }}
         recentQuotes={recentQuotes}
         apiBase="/api/portal"
-        initialTemplateId={composerTemplateId}
+        initialTemplateId={composerTemplate.templateId}
+        initialPresetId={composerTemplate.presetId}
+        initialQuantity={composerTemplate.quantity}
         supplierManagerOptions={supplierManagerOptions}
         teamTemplates={teamTemplates}
         onSaveTemplate={handleSaveTemplate}
         onDeleteTemplate={handleDeleteTemplate}
         displaySettings={{ preferences, onChange: updatePreferences, storageError }}
-        prefill={prefill}
+        prefill={composerDraft ? null : prefill}
+        initialDraft={composerDraft}
+        distributorQuote={distributorQuote}
+        loadCustomerUnits={loadCustomerUnits}
         onCreated={handleCreated}
       />
     </div>

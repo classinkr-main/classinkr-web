@@ -22,7 +22,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 //  - 요청은 전체 상태({ navOverrides })다 — 부분 병합이 아니다. 정규화가 모르는 href·값을 버리고
 //    Overview 의 hidden 을 지운다. CRM 하위 탭 키(`crm:<href>` = hidden|shown, 숨길 수 있는
 //    레지스트리 탭만)는 보존하고, 모르는 네임스페이스 키는 버린다(CrmSubnav "다시 표시"도 이 경로).
-//  - nav_preset(레거시 컬럼)은 건드리지 않는다.
+//  - nav_preset 은 건드리지 않는다. 2026-11-20 부터 "super" 값이 전체 사이드바 지정이다 — 켜고 끄는
+//    것은 SUPER_ADMIN 전용 PATCH /api/admin/users 뿐이고, 본인이 이 경로로 스스로 켤 수 없다.
+//  - 정규화는 계정(전체/간소)을 모른다. 간소 계정이 착지 화면(매출 장부)을 숨긴 값은 저장되더라도
+//    판정(resolveNavPreference)이 무시한다.
 //  - 성공하면 사용자 디렉터리 캐시 태그와 이 인스턴스의 셸 세션 캐시를 무효화한다.
 export async function PATCH(req: NextRequest) {
   // unsafe 메서드의 기본 허용 역할은 STAFF_ADMIN 이다 — 본인 설정은 전 역할이 써야 하므로 명시한다.

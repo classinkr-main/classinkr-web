@@ -117,6 +117,7 @@ export default function QuoteDirectViewerClient({ quoteId }: { quoteId: string }
   const quoteDetails = getQuoteDetailsFromStructuredJson(version.structured_json, {
     validUntil: version.valid_until,
   })
+  const showDiscount = version.discount_amount > 0 && quoteDetails?.showDiscountDetails !== false
 
   return (
     <main data-quote-viewer="true" className="min-h-screen bg-[#F6F5F4] px-4 py-10 print:bg-white print:px-0 print:py-0 sm:px-6 sm:py-16">
@@ -134,6 +135,7 @@ export default function QuoteDirectViewerClient({ quoteId }: { quoteId: string }
             <QuoteViewerActions
               reviewEndpoint={`/api/portal/quotes/${document.id}/confirm`}
               authMode="admin"
+              showReviewActions={document.status !== "draft"}
             />
           </div>
         </header>
@@ -142,10 +144,11 @@ export default function QuoteDirectViewerClient({ quoteId }: { quoteId: string }
           <div>
             <p className="text-xs uppercase tracking-wider text-[#1a1a1a]/45">총 금액</p>
             <p className="mt-1 text-2xl font-semibold text-[#1a1a1a]">{formatKRW(version.total_amount)}</p>
-            {(version.discount_amount > 0 || version.tax_amount > 0) && (
+            {(showDiscount || version.tax_amount > 0) && (
               <p className="mt-1 text-xs text-[#1a1a1a]/50">
-                {version.discount_amount > 0 ? `할인 ${formatKRW(version.discount_amount)} · ` : ""}
-                부가세 {formatKRW(version.tax_amount)}
+                {showDiscount ? `할인 ${formatKRW(version.discount_amount)}` : ""}
+                {showDiscount && version.tax_amount > 0 ? " · " : ""}
+                {version.tax_amount > 0 ? `부가세 ${formatKRW(version.tax_amount)}` : ""}
               </p>
             )}
           </div>

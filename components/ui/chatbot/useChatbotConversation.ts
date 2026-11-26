@@ -6,7 +6,7 @@ import { getChannelTalkAnonymousId } from "@/lib/channel-talk"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { trackEvent } from "@/lib/analytics"
 import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
-import { sanitizeChatbotPageUrl } from "@/lib/chatbot/pii"
+import { chatbotRequestReferrer, sanitizeChatbotPageUrl, sanitizeChatbotUtm } from "@/lib/chatbot/pii"
 import {
     buildPreviousTurnPayload,
     classifyWidgetTurnError,
@@ -72,8 +72,12 @@ let starterQuestionsCache: string[] | null = null
 
 function loadStarterQuestionsOnce(): Promise<string[]> {
     if (starterQuestionsCache) return Promise.resolve(starterQuestionsCache)
-    starterQuestionsRequest ??= fetch("/api/chatbot/recommended-questions", { cache: "no-store" })
-        .then((response) => response.json() as Promise<ChatbotStarterQuestionsResponse>)
+    // Referer 에 주소 전체(쿼리 포함)가 실리지 않게 정화한 주소를 준다(CX-04·C4).
+    starterQuestionsRequest ??= fetch("/api/chatbot/recommended-questions", { cache: "no-store", referrer: chatbotRequestReferrer() })
+        .then((response) => {
+            if (!response.ok) throw new Error("Recommended questions unavailable")
+            return response.json() as Promise<ChatbotStarterQuestionsResponse>
+        })
         .then((data) => {
             const questions = Array.isArray(data.questions)
                 ? data.questions
@@ -97,7 +101,7 @@ function buildWelcomeMessage(pageContext: PageContext, starterQuestions: readonl
     return {
         id: "welcome",
         role: "assistant",
-        content: CLASSIN_POSITIONING.chatbot.welcome,
+        content: pageContext.welcome ?? CLASSIN_POSITIONING.chatbot.welcome,
         suggestedQuestions: mergeStarters(pageContext.starters, [...(starterQuestions ?? [])], STARTER_SUGGESTION_LIMIT),
     }
 }
@@ -232,14 +236,13 @@ export function useChatbotConversation({
     const context = useMemo(
         () => {
             // 쿼리의 토큰·이메일이 챗봇 서버와 상담 수신함으로 가지 않게 정화한다(CX-04·C4). 추적 제외 경로는 경로만 보낸다.
+            // utm 도 같은 경계다: 이메일 같은 개인정보 값은 버리고 추적 제외 경로에서는 보내지 않는다. Referer 헤더는 fetch 의
+            // referrer(chatbotRequestReferrer)로 같은 정화 주소만 싣는다.
             const pageUrl = typeof window === "undefined" ? undefined : sanitizeChatbotPageUrl(window.location.href)
-            const searchParams =
-                typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search)
-            const utm = Object.fromEntries(
-                ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]
-                    .map((key) => [key, searchParams.get(key)] as const)
-                    .filter(([, value]) => Boolean(value))
-            )
+            const utm =
+                typeof window === "undefined"
+                    ? {}
+                    : sanitizeChatbotUtm(new URLSearchParams(window.location.search), window.location.pathname)
 
             return {
                 channel: "web",
@@ -268,25 +271,30 @@ export function useChatbotConversation({
     // hidden이어도 isOpen은 강제로 닫지 않는다 — 숨김 페이지(/pricing 등)를 잠깐
     // 거쳐도 창이 영구히 닫히지 않고, 다시 보이는 페이지로 오면 이전 열림 상태로
     // 복귀한다. 시각적 숨김은 셸(FloatingChatbot)의 `if (hidden) return null`이 담당한다.
-    // 추천 질문은 창을 열 때만 받는다(페이지를 불러오기만 해서는 요청하지 않는다).
+    // 경로가 바뀌면 환영·첫 질문만 맞추고 복원한 대화는 보존한다.
     useEffect(() => {
-        if (hidden || !isOpen) return
+        const next = buildWelcomeMessage(pageContext, starterQuestionsCache)
+        setMessages((current) => current.map((message) =>
+            message.id === "welcome" && (message.content !== next.content ||
+                !sameQuestions(message.suggestedQuestions, next.suggestedQuestions ?? []))
+                ? next : message
+        ))
+    }, [pageContext])
+
+    // 추천 질문은 위젯이 열려 있고 현재 페이지의 질문이 부족할 때만 받는다.
+    useEffect(() => {
+        if (hidden || !isOpen || pageContext.starters.length >= STARTER_SUGGESTION_LIMIT) return
         let cancelled = false
         void loadStarterQuestionsOnce().then((questions) => {
             if (cancelled) return
-            const suggestedQuestions = buildWelcomeMessage(pageContext, questions).suggestedQuestions ?? []
-            if (suggestedQuestions.length === 0) return
-            setMessages((current) => {
-                const welcome = current.find((message) => message.id === "welcome")
-                if (!welcome || sameQuestions(welcome.suggestedQuestions, suggestedQuestions)) return current
-                return current.map((message) =>
-                    message.id === "welcome" ? { ...message, suggestedQuestions } : message
-                )
-            })
+            const next = buildWelcomeMessage(pageContext, questions)
+            setMessages((current) => current.map((message) =>
+                message.id === "welcome" && (message.content !== next.content ||
+                    !sameQuestions(message.suggestedQuestions, next.suggestedQuestions ?? []))
+                    ? next : message
+            ))
         })
-        return () => {
-            cancelled = true
-        }
+        return () => { cancelled = true }
     }, [hidden, isOpen, pageContext])
 
     useEffect(() => {
@@ -388,6 +396,8 @@ export function useChatbotConversation({
             const response = await fetch("/api/chatbot/query/stream", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                // 서버는 Referer 를 chat_sessions.referrer 로 저장한다 — 기본 정책이면 같은 출처라 쿼리째 실린다(CX-04·C4).
+                referrer: chatbotRequestReferrer(),
                 signal: controller.signal,
                 body: JSON.stringify({
                     message: question,

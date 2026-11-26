@@ -398,13 +398,23 @@ const CLICK_SKIP_WARMUP_URLS: Record<string, string[]> = {
 const MINIMAL_SCROLLBAR =
   "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/10 hover:[&::-webkit-scrollbar-thumb]:bg-black/20"
 
-// 현장 사용 빈도 기준 — 2026-07-29 탭 재구성으로 첫 화면이 캘린더가 되면서 Overview를 내렸다.
-// 나머지는 More의 전체 메뉴에서 접근한다.
+// 모바일 하단 바로가기는 사이드바의 첫 네 업무 메뉴를 따른다.
 const MOBILE_PRIMARY_NAV = [
-  { href: "/admin/calendar", label: "캘린더" },
+  { href: "/admin/overview", label: "Overview" },
+  { href: "/admin/branch/ledger", label: "장부" },
   { href: "/admin/quotes", label: "견적" },
-  { href: "/admin/crm", label: "CRM" },
+  { href: "/admin/hardware", label: "재고" },
 ] as const
+
+// 간소 계정은 상시 목록의 앞 네 항목을 바로가기로 쓴다.
+const MOBILE_SIMPLE_NAV_MAX = 4
+const MOBILE_SHORT_LABELS: Record<string, string> = {
+  "/admin/branch/ledger": "장부",
+  "/admin/quotes": "견적",
+  "/admin/hardware": "재고",
+  "/admin/calendar": "캘린더",
+  "/admin/crm": "CRM",
+}
 
 const ROLE_LABEL: Record<AdminRole, string> = {
   SUPER_ADMIN: "최고 관리자",
@@ -419,6 +429,11 @@ interface Props {
   role: string
   name: string
   email: string
+  /**
+   * 셸 세션의 nav_preset. "super" 면 역할과 무관하게 전체 사이드바를 보는 지정 계정이다
+   * (admin-nav-access hasFullAdminNav, 2026-11-20). 판정은 resolveAdminNavAccess 가 한다.
+   */
+  navPreset?: string | null
   navOverrides: Record<string, string>
   /**
    * 본인 편집(편집 드로어·"다시 표시")이 저장에 성공하면 서버가 정규화한 값을 넘긴다.
@@ -507,7 +522,7 @@ export default function AdminSidebar(props: Props) {
   )
 }
 
-function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesChange }: Props) {
+function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNavOverridesChange }: Props) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -542,7 +557,9 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
   // 현재 경로가 숨긴 항목이면 아래 hiddenHasActiveItem 이 강제로 펼친다.
   const [hiddenOpen, setHiddenOpen] = useState(false)
   // 본인 사이드바 편집 드로어 — 사용자 블록·모바일 메뉴의 "사이드바 편집" 버튼과
-  // ⌘K 명령(window 이벤트 "admin:open-nav-editor")이 연다.
+  // ⌘K 명령(window 이벤트 "admin:open-nav-editor")이 연다. 간소 사이드바 계정에게는 그 버튼과
+  // 명령을 그리지 않는다(2026-11-20). 이벤트 수신은 남긴다 — CRM 탭 줄(CrmSubnav)의 "사이드바 편집"
+  // 링크가 같은 이벤트를 쏘므로, 주소로 CRM 에 들어온 간소 계정의 그 링크가 죽은 버튼이 되지 않게 한다.
   const [navEditorOpen, setNavEditorOpen] = useState(false)
   // 숨긴 탭 "다시 표시" 저장 상태.
   const [restoringHref, setRestoringHref] = useState<string | null>(null)
@@ -631,16 +648,22 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
   const normalizedRole = normalizeAdminRole(role)
   const normalizedOverrides = useMemo(() => normalizeNavOverrides(navOverrides), [navOverrides])
   // 상시/접힘/숨김 배치는 반드시 resolveAdminNavAccess를 통해서만 계산한다 — 사이드바가 자체
-  // 계산을 하면 편집기 미리보기와 어긋난다. 2026-09-10 전면 공개 이후 목록 자체는 전원 동일하고,
-  // 사람별 오버라이드는 항목의 상시/접힘 자리를 옮기거나 내 목록에서 숨길 뿐이다.
+  // 계산을 하면 편집기 미리보기와 어긋난다. 기본값은 계정에 따라 둘이다(2026-11-20): 전체 사이드바
+  // (SUPER_ADMIN · nav_preset "super" 지정 계정)는 전체 배치, 그 밖은 간소(Overview + 매출 장부 + 견적·문서 + 하드웨어 재고).
+  // 사람별 오버라이드는 그 위에서 항목의 상시/접힘 자리를 옮기거나 내 목록에서 숨길 뿐이다.
+  // 어느 쪽이든 목록 정리일 뿐 접근을 막지 않는다 — 주소로는 모든 화면이 열린다.
   const navAccess = useMemo(
     () =>
       resolveAdminNavAccess({
         role: normalizedRole,
+        preset: navPreset,
         overrides: normalizedOverrides,
       }),
-    [normalizedRole, normalizedOverrides]
+    [normalizedRole, navPreset, normalizedOverrides]
   )
+  // 간소 계정에게는 "숨긴 탭 N" 묶음과 "사이드바 편집" 진입점을 그리지 않는다 — 거의 전부가 숨김이라
+  // 그 묶음이 곧 전체 메뉴가 된다. 상시는 2026-11-09 D안부터 소제목 없이 간격만 둔다.
+  const fullNav = navAccess.fullNav
   // accessibleNav 는 숨긴 항목까지 포함한 전체다(admin-nav-access 불변식) — active 판정의 형제
   // 목록과 모바일 헤더 라벨은 숨긴 화면에 있을 때도 맞아야 하므로 이것을 쓴다.
   const accessibleNav = useMemo(() => getAccessibleAdminNavItems(navAccess), [navAccess])
@@ -669,18 +692,23 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
   const currentCrmRouteLabel = inCrm ? resolveCrmRouteLabel(pathname ?? "") : null
   const mobilePrimaryNav = useMemo(
     () =>
-      MOBILE_PRIMARY_NAV.flatMap(({ href, label }) => {
-        const item = visibleNav.find((entry) => entry.href === href)
-        return item ? [{ ...item, label }] : []
-      }),
-    [visibleNav]
+      fullNav
+        ? MOBILE_PRIMARY_NAV.flatMap(({ href, label }) => {
+            const item = visibleNav.find((entry) => entry.href === href)
+            return item ? [{ ...item, label }] : []
+          })
+        : navAccess.primary
+            .slice(0, MOBILE_SIMPLE_NAV_MAX)
+            .map((item) => ({ ...item, label: MOBILE_SHORT_LABELS[item.href] ?? item.label })),
+    [fullNav, navAccess.primary, visibleNav]
   )
 
   // 숨긴 탭 "다시 표시" — 그 항목의 기본 자리(상시/접힘)로 돌려 저장한다. 기본 숨김 항목이면
   // 그 자리가 이 사람의 오버라이드로 남는다(setNavOverride 는 기본값과 같을 때만 키를 지운다).
   const restoreHiddenItem = async (href: string) => {
-    const seat = resolveNavPlacement(href, { role: normalizedRole, overrides: normalizedOverrides })
-    const next = setNavOverride(normalizedOverrides, href, seat)
+    const audience = { role: normalizedRole, preset: navPreset }
+    const seat = resolveNavPlacement(href, { ...audience, overrides: normalizedOverrides })
+    const next = setNavOverride(normalizedOverrides, href, seat, audience)
     setRestoringHref(href)
     setRestoreError(null)
     try {
@@ -921,8 +949,9 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
 
   // 접힘 묶음 아래 "숨긴 탭 N · 보기" 묶음. 숨긴 항목도 링크 그대로 열리고(도달성 불변), 행마다
   // "다시 표시"로 기본 자리에 되돌린다. 모바일 드로어와 데스크톱이 같은 마크업을 쓰되 터치 높이만 다르다.
+  // 간소 사이드바 계정에게는 그리지 않는다(2026-11-20 D2) — 숨김은 눈에 보이는 목록 전체에 적용된다.
   const renderHiddenGroup = (variant: "mobile" | "desktop") => {
-    if (navAccess.hidden.length === 0) return null
+    if (!fullNav || navAccess.hidden.length === 0) return null
 
     const mobile = variant === "mobile"
     const collapsedDesktop = !mobile && effectiveCollapsed
@@ -1065,15 +1094,17 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
             <p className="truncate text-[11px] text-[#1a1a1a]/40">
               {ROLE_LABEL[normalizedRole]}{email ? ` - ${email}` : ""}
             </p>
-            <button
-              type="button"
-              onClick={openNavEditor}
-              aria-haspopup="dialog"
-              className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-md px-1 text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110]"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              사이드바 편집
-            </button>
+            {fullNav ? (
+              <button
+                type="button"
+                onClick={openNavEditor}
+                aria-haspopup="dialog"
+                className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-md px-1 text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110]"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                사이드바 편집
+              </button>
+            ) : null}
           </div>
 
           <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
@@ -1081,8 +1112,8 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
               <>
                 {/* 상시 — 소제목 없이 범주 묶음 사이 간격만(2026-11-09 D안, renderFoldedGroups 위 주석). */}
                 <div className="space-y-2.5">
-                  {navAccess.primaryGroups.map(({ category, items }) => (
-                    <div key={`mobile-primary-${category}`} className="space-y-1">
+                  {navAccess.primaryGroups.map(({ items }) => (
+                    <div key={`mobile-primary-${items[0].href}`} className="space-y-1">
                       {items.map((item) => {
                         const isActive = isNavActive(item.href)
 
@@ -1227,16 +1258,19 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
           <p className="text-[11px] text-[#1a1a1a]/40">
             {ROLE_LABEL[normalizedRole]}{email ? ` - ${email}` : ""}
           </p>
-          {/* 본인 사이드바 편집 — 설정 여부와 무관하게 항상 렌더한다(찾을 수 있어야 쓴다). */}
-          <button
-            type="button"
-            onClick={openNavEditor}
-            aria-haspopup="dialog"
-            className="-ml-1 mt-1.5 inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-[#615D59] transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            사이드바 편집
-          </button>
+          {/* 본인 사이드바 편집 — 전체 사이드바 계정에게는 설정 여부와 무관하게 항상 렌더한다(찾을 수
+              있어야 쓴다). 간소 계정에게는 진입점을 두지 않는다(2026-11-20). */}
+          {fullNav ? (
+            <button
+              type="button"
+              onClick={openNavEditor}
+              aria-haspopup="dialog"
+              className="-ml-1 mt-1.5 inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-[#615D59] transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              사이드바 편집
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -1266,8 +1300,8 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
             {/* 상시 — 소제목 없이 범주 묶음 사이 간격만(2026-11-09 D안, renderFoldedGroups 위 주석).
                 아이콘 레일에서도 같은 간격이 묶음 경계를 보여 준다. */}
             <div className="space-y-2">
-              {navAccess.primaryGroups.map(({ category, items }) => (
-                <div key={`primary-${category}`} className="space-y-0.5">
+              {navAccess.primaryGroups.map(({ items }) => (
+                <div key={`primary-${items[0].href}`} className="space-y-0.5">
                   {items.map((item) => {
                     const isActive = isNavActive(item.href)
 
@@ -1330,8 +1364,8 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
           aria-hidden
           className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-white to-transparent"
         />
-        {/* 접힌 사이드바에는 사용자 블록이 없다 — 편집 진입점을 아이콘으로 남긴다. */}
-        {effectiveCollapsed ? (
+        {/* 접힌 사이드바에는 사용자 블록이 없다 — 편집 진입점을 아이콘으로 남긴다(전체 사이드바 계정만). */}
+        {effectiveCollapsed && fullNav ? (
           <button
             type="button"
             onClick={openNavEditor}
@@ -1382,6 +1416,7 @@ function AdminSidebarContent({ role, name, email, navOverrides, onNavOverridesCh
     {navEditorOpen ? (
       <MyNavEditorDrawer
         role={role}
+        navPreset={navPreset}
         name={name}
         initialOverrides={navOverrides}
         onClose={() => setNavEditorOpen(false)}

@@ -351,10 +351,9 @@ export default function ContactPage() {
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.1 }}
-                            className="text-[2rem] leading-[1.12] tracking-tight text-[#111110] sm:text-4xl md:text-[3rem]"
+                            className="text-[2rem] leading-[1.25] tracking-tight text-[#111110] sm:text-4xl md:text-[3rem]"
                         >
-                            궁금한 점이 있으신가요? <br />
-                            운영 상황부터 함께 확인해드립니다.
+                            클래스인 도입 상담·기술 지원
                         </motion.h1>
 
                         <motion.p

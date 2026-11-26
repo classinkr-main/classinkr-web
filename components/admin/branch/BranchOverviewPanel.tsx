@@ -1,19 +1,22 @@
 "use client"
 
+import Link from "next/link"
 import { useState } from "react"
+import type { BranchSalesCounts } from "@/lib/branch/sales-counts-contract"
 import type { CompassKrTeamResult } from "@/lib/compass/kr-team-contract"
-import type { BranchJsonState } from "./client-api"
+import { useBranchJson, type BranchJsonState } from "./client-api"
 import IntegrityStrip from "./IntegrityStrip"
 import type { DealModalDeal } from "./sections/DealModal"
 import BranchHeroGauges from "./sections/BranchHeroGauges"
 import BranchUpcomingDeals, { type UpcomingDealClick } from "./sections/BranchUpcomingDeals"
 import CampaignsSection from "./sections/CampaignsSection"
 import ChannelSettlementSection from "./sections/ChannelSettlementSection"
-import CoreKpiGrid from "./sections/CoreKpiGrid"
 import CompassTeamSection from "./sections/CompassTeamSection"
 import DealMixSection from "./sections/DealMixSection"
 import HardwareSection from "./sections/HardwareSection"
-import RevenueFlowSection from "./sections/RevenueFlowSection"
+import OverviewHeroCard from "./sections/OverviewHeroCard"
+import { RevenueFlowCard, useRevenueFlow } from "./sections/RevenueFlowSection"
+import MoneyValue from "./MoneyValue"
 import type { BranchKpiResponse, BranchSummaryResponse, Period, Team } from "./types"
 
 interface BranchOverviewPanelProps {
@@ -83,6 +86,28 @@ function StaleNotice({ summary, kpi }: {
   )
 }
 
+function SummaryCard({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-5 py-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[14px] font-bold text-[#111110]">{title}</h2>
+        {aside ? <span className="text-[11.5px] text-[#615D59]">{aside}</span> : null}
+      </div>
+      <div className="mt-3">{children}</div>
+    </section>
+  )
+}
+
+function CompanyNote({ title, value, sub }: { title: string; value: string; sub: string }) {
+  return (
+    <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-3">
+      <p className="text-[11.5px] font-medium text-[#615D59]">{title}</p>
+      <p className="mt-0.5 text-[16px] font-bold text-[#111110]">{value}</p>
+      <p className="text-[11.5px] text-[#615D59]">{sub}</p>
+    </div>
+  )
+}
+
 export default function BranchOverviewPanel({
   manager,
   summary,
@@ -97,7 +122,14 @@ export default function BranchOverviewPanel({
   canRunAdminOperations,
   onUpcomingDealClick,
 }: BranchOverviewPanelProps) {
-  const [showOperations, setShowOperations] = useState(true)
+  // 캠페인·HW 상세는 전사 공용 참고라 기본으로 접는다(KR Team 차트·게이지는 접지 않는다 — SKILL 보존 원칙).
+  const [showOperations, setShowOperations] = useState(false)
+  const flow = useRevenueFlow({ manager, summary: summary.data, team, period, selectedMonth, refreshKey })
+  // 총 고객수·칠판 판매 대수 — 개요의 유일한 새 페치. manager 쿼리는 useRevenueFlow(pipeline)와 같은 방식으로 붙인다.
+  const salesCounts = useBranchJson<BranchSalesCounts>(
+    `/api/admin/branch/sales-counts?team=${team}${manager ? `&manager=${encodeURIComponent(manager)}` : ""}`,
+    refreshKey,
+  )
   const evaluation = <CompassTeamSection resource={compass} month={selectedMonth} onMonthChange={onMonthChange} team={team} />
   const settlement = <div className="space-y-2"><p className="text-[12px] text-[#615D59]">채널 정산 · 전사 공용 참고</p><ChannelSettlementSection period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} /></div>
   if (summary.loading && !summary.data) {
@@ -151,42 +183,73 @@ export default function BranchOverviewPanel({
     })
   }
 
+  const data = summary.data
+  const bottleneckPct = data.bottleneck.pct
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <StaleNotice summary={summary} kpi={kpi} />
-      <BranchHeroGauges
-        summary={summary.data}
-        kpi={kpi.data}
-        loading={kpi.loading}
-        periodLabel={periodLabel}
-        error={kpi.error}
-      />
-      <IntegrityStrip refreshKey={refreshKey} canRunAdminOperations={canRunAdminOperations} />
-      <DealMixSection summary={summary.data} loading={false} error={null} />
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
-        <RevenueFlowSection manager={manager}
-          summary={summary.data}
-          loading={false}
-          team={team}
-          period={period}
-          selectedMonth={selectedMonth}
-          refreshKey={refreshKey}
-        />
+      {/* 2026-11-25 시안 '개요 A · 다듬기' — ① 확정 매출(+고객·칠판) | 목표 달성 ② 매출 누적 흐름 ③ 매출 분해 ④ 일정·병목·딜 ⑤ 전사 참고. */}
+      {/* 왼쪽 카드는 내용 높이만큼(오른쪽 게이지 카드가 더 길어 늘이면 가운데가 비었다). */}
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+        <OverviewHeroCard summary={data} flow={flow} counts={salesCounts} periodLabel={periodLabel} period={period} selectedMonth={selectedMonth} />
+        <div className="flex min-w-0 flex-col gap-3">
+          <BranchHeroGauges
+            summary={summary.data}
+            kpi={kpi.data}
+            loading={kpi.loading}
+            periodLabel={periodLabel}
+            error={kpi.error}
+            layout="cockpit"
+          />
+          <IntegrityStrip refreshKey={refreshKey} canRunAdminOperations={canRunAdminOperations} />
+        </div>
+      </div>
+      <RevenueFlowCard flow={flow} summary={data} manager={manager} selectedMonth={selectedMonth} />
+      <DealMixSection summary={data} loading={false} error={null} />
+      <div className="grid gap-4 lg:grid-cols-3">
         <BranchUpcomingDeals
-          data={summary.data.monthly_series ?? null}
+          data={data.monthly_series ?? null}
           loading={false}
           error={null}
           onDealClick={openUpcomingDeal}
+          limit={4}
         />
+        <SummaryCard title="시트 영업 KPI 병목" aside="BD">
+          {data.bottleneck.metric ? (
+            <>
+              <p className="flex items-baseline gap-2.5">
+                <span className="text-[22px] font-bold text-[#111110]">{data.bottleneck.metric.toUpperCase()}</span>
+                <span className={`text-[14px] font-bold tabular-nums ${bottleneckPct < 30 ? "text-[#B43E3E]" : "text-[#111110]"}`}>{bottleneckPct.toFixed(0)}%</span>
+              </p>
+              {data.bottleneck.worst_member ? <p className="mt-1.5 text-[11.5px] text-[#615D59]">가장 낮은 담당: {data.bottleneck.worst_member}</p> : null}
+            </>
+          ) : <p className="text-[12px] text-[#615D59]">판정할 병목이 없습니다.</p>}
+        </SummaryCard>
+        <SummaryCard title="가까운 딜">
+          <p className="flex items-baseline gap-2.5">
+            <span className="text-[22px] font-bold text-[#111110]">{data.closing.count}건</span>
+            <span className="text-[14px] font-bold tabular-nums text-[#31302E]">목표 합 <MoneyValue value={data.closing.total_target} /></span>
+          </p>
+          <Link href={`/admin/branch?tab=pipeline&team=${team}&period=${period}${period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""}`} className="mt-1.5 inline-flex min-h-11 items-center text-[11.5px] font-semibold text-[#084734] underline underline-offset-2 md:min-h-0">파이프라인 탭에서 전체 보기 →</Link>
+        </SummaryCard>
       </div>
-      <CoreKpiGrid data={summary.data} loading={false} error={null} />
+
+      <div className="flex items-center gap-3 pt-4">
+        <h2 className="text-[12px] font-bold tracking-[0.04em] text-[#615D59]">전사 참고</h2>
+        <span className="h-px flex-1 bg-[rgba(0,0,0,0.08)]" aria-hidden="true" />
+        <span className="text-[11.5px] text-[#615D59]">KR Team 매출과 합산하지 않음</span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <CompanyNote title="전사 공용 행사 (30일)" value={`${data.events_30d.count}건`} sub={`지역 ${data.events_30d.regions}개`} />
+        <CompanyNote title="전사 공용 캠페인 성과" value={`${data.campaigns_30d.count}건`} sub={`평균 오픈율 ${data.campaigns_30d.avg_open_pct.toFixed(0)}%`} />
+      </div>
       {evaluation}
       {settlement}
       <button type="button" aria-expanded={showOperations} aria-controls="branch-operations-detail" onClick={() => setShowOperations((open) => !open)} className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-5 py-3 text-[13px] font-semibold text-[#31302E] focus-visible:outline-2 focus-visible:outline-[#084734]">
         캠페인 · 하드웨어 상세 · 전사 공용<span aria-hidden="true">{showOperations ? "−" : "+"}</span>
       </button>
       {showOperations ? <div id="branch-operations-detail" className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
-        <CampaignsSection rows={summary.data.campaigns_recent ?? null} loading={false} error={null} />
+        <CampaignsSection rows={data.campaigns_recent ?? null} loading={false} error={null} />
         <HardwareSection refreshKey={refreshKey} />
       </div> : null}
     </div>

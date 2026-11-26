@@ -1,6 +1,8 @@
 import { PRODUCT_TEMPLATES } from "@/lib/product-templates"
 import {
+  INSTALL_FEE_ITEM_CODE,
   QUOTE_NOTE_PRESETS,
+  STANDARD_PRICE_INSTALL_FEE,
   STANDARD_QUOTE_TEMPLATES,
   isRetiredQuoteTemplate,
   isSoftwareQuoteTemplate,
@@ -18,7 +20,7 @@ import {
 
 export type QuoteTemplateScope = "mine" | "team"
 export type QuoteTemplateVat = "excluded" | "included"
-export type QuoteTemplateInstallation = "included_quote" | "separate_billing" | "tbd"
+export type QuoteTemplateInstallation = "included_quote" | "separate_billing" | "tbd" | "none"
 export type QuoteTemplatePayment = "one_time" | "12_month"
 
 export const QUOTE_TEMPLATE_VALIDITY_DAYS = [14, 30, 60] as const
@@ -32,6 +34,7 @@ export const QUOTE_TEMPLATE_INSTALLATION_OPTIONS: Array<{ value: QuoteTemplateIn
   { value: "included_quote", label: "견적 포함" },
   { value: "separate_billing", label: "별도 청구" },
   { value: "tbd", label: "추후 협의" },
+  { value: "none", label: "제외" },
 ]
 export const QUOTE_TEMPLATE_PAYMENT_OPTIONS: Array<{ value: QuoteTemplatePayment; label: string }> = [
   { value: "one_time", label: "일시 납부" },
@@ -114,6 +117,7 @@ function buildCatalog(): QuoteTemplateCatalogEntry[] {
       if (line.itemCode && typeof line.unitPrice === "number") add(line.itemCode, line.itemName, line.unitPrice)
     }
   }
+  add(INSTALL_FEE_ITEM_CODE, "배송·설치비", STANDARD_PRICE_INSTALL_FEE)
   return [...bySku.values()]
 }
 

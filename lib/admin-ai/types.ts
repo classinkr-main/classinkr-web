@@ -19,6 +19,8 @@ export type OrderState =
   | "cancelled"
   | "expired"
   | "failed"
+  /** 서버 오더의 확인표가 이미 쓰였다(같은 표를 다시 보냄) — 실행하지 않았고, 결과는 화면에서 본다. */
+  | "processed"
 
 export type OrderIcon =
   | "task"
@@ -32,6 +34,7 @@ export type OrderIcon =
   | "search"
   | "lock"
   | "help"
+  | "link"
 
 /**
  * 되돌리기 방식.
@@ -114,6 +117,21 @@ export interface OrderTicket {
   failure?: OrderFailure
   /** 오더를 내린 화면 경로. */
   pagePath?: string
+  /**
+   * 서버(실제 모드)가 낸 오더. ticket 은 서버가 서명한 일회용 확인 표 — 카드의 확인 버튼이 이 값을 그대로
+   * POST /api/admin/ai/orders/confirm 에 보낸다. 서명 비밀이 없으면 ticket 이 없고 directHref(화면에서 직접 등록)만 있다.
+   * 시안 오더에는 없다.
+   */
+  server?: OrderServerTicket
+  /** 확인 요청을 서버에 보내 답을 기다리는 중(버튼을 막는다). */
+  submitting?: boolean
+}
+
+export interface OrderServerTicket {
+  ticket?: string
+  /** 화면에서 직접 하는 주소 — 링크 목록(links.ts)에 있는 어드민 주소만 그려진다. */
+  directHref?: string
+  directLabel?: string
 }
 
 export interface ReadCardTable {
@@ -141,7 +159,83 @@ export interface DenyCard {
   target: OrderTarget
   text: string
   openLabel?: string
+  /** 해당 화면 주소 — 링크 목록(links.ts)에 있는 어드민 주소만 그려진다. */
   openHref?: string
+}
+
+// ── 묻기(R0) 블록 — 오더가 아니라 답·링크·담당자를 카드로 낸다(기획 §11.9) ──
+
+/** 근거 문서의 상태. "confirmed" 는 사람이 확정한 내용, "needs-check" 는 초안·오래됨·충돌 등 확인이 필요한 내용. */
+export type AnswerConfidence = "confirmed" | "needs-check"
+
+/** 출처의 성격 — public: 공개 문서, internal: 사내 문서, consultation: 상담 사례(원문은 싣지 않는다). */
+export type AnswerSourceKind = "public" | "internal" | "consultation"
+
+export interface AnswerSource {
+  /** 문서 이름(상담 사례는 "상담 사례 N건" 같은 요약). */
+  title: string
+  /** 문서 안의 위치(절·항목). */
+  where?: string
+  kind: AnswerSourceKind
+  status: AnswerConfidence
+  /** 고객에게 그대로 전해도 되는 문서인가. 사내 문서·상담 사례는 false. */
+  externalUse: boolean
+  /** 열 수 있는 화면 — 링크 목록의 id 만 쓴다. */
+  linkId?: string
+}
+
+export interface AnswerCard {
+  title: string
+  target: OrderTarget
+  /** 바로 답 — 결론 한 문장(두괄식). */
+  answer: string
+  /** 방법 — 한 단계 한 줄. */
+  steps?: string[]
+  /** 조건·주의 — 있을 때만. */
+  cautions?: string[]
+  confidence: AnswerConfidence
+  sources: AnswerSource[]
+  /**
+   * 고객용 문안 — 공개 챗봇 답 색인 카드의 고객 말투 그대로(매니저 답과 따로 둔다, 점검 R18).
+   * 정책 결정 대기 카드면 status 가 needs-check 이고 note 에 결정 번호가 들어간다.
+   */
+  customerDraft?: { text: string; status: AnswerConfidence; note?: string }
+  /** 근거를 못 찾았을 때 등의 보충 한 줄. */
+  note?: string
+}
+
+export interface LinksCardItem {
+  /** 링크 목록의 id. 목록에 없으면 그리지 않는다. */
+  linkId: string
+  note?: string
+}
+
+export interface LinksCard {
+  title: string
+  target: OrderTarget
+  items: LinksCardItem[]
+  note?: string
+}
+
+export interface ContactPerson {
+  /** 역할 이름 — "카메라 담당(본사)" 처럼. 사람 이름은 사내 담당표(서버)에서만 온다. */
+  role: string
+  /** 담당표에 이름이 있을 때만(사내 전용). */
+  name?: string
+  /** 연락 채널(사내 메신저 방·메일 등). 전화번호는 두지 않는다. */
+  channel?: string
+}
+
+export interface ContactCard {
+  title: string
+  target: OrderTarget
+  primary?: ContactPerson
+  backup?: ContactPerson
+  /** 연락하기 전에 준비해 갈 것. */
+  prepare?: string[]
+  /** 담당표 행을 마지막으로 확인한 날(YYYY-MM-DD). 없으면 확인일 미입력. */
+  checkedAt?: string
+  note?: string
 }
 
 export interface ChoiceCard {
@@ -149,6 +243,42 @@ export interface ChoiceCard {
   target: OrderTarget
   options: Array<{ label: string; meta: string }>
   note?: string
+}
+
+// ── 상담 내역 찾기(R0) — 채널톡 상담·내부 CS 대화 목록과 그 상담으로 가는 링크 ──
+
+export type ConsultationSource = "channel_talk" | "internal_cs"
+
+export interface ConsultationListItem {
+  id: string
+  source: ConsultationSource
+  /** 날짜(YYYY-MM-DD, KST). 없으면 "날짜 없음". */
+  date?: string
+  /** 고객·기관 표시 — 상담 글을 볼 수 있는 역할에만 싣는다. */
+  who?: string
+  /** 한 줄 요지 — 가린 글. 상담 글을 볼 수 있는 역할에만 싣는다. */
+  summary?: string
+  /** 상태 이름(진행 중·종료…). */
+  status: string
+  /** 그 상담을 여는 어드민 주소 — 링크 관문(isAllowedAdminHref)을 지난 주소만 그려진다. */
+  href?: string
+}
+
+export interface ConsultationsCard {
+  title: string
+  target: OrderTarget
+  /** 맨 위 결론 한 줄(두괄식) — "… 상담 3건을 찾았습니다(최근 30일)." / "찾지 못했습니다 — 조건: …". */
+  headline: string
+  items: ConsultationListItem[]
+  /** 보인 것보다 더 있는 건수(0 이면 없음). */
+  moreCount?: number
+  /** 무엇으로 찾았는지 — "고객 · 낱말 · 기간 · 최근 N건 안에서". */
+  basis: string
+  /** 상담 글을 볼 수 없는 역할 — 건수만 보이고 CS 담당 안내를 단다. */
+  restricted?: boolean
+  note?: string
+  /** 상담 Inbox 등 화면 바로가기 — 링크 목록 id. */
+  openLinkId?: string
 }
 
 export interface AiStep {
@@ -163,6 +293,10 @@ export type AiBlock =
   | { kind: "read"; card: ReadCard }
   | { kind: "deny"; card: DenyCard }
   | { kind: "choice"; card: ChoiceCard }
+  | { kind: "answer"; card: AnswerCard }
+  | { kind: "links"; card: LinksCard }
+  | { kind: "contact"; card: ContactCard }
+  | { kind: "consultations"; card: ConsultationsCard }
 
 export interface AiMessage {
   id: string

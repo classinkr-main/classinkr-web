@@ -10,16 +10,20 @@ const {
   getQuoteDocument,
   updateQuoteDocument,
   ensureQuoteDocumentShare,
+  markQuoteDraftShared,
   getDeal,
   convertQuoteToContract,
+  findContractDocumentBySourceQuote,
   createQuoteDocumentVersion,
 } = vi.hoisted(() => ({
   requirePortalContext: vi.fn(),
   getQuoteDocument: vi.fn(),
   updateQuoteDocument: vi.fn(),
   ensureQuoteDocumentShare: vi.fn(),
+  markQuoteDraftShared: vi.fn(),
   getDeal: vi.fn(),
   convertQuoteToContract: vi.fn(),
+  findContractDocumentBySourceQuote: vi.fn(),
   createQuoteDocumentVersion: vi.fn(),
 }))
 
@@ -32,14 +36,22 @@ vi.mock("@/lib/portal/portal-authorize", () => ({
   getActorInfo: vi.fn(() => ({ actor_user_id: "admin-1", actor_role: "admin" })),
 }))
 vi.mock("@/lib/portal/repositories/deals", () => ({ getDeal, updateDeal: vi.fn() }))
-vi.mock("@/lib/portal/repositories/quote-documents", () => ({
+vi.mock("@/lib/portal/repositories/quote-documents", async (importOriginal) => ({
+  QuoteDraftVersionConflictError: (await importOriginal<typeof import("@/lib/portal/repositories/quote-documents")>()).QuoteDraftVersionConflictError,
   getQuoteDocument,
   updateQuoteDocument,
   ensureQuoteDocumentShare,
+  markQuoteDraftShared,
   createQuoteDocumentVersion,
 }))
-vi.mock("@/lib/portal/repositories/contract-documents", () => ({ convertQuoteToContract }))
-vi.mock("@/lib/portal/repositories/activity", () => ({ logActivity: vi.fn() }))
+vi.mock("@/lib/portal/repositories/contract-documents", () => ({
+  convertQuoteToContract,
+  findContractDocumentBySourceQuote,
+}))
+vi.mock("@/lib/portal/repositories/activity", () => ({
+  logActivity: vi.fn(),
+  getLatestAcceptedQuoteInteraction: vi.fn(async () => null),
+}))
 vi.mock("@/lib/repositories/crm-tasks", () => ({
   completeCrmTask: vi.fn(),
   listActiveTasksForDealByType: vi.fn(async () => []),
@@ -96,18 +108,30 @@ describe("POST /api/portal/quotes/[id]/share — 닫힌 견적 상태 보존", (
 
   it("작성 중 견적은 공유하면 shared 가 된다", async () => {
     requirePortalContext.mockResolvedValue(ADMIN_CTX)
-    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status: "draft" })
+    const document = { id: "qd_1", deal_id: "deal_1", status: "draft", current_version_id: "v1" }
+    getQuoteDocument.mockResolvedValue(document)
     getDeal.mockResolvedValue({ id: "deal_1", partner_account_id: null })
     ensureQuoteDocumentShare.mockResolvedValue({
-      document: { id: "qd_1", status: "draft" },
+      document,
       version: { id: "v1" },
       share: { token: "tok" },
     })
-    updateQuoteDocument.mockResolvedValue({ id: "qd_1", status: "shared" })
+    markQuoteDraftShared.mockResolvedValue({ id: "qd_1", status: "shared" })
 
     const response = await share(post("share"), params)
-    expect(updateQuoteDocument).toHaveBeenCalledWith("qd_1", { status: "shared" })
+    expect(markQuoteDraftShared).toHaveBeenCalledWith("qd_1", "v1")
     expect((await response.json()).document.status).toBe("shared")
+  })
+
+  it("편집 중 최신 버전이 바뀌면 고객 링크를 발급하지 않는다", async () => {
+    requirePortalContext.mockResolvedValue(ADMIN_CTX)
+    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status: "draft", current_version_id: "v2" })
+    getDeal.mockResolvedValue({ id: "deal_1" })
+
+    const request = new NextRequest(post("share"), { headers: { "x-quote-version-id": "v1" } })
+    const response = await share(request, params)
+    expect(response.status).toBe(409)
+    expect(ensureQuoteDocumentShare).not.toHaveBeenCalled()
   })
 })
 
@@ -116,9 +140,50 @@ describe("POST /api/portal/quotes/[id]/convert — 중복 전환 방지", () => 
     requirePortalContext.mockResolvedValue(ADMIN_CTX)
     getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status: "archived" })
     getDeal.mockResolvedValue({ id: "deal_1", partner_account_id: null })
+    findContractDocumentBySourceQuote.mockResolvedValue({ id: "cd_1", contract_number: "C-2026-003" })
 
     const response = await convert(post("convert"), params)
     expect(response.status).toBe(409)
+    expect((await response.json()).contract_number).toBe("C-2026-003")
+    expect(convertQuoteToContract).not.toHaveBeenCalled()
+  })
+
+  it("계약 없이 보관만 된 견적은 '보관된 견적' 안내와 함께 409 로 거절한다", async () => {
+    requirePortalContext.mockResolvedValue(ADMIN_CTX)
+    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status: "archived" })
+    getDeal.mockResolvedValue({ id: "deal_1", partner_account_id: null })
+    findContractDocumentBySourceQuote.mockResolvedValue(null)
+
+    const response = await convert(post("convert"), params)
+    expect(response.status).toBe(409)
+    const body = await response.json()
+    expect(body.contract_number).toBeNull()
+    expect(body.error).toContain("보관된 견적")
+  })
+
+  it("상태가 accepted 여도 이미 만든 계약이 있으면 409 로 거절한다", async () => {
+    requirePortalContext.mockResolvedValue(ADMIN_CTX)
+    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status: "accepted" })
+    getDeal.mockResolvedValue({ id: "deal_1", partner_account_id: null })
+    findContractDocumentBySourceQuote.mockResolvedValue({ id: "cd_1", contract_number: "C-2026-003" })
+
+    const response = await convert(post("convert"), params)
+    expect(response.status).toBe(409)
+    const body = await response.json()
+    expect(body.error).toContain("C-2026-003")
+    expect(body.error).toContain("계약서 탭")
+    expect(convertQuoteToContract).not.toHaveBeenCalled()
+  })
+
+  it.each(["draft", "shared", "expired"])("고객이 동의하지 않은(%s) 견적은 409 로 거절한다", async (status) => {
+    requirePortalContext.mockResolvedValue(ADMIN_CTX)
+    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status })
+    getDeal.mockResolvedValue({ id: "deal_1", partner_account_id: null })
+    findContractDocumentBySourceQuote.mockResolvedValue(null)
+
+    const response = await convert(post("convert"), params)
+    expect(response.status).toBe(409)
+    expect((await response.json()).error).toBe("고객이 동의한 견적만 계약으로 전환할 수 있습니다.")
     expect(convertQuoteToContract).not.toHaveBeenCalled()
   })
 })
@@ -140,6 +205,25 @@ describe("POST /api/portal/quotes/[id]/versions — 동의·전환된 견적은 
 
     const response = await createVersion(post("versions", { version_number: 2, total_amount: 1 }), params)
     expect(response.status).toBe(201)
-    expect(createQuoteDocumentVersion).toHaveBeenCalledWith(expect.objectContaining({ quote_document_id: "qd_1", version_number: 2 }))
+    expect(createQuoteDocumentVersion).toHaveBeenCalledWith(expect.objectContaining({ quote_document_id: "qd_1", version_number: 2 }), undefined)
+  })
+
+  it.each([["draft", "v2"], ["shared", "v1"]])("편집 시작 이후 견적이 %s / %s 상태가 되면 저장을 거절한다", async (status, current_version_id) => {
+    requirePortalContext.mockResolvedValue(ADMIN_CTX)
+    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status, current_version_id })
+
+    const response = await createVersion(post("versions", { draft_version_id: "v1", version_number: 2 }), params)
+    expect(response.status).toBe(409)
+    expect(createQuoteDocumentVersion).not.toHaveBeenCalled()
+  })
+
+  it("현재 초안의 같은 견적 번호로 다음 버전을 저장한다", async () => {
+    requirePortalContext.mockResolvedValue(ADMIN_CTX)
+    getQuoteDocument.mockResolvedValue({ id: "qd_1", deal_id: "deal_1", status: "draft", current_version_id: "v1" })
+    createQuoteDocumentVersion.mockResolvedValue({ id: "v2", version_number: 2 })
+
+    const response = await createVersion(post("versions", { draft_version_id: "v1", version_number: 2 }), params)
+    expect(response.status).toBe(201)
+    expect(createQuoteDocumentVersion).toHaveBeenCalledWith(expect.objectContaining({ quote_document_id: "qd_1", version_number: 2 }), "v1")
   })
 })

@@ -15,7 +15,7 @@ import SyncStatusBar, { pickSyncStatusError, type SyncStatusErrorOrigin } from "
 
 function render(lastError: string | null, lastErrorOrigin?: SyncStatusErrorOrigin | null) {
   return renderToStaticMarkup(
-    createElement(SyncStatusBar, { lastSync: null, lastError, lastErrorOrigin, onRefresh: async () => undefined })
+    createElement(SyncStatusBar, { lastSync: null, lastError, lastErrorOrigin })
   )
 }
 
@@ -94,7 +94,7 @@ describe("pickSyncStatusError — 보이는 오류와 그 출처", () => {
       "utf8"
     )
     expect(client).toMatch(
-      /const \{ lastError, lastErrorOrigin \} = pickSyncStatusError\(\{\s*syncError,\s*summaryError: summary\.error,\s*runError: summary\.data\?\.lastError,?\s*\}\)/
+      /const \{ lastError, lastErrorOrigin \} = pickSyncStatusError\(\{\s*syncError: null,\s*summaryError: summary\.error,\s*runError: summary\.data\?\.lastError,?\s*\}\)/
     )
     const bar = client.indexOf("<SyncStatusBar")
     expect(bar).toBeGreaterThan(-1)

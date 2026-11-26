@@ -21,6 +21,7 @@ export const CS_KNOWLEDGE_CATEGORY = "cs-knowledge"
 export const CS_KNOWLEDGE_UPDATED_BY = "cs-knowledge-promotion"
 
 const MAX_CHUNK_CHARS = 1400
+const EMBED_DOCUMENT_TIMEOUT_MS = 10_000
 const THROTTLE_MS = 120
 
 export function getInternalEmbedConfig() {
@@ -229,30 +230,24 @@ export function ensureKnowledgeHeading(markdown: string): string {
 export type InternalDocsSupabase = Pick<SupabaseClient, "from">
 
 export async function embedInternalText(text: string): Promise<number[] | null> {
-  const geminiApiKey = process.env.GEMINI_API_KEY
-  if (!geminiApiKey || !text.trim()) return null
+  if (!text.trim()) return null
   const { model, dim } = getInternalEmbedConfig()
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: `models/${model}`,
-          content: { parts: [{ text }] },
-          taskType: "RETRIEVAL_DOCUMENT",
-          outputDimensionality: dim,
-        }),
-      }
-    )
-    if (!res.ok) return null
-    const data = (await res.json()) as { embedding?: { values?: number[] } }
-    const values = data.embedding?.values
-    return Array.isArray(values) && values.length > 0 ? values : null
-  } catch {
-    return null
-  }
+  // 연결(공개 챗봇 연결 따름·헤더 키)과 실패 분류는 model-transport 가 맡는다. model-transport 는 server-only 라서
+  // tsx 스크립트(seed-internal-canon)가 이 파일을 불러올 때 곧바로 읽히지 않도록, 호출 시점에 불러온다
+  // (스크립트는 server-only 를 가짜로 둔다).
+  const { embedWithInternalCsModel } = await import("@/lib/internal-cs-chat/model-transport")
+  const result = await embedWithInternalCsModel({
+    text,
+    model,
+    dim,
+    taskType: "RETRIEVAL_DOCUMENT",
+    timeoutMs: EMBED_DOCUMENT_TIMEOUT_MS,
+  })
+  if (result.ok) return result.values
+  console.warn(
+    `[internal-cs] document embed failed: ${result.kind}${result.status ? ` HTTP ${result.status}` : ""}`
+  )
+  return null
 }
 
 export interface EnsureDocsCategoryInput {
@@ -380,22 +375,37 @@ export async function syncArticleChunks(
   const throttleMs = options.throttleMs ?? THROTTLE_MS
   const { model: embedModel } = getInternalEmbedConfig()
 
+  // 청크 임베딩 벡터(수천 개 실수)를 통째로 읽지 않는다: 해시와 임베딩 시각만 읽고, 시각이 없는 행만
+  // '임베딩이 있는지'를 id 수준으로 한 번 더 확인한다(시각 없이 벡터만 있는 옛 행).
   const { data: existingData, error: existingError } = await supabase
     .from("docs_ai_chunks")
-    .select("chunk_index, content_hash, embedding")
+    .select("chunk_index, content_hash, embedding_updated_at")
     .eq("article_id", articleId)
   if (existingError) throw new Error(`기존 청크 조회 실패: ${existingError.message}`)
 
   const existing = new Map<number, ExistingChunk>()
+  const unstamped: number[] = []
   for (const row of (existingData ?? []) as {
     chunk_index: number
     content_hash: string
-    embedding: unknown
+    embedding_updated_at: string | null
   }[]) {
-    existing.set(row.chunk_index, {
-      content_hash: row.content_hash,
-      hasEmbedding: row.embedding != null,
-    })
+    const stamped = row.embedding_updated_at != null
+    existing.set(row.chunk_index, { content_hash: row.content_hash, hasEmbedding: stamped })
+    if (!stamped) unstamped.push(row.chunk_index)
+  }
+  if (unstamped.length > 0) {
+    const { data: withVector, error: vectorError } = await supabase
+      .from("docs_ai_chunks")
+      .select("chunk_index")
+      .eq("article_id", articleId)
+      .in("chunk_index", unstamped)
+      .not("embedding", "is", null)
+    if (vectorError) throw new Error(`기존 청크 임베딩 확인 실패: ${vectorError.message}`)
+    for (const row of (withVector ?? []) as { chunk_index: number }[]) {
+      const chunk = existing.get(row.chunk_index)
+      if (chunk) chunk.hasEmbedding = true
+    }
   }
 
   let embedded = 0

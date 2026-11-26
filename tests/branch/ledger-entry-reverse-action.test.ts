@@ -133,7 +133,9 @@ describe("DraftQueue UI 배선 — 되돌리기 버튼/다이얼로그(웨이브
     expect(btnBlock).toContain('mode !== "server"')
     expect(btnBlock).toContain('draft.id.startsWith("local-")')
     expect(btnBlock).toContain("reversedDraftIds.has(draft.id)")
-    expect(btnBlock).toContain("<RotateCcw")
+    // 체크 큐 컴팩트(P0-5): 네모 아이콘 버튼(RotateCcw) → 펼친 줄의 글자 링크. 아이콘은 확인 다이얼로그 버튼에만 남는다.
+    expect(btnBlock).toContain("적용 되돌리기")
+    expect(btnBlock).toContain("className={ROW_LINK_CLASS}")
   })
 
   it("확인 다이얼로그는 danger가 아닌 warning 톤 문구('상쇄' + 감사 보존 안내)를 쓴다", () => {

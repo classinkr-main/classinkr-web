@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  authenticateInternalCsBridgeRequest,
+  signInternalCsBridgeTimestamped,
   decodeInternalCsInboundImage,
   parseInternalCsInboundPayload,
   signInternalCsBridgeBody,
@@ -74,5 +76,63 @@ describe("internal CS AI bridge contract", () => {
       mimeType: "image/jpeg",
     })
     expect(mismatched).toEqual({ ok: false, error: "image MIME type does not match its file signature" })
+  })
+})
+
+describe("authenticateInternalCsBridgeRequest", () => {
+  const secret = "bridge-secret-that-is-longer-than-thirty-two-chars"
+  const body = '{"a":1}'
+  const now = 1_800_000_000_000
+  const ts = String(Math.floor(now / 1000))
+
+  const call = (overrides: Partial<Parameters<typeof authenticateInternalCsBridgeRequest>[0]> = {}) =>
+    authenticateInternalCsBridgeRequest({
+      rawBody: body,
+      signatureHeader: `sha256=${signInternalCsBridgeTimestamped(body, ts, secret)}`,
+      timestampHeader: ts,
+      secret,
+      now,
+      ...overrides,
+    })
+
+  it("accepts a timestamped signature inside the window (including the edge)", () => {
+    expect(call()).toEqual({ ok: true, mode: "timestamped" })
+    const edge = String(Math.floor(now / 1000) - 300)
+    expect(call({
+      timestampHeader: edge,
+      signatureHeader: `sha256=${signInternalCsBridgeTimestamped(body, edge, secret)}`,
+    })).toEqual({ ok: true, mode: "timestamped" })
+  })
+
+  it("accepts millisecond timestamps", () => {
+    const ms = String(now)
+    expect(call({
+      timestampHeader: ms,
+      signatureHeader: `sha256=${signInternalCsBridgeTimestamped(body, ms, secret)}`,
+    })).toEqual({ ok: true, mode: "timestamped" })
+  })
+
+  it("rejects timestamps outside the window and malformed timestamps", () => {
+    const old = String(Math.floor(now / 1000) - 301)
+    expect(call({
+      timestampHeader: old,
+      signatureHeader: `sha256=${signInternalCsBridgeTimestamped(body, old, secret)}`,
+    })).toEqual({ ok: false, reason: "bad_timestamp" })
+    expect(call({ timestampHeader: "yesterday" })).toEqual({ ok: false, reason: "bad_timestamp" })
+  })
+
+  it("rejects a tampered body or a signature made for another timestamp", () => {
+    expect(call({ rawBody: '{"a":2}' })).toEqual({ ok: false, reason: "bad_signature" })
+    const other = String(Math.floor(now / 1000) - 1)
+    expect(call({ timestampHeader: other })).toEqual({ ok: false, reason: "bad_signature" })
+  })
+
+  it("accepts legacy body-only signatures without a timestamp unless a timestamp is required", () => {
+    const legacy = `sha256=${signInternalCsBridgeBody(body, secret)}`
+    expect(call({ timestampHeader: null, signatureHeader: legacy })).toEqual({ ok: true, mode: "legacy" })
+    expect(call({ timestampHeader: null, signatureHeader: legacy, requireTimestamp: true })).toEqual({
+      ok: false,
+      reason: "timestamp_required",
+    })
   })
 })

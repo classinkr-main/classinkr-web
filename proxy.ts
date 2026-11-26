@@ -9,7 +9,8 @@ import { getSupabaseBrowserEnv, hasSupabaseBrowserEnv } from "@/lib/supabase/pub
 
 const ADMIN_LOGIN_PATH = "/admin/login"
 // /api/mcp 는 Bearer 토큰만 본다(app/api/mcp/route.ts) — 세션 갱신 왕복이 필요 없다.
-const PROXY_BYPASS_PATHS = new Set(["/api/meta/webhook", "/api/mcp"])
+// /api/webhook/wecom-aibot 은 위컴 서명만 본다 — URL 검증 GET 을 1초 안에 답해야 해서 세션 왕복을 뺀다.
+const PROXY_BYPASS_PATHS = new Set(["/api/meta/webhook", "/api/mcp", "/api/webhook/wecom-aibot"])
 const ADMIN_PAGE_ROLES = new Set(["ADMIN", "SUPER_ADMIN"])
 const BRANCH_PAGE_ROLES = new Set(["ADMIN", "SUPER_ADMIN", "BRANCH"])
 

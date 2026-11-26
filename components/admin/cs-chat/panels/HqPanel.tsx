@@ -1,23 +1,30 @@
 "use client"
 
-import { Building, CheckCircle2, ChevronRight, Clock, Copy, Loader2, MessageSquare } from "lucide-react"
+import { useState } from "react"
+import { Building, CheckCircle2, ChevronRight, Clock, Copy, Loader2, MessageSquare, RotateCw, ShieldCheck, Undo2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
 import StatusBadge from "../components/StatusBadge"
 import EscalationWhoBadge from "../components/EscalationWhoBadge"
 import { CONSOLE_CONTENT_CLASS } from "../constants"
-import { buildHqTemplate, formatDay } from "../formatters"
-import { formatWaitingElapsed, hqWaitingSince, isHqStale } from "../hq-desk"
 import {
-  buildSmartHqDraft,
-  extractEscalationContext,
-} from "@/lib/internal-cs-chat/escalation-routing"
+  buildHqTemplate,
+  formatDay,
+  prepareInternalDraftCopy,
+} from "../formatters"
+import { formatWaitingElapsed, hqWaitingSince, isHqStale } from "../hq-desk"
+import { useEscalation } from "../use-escalation"
+import { redactionNotice } from "@/lib/internal-cs-chat/redact"
 import type { ConversationDetailResponse, InternalCsConversation } from "../types"
 
 // 본사 확인(§6) — 신규 테이블·API 없이 tags[]만으로 세운 화면.
-// 목록은 워크스페이스가 이미 받아 둔 conversations(status=all 한 번 받은 응답)를
-// evidence:hq_pending으로 거른 것이고, 펼침 본문은 기존 buildHqTemplate()의 6항목 고정 포맷을 그대로 쓴다.
+// 목록은 워크스페이스가 이미 받아 둔 conversations(status=all 한 번 받은 응답)를 evidence:hq_pending으로 거른 것이다.
+// 펼침 본문은 스마트 WeCom 초안(서버 POST /api/admin/cs-chat/escalation — 사용자 글·customer_context 만 입력, 개인정보 가림)이고,
+// buildHqTemplate()의 6항목 고정 틀은 복사 버튼으로 함께 낸다. 두 복사 모두 prepareInternalDraftCopy 를 거친다
+// (소통 탭의 본사 초안과 같은 규칙: 사내용이라 승인 잠금 없음, 복사 직전 가림).
+//
+// onRecordHqReply·onReopenHq 는 선택 prop 이다. 워크스페이스가 아직 넘기지 않으면 회신 칸과 되돌리기 띠가 없다.
 export default function HqPanel({
   conversations,
   detailError,
@@ -28,6 +35,8 @@ export default function HqPanel({
   onCopy,
   onOpenConversation,
   onResolve,
+  onRecordHqReply,
+  onReopenHq,
 }: {
   conversations: InternalCsConversation[]
   detailError: string | null
@@ -38,7 +47,43 @@ export default function HqPanel({
   onCopy: (text: string, success: string) => void
   onOpenConversation: (conversation: InternalCsConversation) => void
   onResolve: (conversation: InternalCsConversation) => void
+  /** 본사 회신을 대화에 남긴다(내부 메모). 있으면 펼친 행에 회신 붙여넣기 칸이 보인다. */
+  onRecordHqReply?: (conversation: InternalCsConversation, reply: string) => Promise<void> | void
+  /** 본사 확인 완료를 되돌린다. 있으면 완료 뒤 되돌리기 띠가 뜬다. */
+  onReopenHq?: (conversation: InternalCsConversation) => void
 }) {
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
+  const [replySavingId, setReplySavingId] = useState<string | null>(null)
+  const [replyError, setReplyError] = useState<string | null>(null)
+  const [lastResolved, setLastResolved] = useState<InternalCsConversation | null>(null)
+
+  const copyInternal = (text: string, success: string) => {
+    onCopy(prepareInternalDraftCopy(text).text, success)
+  }
+
+  const completeHq = async (conversation: InternalCsConversation) => {
+    setReplyError(null)
+    const reply = replyDrafts[conversation.id]?.trim() ?? ""
+    if (onRecordHqReply && reply) {
+      setReplySavingId(conversation.id)
+      try {
+        await onRecordHqReply(conversation, reply)
+      } catch {
+        setReplyError("본사 회신을 저장하지 못했습니다. 완료 처리는 하지 않았습니다.")
+        setReplySavingId(null)
+        return
+      }
+      setReplySavingId(null)
+    }
+    onResolve(conversation)
+    setReplyDrafts((prev) => {
+      const next = { ...prev }
+      delete next[conversation.id]
+      return next
+    })
+    if (onReopenHq) setLastResolved(conversation)
+  }
+
   return (
     <section className="min-h-0 flex-1 overflow-y-auto bg-white">
       <div className={cn(CONSOLE_CONTENT_CLASS, "py-6")}>
@@ -46,7 +91,8 @@ export default function HqPanel({
           <div>
             <h2 className="text-[20px] font-semibold tracking-[-0.02em]">본사 확인</h2>
             <p className="mt-1 max-w-[640px] text-[12px] leading-5 text-[#615D59]">
-              본사 회신을 기다리는 대화입니다. 행을 펼치면 6항목 고정 포맷 요청 초안이 그대로 나옵니다.
+              본사 회신을 기다리는 대화입니다. 행을 펼치면 본사 요청 초안이 나오고, 6항목 고정 틀도 복사할 수 있습니다.
+              초안은 사용자 글에서만 만들고 전화·이메일·계좌·계정 ID는 가립니다(이름·주소는 직접 확인).
               이 화면의 내용은 사내 전용이며 고객 안내 문안과 섞지 마세요.
             </p>
           </div>
@@ -60,6 +106,32 @@ export default function HqPanel({
           대기 경과는 마지막 업데이트 시각(updated_at) 기준 <strong className="font-semibold text-[#31302E]">근사값</strong>입니다.
           태그가 붙은 시각은 따로 저장하지 않으므로, 이후 담당자·상태·제목을 바꾸면 경과가 다시 0부터 계산됩니다.
         </p>
+        {lastResolved && onReopenHq ? (
+          <div
+            role="status"
+            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-2 text-[11.5px] text-[#084734]"
+          >
+            <span>
+              <strong className="font-semibold">{lastResolved.title}</strong> 건을 본사 확인 완료로 옮겼습니다.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onReopenHq(lastResolved)
+                setLastResolved(null)
+              }}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-[#084734]/30 bg-white px-2.5 text-[11px] font-semibold text-[#084734] hover:bg-[#D5F7E8]"
+            >
+              <Undo2 className="h-3 w-3" aria-hidden />
+              되돌리기
+            </button>
+          </div>
+        ) : null}
+        {replyError ? (
+          <p className="mt-3 rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[11.5px] text-[#8F2C2C]">
+            {replyError}
+          </p>
+        ) : null}
         {detailError ? (
           <p className="mt-3 rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[11.5px] text-[#8F2C2C]">
             {detailError}
@@ -69,7 +141,7 @@ export default function HqPanel({
 
       {conversations.length === 0 ? (
         <div className="flex min-h-[320px] flex-col items-center justify-center border-t border-black/[0.08] px-6 text-center">
-          <Building className="h-8 w-8 text-[#A39E98]" />
+          <Building className="h-8 w-8 text-[#78736D]" />
           <p className="mt-4 text-[14px] font-semibold text-[#31302E]">본사 회신을 기다리는 건이 없습니다.</p>
           <p className="mt-1 max-w-[420px] text-[12px] leading-5 text-[#615D59]">
             대기열이나 내부 상담에서 <span className="font-semibold text-[#31302E]">본사 확인 요청</span>을 누르면 이곳에 쌓입니다.
@@ -81,7 +153,7 @@ export default function HqPanel({
             const expanded = expandedId === conversation.id
             const since = hqWaitingSince(conversation)
             const stale = isHqStale(since)
-            const busy = busyId === conversation.id
+            const busy = busyId === conversation.id || replySavingId === conversation.id
             const rowDetail = expanded ? expandedDetail : null
             return (
               <article key={conversation.id} className="border-b border-black/[0.08] bg-white">
@@ -94,7 +166,7 @@ export default function HqPanel({
                   <ChevronRight
                     aria-hidden
                     className={cn(
-                      "mt-1 h-4 w-4 shrink-0 text-[#A39E98] transition-transform",
+                      "mt-1 h-4 w-4 shrink-0 text-[#78736D] transition-transform",
                       expanded && "rotate-90"
                     )}
                   />
@@ -108,13 +180,13 @@ export default function HqPanel({
                       <span className="text-[#D8D5D1]" aria-hidden>·</span>
                       <span>등록 {formatDay(conversation.created_at)}</span>
                       <span className="text-[#D8D5D1]" aria-hidden>·</span>
-                      <span className="truncate text-[#A39E98]">
+                      <span className="truncate text-[#78736D]">
                         {conversation.tags.length > 0 ? conversation.tags.join(" · ") : "분류 전"}
                       </span>
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
-                    <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#A39E98]">대기 경과</span>
+                    <span className="block text-[11px] font-bold uppercase tracking-[0.12em] text-[#78736D]">대기 경과</span>
                     <span
                       className={cn(
                         "mt-1 inline-flex items-center gap-1.5 text-[13px] font-semibold tabular-nums",
@@ -129,77 +201,21 @@ export default function HqPanel({
 
                 {expanded ? (
                   <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4 sm:px-6">
-                    {rowDetail ? (() => {
-                      const hqContext = extractEscalationContext(
-                        rowDetail.messages.map((m) => m.content).join("\n"),
-                        {
-                          title: rowDetail.conversation.title,
-                          tags: rowDetail.conversation.tags,
-                          assigneeName: rowDetail.conversation.assignee_name,
+                    {rowDetail ? (
+                      <HqRowBody
+                        detail={rowDetail}
+                        conversation={conversation}
+                        busy={busy}
+                        replyDraft={replyDrafts[conversation.id] ?? ""}
+                        onReplyDraftChange={(value) =>
+                          setReplyDrafts((prev) => ({ ...prev, [conversation.id]: value }))
                         }
-                      )
-                      return (
-                        <>
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#31302E]">
-                                본사 요청 초안
-                              </h3>
-                              <EscalationWhoBadge
-                                contact={hqContext.contact}
-                                issueTypeTag={hqContext.issueTypeTag}
-                                compact
-                              />
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  onCopy(buildSmartHqDraft(hqContext), "스마트 WeCom 초안을 복사했습니다.")
-                                }
-                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#084734]/30 bg-[#ECFDF5] px-2.5 text-[11px] font-semibold text-[#084734] hover:bg-[#D5F7E8]"
-                              >
-                                <Copy className="h-3 w-3" />
-                                스마트 WeCom 복사
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  onCopy(buildHqTemplate(rowDetail), "본사 확인 초안을 복사했습니다.")
-                                }
-                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold hover:bg-[#F6F5F4]"
-                              >
-                                <Copy className="h-3 w-3" />
-                                고정 초안 복사
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => onOpenConversation(conversation)}
-                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
-                              >
-                                <MessageSquare className="h-3 w-3" />
-                                대화 열기
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => onResolve(conversation)}
-                                disabled={busy}
-                                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
-                              >
-                                {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                                본사 확인 완료
-                              </button>
-                            </div>
-                          </div>
-                          <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md border border-black/[0.08] bg-white px-3.5 py-3 font-sans text-[11.5px] leading-5 text-[#31302E]">
-                            {buildSmartHqDraft(hqContext)}
-                          </pre>
-                          <p className="mt-2 text-[10.5px] leading-4 text-[#A39E98]">
-                            회신을 받으면 본사 확인 완료를 눌러 주세요 — 근거 태그가 확정으로 바뀌고 이 목록에서 빠집니다.
-                          </p>
-                        </>
-                      )
-                    })() : (
+                        showReply={Boolean(onRecordHqReply)}
+                        copyInternal={copyInternal}
+                        onOpenConversation={onOpenConversation}
+                        onComplete={() => void completeHq(conversation)}
+                      />
+                    ) : (
                       <p className="flex items-center gap-2 py-3 text-[12px] text-[#615D59]">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         본사 요청 초안을 준비하는 중입니다.
@@ -213,5 +229,139 @@ export default function HqPanel({
         </div>
       )}
     </section>
+  )
+}
+
+/** 펼친 행 본문. 스마트 WeCom 초안과 담당 배지는 서버 결과(useEscalation)로 그린다 — 담당 표는 server-only(B2). */
+function HqRowBody({
+  detail,
+  conversation,
+  busy,
+  replyDraft,
+  onReplyDraftChange,
+  showReply,
+  copyInternal,
+  onOpenConversation,
+  onComplete,
+}: {
+  detail: ConversationDetailResponse
+  conversation: InternalCsConversation
+  busy: boolean
+  replyDraft: string
+  onReplyDraftChange: (value: string) => void
+  showReply: boolean
+  copyInternal: (text: string, success: string) => void
+  onOpenConversation: (conversation: InternalCsConversation) => void
+  onComplete: () => void
+}) {
+  const escalation = useEscalation(detail)
+  const smartDraft = escalation.result?.hqDraft ?? null
+  const notice = redactionNotice(escalation.result?.context.redactionCount ?? 0)
+  const replyId = `hq-reply-${conversation.id}`
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#31302E]">
+            본사 요청 초안
+          </h3>
+          {escalation.result ? (
+            <EscalationWhoBadge
+              contact={escalation.result.context.contact}
+              issueTypeTag={escalation.result.context.issueTypeTag}
+              candidates={escalation.result.context.candidates}
+              compact
+            />
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => smartDraft && copyInternal(smartDraft, "스마트 WeCom 초안을 복사했습니다.")}
+            disabled={!smartDraft}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#084734]/30 bg-[#ECFDF5] px-2.5 text-[11px] font-semibold text-[#084734] hover:bg-[#D5F7E8] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Copy className="h-3 w-3" />
+            스마트 WeCom 복사
+          </button>
+          <button
+            type="button"
+            onClick={() => copyInternal(buildHqTemplate(detail), "본사 확인 초안을 복사했습니다.")}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold hover:bg-[#F6F5F4]"
+          >
+            <Copy className="h-3 w-3" />
+            고정 초안 복사
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenConversation(conversation)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+          >
+            <MessageSquare className="h-3 w-3" />
+            대화 열기
+          </button>
+          <button
+            type="button"
+            onClick={onComplete}
+            disabled={busy}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#78736D]"
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+            본사 확인 완료
+          </button>
+        </div>
+      </div>
+      {notice ? (
+        <p className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1 text-[11px] font-semibold text-[#7A520F]">
+          <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
+          {notice}
+        </p>
+      ) : null}
+      {escalation.status === "loading" ? (
+        <p role="status" className="mt-3 flex items-center gap-2 text-[12px] text-[#615D59]">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          본사 담당 추천과 WeCom 초안을 만드는 중입니다. 고정 초안은 바로 복사할 수 있습니다.
+        </p>
+      ) : null}
+      {escalation.status === "error" ? (
+        <div
+          role="alert"
+          className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[11.5px] text-[#8F2C2C]"
+        >
+          <span>WeCom 초안을 불러오지 못했습니다. {escalation.error} 고정 초안은 바로 복사할 수 있습니다.</span>
+          <button
+            type="button"
+            onClick={escalation.retry}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2.5 text-[11px] font-semibold text-[#8F2C2C] hover:bg-[#F8DADA]"
+          >
+            <RotateCw className="h-3 w-3" aria-hidden />
+            다시 시도
+          </button>
+        </div>
+      ) : null}
+      {smartDraft ? (
+        <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md border border-black/[0.08] bg-white px-3.5 py-3 font-sans text-[11.5px] leading-5 text-[#31302E]">
+          {smartDraft}
+        </pre>
+      ) : null}
+      {showReply ? (
+        <div className="mt-3">
+          <label htmlFor={replyId} className="text-[11px] font-semibold text-[#31302E]">
+            본사 회신 붙여넣기
+          </label>
+          <textarea
+            id={replyId}
+            value={replyDraft}
+            onChange={(event) => onReplyDraftChange(event.target.value)}
+            rows={4}
+            placeholder="WeCom 회신을 붙여 넣으면 본사 확인 완료 때 대화에 내부 메모로 남깁니다."
+            className="mt-1.5 w-full resize-y rounded-md border border-black/[0.10] bg-white px-3 py-2 text-[11.5px] leading-5 text-[#31302E] outline-none focus:border-[#084734]/50 focus:ring-2 focus:ring-[#084734]/10"
+          />
+        </div>
+      ) : null}
+      <p className="mt-2 text-[11px] leading-4 text-[#615D59]">
+        회신을 받으면 본사 확인 완료를 눌러 주세요 — 근거 태그가 확정으로 바뀌고 이 목록에서 빠집니다.
+      </p>
+    </>
   )
 }

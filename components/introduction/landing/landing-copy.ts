@@ -32,7 +32,7 @@ const casesIn = (sector: IntroCaseSector) => INTRO_CASES.filter((item) => item.s
 export const LANDING_META = {
   title: "클래스인 서비스 소개 — 학원 전자칠판·수업 녹화·AI 교육 플랫폼",
   description:
-    "클래스인은 실시간 판서 수업, 별도 설비 없는 자동 수업 녹화, 과제·시험 LMS, AI 튜터를 한 흐름으로 잇는 AI 교육 플랫폼입니다. 학원 전자칠판과 AI 카메라·마이크로 꾸리는 스마트 교실 클래스인 X, 학원·학교 도입 사례와 소개서 PDF를 한 페이지에서 확인하세요.",
+    "클래스인은 실시간 판서 수업, 설정한 수업의 화면 녹화와 다시보기, 과제·시험 LMS, AI 튜터를 한 흐름으로 잇는 AI 교육 플랫폼입니다. 학원 전자칠판과 AI 카메라·마이크로 꾸리는 스마트 교실 클래스인 X, 학원·학교 도입 사례와 소개서 PDF를 한 페이지에서 확인하세요.",
   keywords: [
     "클래스인",
     "ClassIn",
@@ -68,10 +68,11 @@ export const LANDING_HERO = {
 export const LANDING_FLOW = {
   label: "수업 운영 흐름",
   note: "수업 전·중·후가 한 플랫폼에서 이어집니다.",
+  recordingLink: { label: "학원 수업 녹화 방식 보기", href: "/product/recording" },
   steps: [
     { title: "수업 준비", body: "드라이브의 수업 자료를 바로 칠판으로 불러옵니다." },
     { title: "실시간 수업", body: "30여 가지 수업 도구와 최대 50페이지 칠판으로 가르칩니다." },
-    { title: "자동 녹화", body: "별도 설비 없이 칠판과 카메라를 함께 녹화합니다." },
+    { title: "수업 녹화", body: "녹화를 켠 수업은 칠판 화면을 남길 수 있고, 카메라를 연결해 현장 녹화를 설정하면 교실도 담을 수 있습니다." },
     { title: "과제·시험", body: "LMS로 수업 전·후 학습을 이어 갑니다." },
     { title: "데이터·AI", body: "출결·성적이 쌓이고, AI가 개별 피드백을 돕습니다." },
   ],
@@ -100,7 +101,7 @@ const FEATURE_POINTS: Record<string, { mat: LandingMatKind; points: string[] }> 
     mat: "capture",
     points: [
       "개인 + 공유 드라이브, 세부 권한으로 저작권 보호",
-      "별도 설비 없는 자동 녹화, 칠판/카메라 듀얼 녹화",
+      "설정에 따른 칠판 화면 녹화와 선택 카메라 현장 녹화",
       "녹화본은 앱 안에서만 열람",
     ],
   },

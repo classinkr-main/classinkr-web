@@ -7,8 +7,9 @@ import {
 import { describeAdminPath, isAdminAiWidgetHidden } from "@/components/admin/ai/page-context"
 import { buildDemoTurn, matchDemoScenario } from "@/lib/admin-ai/demo-scenarios"
 import { formatAmountDelta, formatClock } from "@/lib/admin-ai/format"
-import { FORBIDDEN_ORDER_LABELS, ORDER_CATALOG } from "@/lib/admin-ai/order-catalog"
+import { FORBIDDEN_ORDERS, FORBIDDEN_ORDER_LABELS, ORDER_CATALOG } from "@/lib/admin-ai/order-catalog"
 import { resolveAdminAiSuggestions } from "@/lib/admin-ai/suggestions"
+import { OPS_TOOLS } from "@/lib/ops-tools/registry"
 
 describe("오더 카탈로그 — 기획 §4 등급 계약", () => {
   it("오더 id 는 겹치지 않는다", () => {
@@ -35,6 +36,55 @@ describe("오더 카탈로그 — 기획 §4 등급 계약", () => {
     for (const entry of ORDER_CATALOG.filter((item) => item.risk === "R0")) {
       expect(entry.confirm, entry.id).toBe("없음")
     }
+  })
+})
+
+describe("오더 카탈로그 — 묻기·홈페이지 MCP 대응(2026-11 점검 B4)", () => {
+  const byId = (id: string) => ORDER_CATALOG.find((entry) => entry.id === id)
+
+  it("묻기 3종(정책·담당자·링크)은 R0 이고 확인 절차가 없다", () => {
+    for (const id of ["knowledge.ask", "contact.who", "link.find"]) {
+      expect(byId(id), id).toMatchObject({ risk: "R0", confirm: "없음", domain: "묻기" })
+    }
+  })
+
+  it("홈페이지 MCP 읽기 대응 — 견적·HW 판매·사이트 방문 조회와 마케팅 성과 요약이 R0 로 있다", () => {
+    for (const id of ["quote.read", "hardware.sales.read", "site.traffic.read", "marketing.perf.read"]) {
+      expect(byId(id), id).toMatchObject({ risk: "R0", confirm: "없음" })
+    }
+  })
+
+  it("견적 초안 만들기는 R1 이고 고객에게 나가지 않는다고 적혀 있다", () => {
+    expect(byId("quote.draft.create")).toMatchObject({ risk: "R1", confirm: "1클릭", mcp: ["quote_create_draft"] })
+    expect(byId("quote.draft.create")?.label).toContain("고객에게 나가지 않음")
+  })
+
+  it("공용 도구 레지스트리(OPS_TOOLS)의 도구 이름이 카탈로그 mcp 칸과 정확히 맞는다(빠짐·겹침·없는 이름 없음)", () => {
+    // B3 이후 도구 정의의 정본은 lib/ops-tools/registry.ts 의 OPS_TOOLS 다(lib/mcp/tools.ts 는 노출만 한다).
+    // 소스 글을 읽지 않고 실제 등록 목록을 본다 — defs 에 있어도 등록되지 않은 도구는 MCP 에 나가지 않는다.
+    const tools = OPS_TOOLS.map((tool) => tool.mcpName)
+    expect(tools.length).toBeGreaterThanOrEqual(11)
+    const claimed = ORDER_CATALOG.flatMap((entry) => entry.mcp ?? [])
+    expect(new Set(claimed).size).toBe(claimed.length)
+    expect([...claimed].sort()).toEqual([...tools].sort())
+  })
+
+  it("카탈로그 조회(R0) 오더는 조회 도구에만, 바꾸는 오더(R1 이상)는 쓰기 도구에만 대응한다", () => {
+    // 두 등급 이름은 척도가 다르다: 카탈로그 R0~R4 는 확인 단계, 레지스트리 R0/R1 은 조회/등록.
+    // 그래서 숫자 일치가 아니라 조회·쓰기 구분만 맞춘다(예: hardware.movement.plan 은 카탈로그 R2, 도구 R1).
+    for (const entry of ORDER_CATALOG) {
+      for (const name of entry.mcp ?? []) {
+        const tool = OPS_TOOLS.find((candidate) => candidate.mcpName === name)
+        expect(tool, name).toBeDefined()
+        expect(tool?.risk === "R0", `${entry.id} → ${name}`).toBe(entry.risk === "R0")
+      }
+    }
+  })
+
+  it("금지 오더 표의 모든 줄이 해당 화면 링크를 갖고 라벨이 겹치지 않는다", () => {
+    expect(FORBIDDEN_ORDERS.length).toBe(FORBIDDEN_ORDER_LABELS.length)
+    expect(new Set(FORBIDDEN_ORDER_LABELS).size).toBe(FORBIDDEN_ORDER_LABELS.length)
+    for (const entry of FORBIDDEN_ORDERS) expect(entry.href, entry.label).toMatch(/^\/admin\//)
   })
 })
 

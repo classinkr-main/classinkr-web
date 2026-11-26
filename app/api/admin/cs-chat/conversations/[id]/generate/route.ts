@@ -1,114 +1,124 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CS_COPILOT_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { normalizeTopicTags } from "@/lib/chatbot/topic-crosswalk"
+import {
+  checkInternalCsAnswer,
+  extractInstitutionNames,
+  warningCodes,
+} from "@/lib/internal-cs-chat/answer-checks"
+import { buildInternalCsAssetEvidence } from "@/lib/internal-cs-chat/asset-evidence"
 import { buildInternalCsCopilotContext } from "@/lib/internal-cs-chat/context"
-import { ingestInternalCsGap } from "@/lib/internal-cs-chat/gap-ingest"
+import {
+  extractCustomerContextFields,
+  formatCustomerContextBlock,
+} from "@/lib/internal-cs-chat/customer-context"
+import { ingestInternalCsGap, shouldIngestInternalCsGap } from "@/lib/internal-cs-chat/gap-ingest"
 import {
   generateInternalCsAnswer,
-  type InternalCsChatTurn,
   type InternalCsRequestedMode,
 } from "@/lib/internal-cs-chat/gemini"
-import { redactInternalCsText } from "@/lib/internal-cs-chat/privacy"
+import {
+  buildApprovedHistory,
+  CONTEXT_RESET_KIND,
+  messagesAfterLastContextReset,
+} from "@/lib/internal-cs-chat/history"
 import {
   createInternalCsMessage,
   getInternalCsConversation,
   isInternalCsChatNotReadyError,
-  type InternalCsAssetRow,
+  supersedeInternalCsPendingMessages,
   type InternalCsMessageRow,
 } from "@/lib/repositories/internal-cs-chat"
+import { checkRateLimitDistributed } from "@/lib/server/rate-limit"
+
+// 이전에는 maxDuration 이 없어 deep(Pro) 시간 예산을 늘려도 함수 제한에 걸렸다(IC-09).
+// deep 전체 30초(gemini.ts) + 문맥 조립(공개 근거·상담 검색 각 3.5초, 병렬)을 덮는다.
+export const maxDuration = 60
+
+// 라우트 파일이 첨부 이미지 근거 조립기를 내보내던 자리다. 구현은 asset-evidence.ts 로 옮겼고(회귀 평가도 같은 블록을 쓴다),
+// 기존 import 경로를 깨지 않도록 다시 내보낸다.
+export { buildInternalCsAssetEvidence }
 
 type Context = { params: Promise<{ id: string }> }
 
 const REQUESTED_MODES = new Set<InternalCsRequestedMode>(["auto", "fast", "deep"])
 const MAX_QUESTION_LENGTH = 1_000
+const GENERATE_RATE_LIMIT = { windowMs: 60_000, max: 30 }
+const RESET_SOURCES = new Set(["manual", "new_chat", "mode_change"])
+const DEFAULT_POLISH_QUESTION = "위 초안을 고객에게 보낼 수 있는 문안으로 다듬어 줘."
+const RESET_MESSAGE = "코파일럿 맥락을 비웠습니다. 이후 질문은 이 줄 앞의 대화를 이력으로 쓰지 않습니다."
 
 function actorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
-}
-
-function buildApprovedHistory(messages: InternalCsMessageRow[]): InternalCsChatTurn[] {
-  return messages
-    .filter((message) => {
-      if (message.role === "user") return true
-      return message.role === "assistant" && message.review_state === "approved"
-    })
-    .slice(-8)
-    .map((message) => ({
-      role: message.role === "assistant" ? "model" as const : "user" as const,
-      text: message.role === "assistant" && message.corrected_content
-        ? message.corrected_content
-        : message.content,
-    }))
-}
-
-function compactAssetList(value: unknown, limit = 12) {
-  if (!Array.isArray(value)) return []
-  return value
-    .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
-    .map((item) => redactInternalCsText(item.trim()).slice(0, 500))
-    .slice(0, limit)
-}
-
-export function buildInternalCsAssetEvidence(assets: InternalCsAssetRow[]) {
-  const usable = assets
-    .filter((asset) => (
-      asset.review_state === "approved" &&
-      Boolean(asset.corrected_analysis?.trim() || asset.analysis_summary?.trim())
-    ))
-    .slice(-5)
-
-  return {
-    text: usable.map((asset, index) => {
-      const correctedAnalysis = asset.corrected_analysis?.trim()
-      // Once a reviewer corrects an image analysis, do not reintroduce contradicted OCR or
-      // observations from the original model payload into factual generation context.
-      const extractedText = correctedAnalysis
-        ? []
-        : compactAssetList(asset.analysis_payload?.extractedText)
-      const observations = correctedAnalysis
-        ? []
-        : compactAssetList(asset.analysis_payload?.observations)
-      const sensitiveWarnings = correctedAnalysis
-        ? []
-        : compactAssetList(asset.analysis_payload?.sensitiveDataWarnings, 6)
-      const fileName = redactInternalCsText(asset.original_file_name)
-      const summary = redactInternalCsText(correctedAnalysis || asset.analysis_summary)
-      return [
-        `[Attached image ${index + 1}: ${fileName}]`,
-        "Review state: approved",
-        `Analysis summary: ${summary}`,
-        extractedText.length ? `Visible text: ${extractedText.join(" | ")}` : "",
-        observations.length ? `Visible observations: ${observations.join(" | ")}` : "",
-        sensitiveWarnings.length ? `Sensitive-data warnings: ${sensitiveWarnings.join(" | ")}` : "",
-      ].filter(Boolean).join("\n")
-    }).join("\n\n"),
-    sourceRefs: usable.map((asset) => ({
-      id: `internal-cs-asset:${asset.id}`,
-      label: `Attached image: ${redactInternalCsText(asset.original_file_name)}`,
-      kind: "internal_asset" as const,
-      reviewState: "approved" as const,
-    })),
-    count: usable.length,
-  }
 }
 
 function errorStatus(error: unknown) {
   return isInternalCsChatNotReadyError(error) ? 503 : 500
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function optionalId(value: unknown, name: string): { value: string | null } | { error: string } {
+  if (value === undefined || value === null) return { value: null }
+  if (typeof value !== "string" || !value.trim() || value.length > 80) return { error: `${name} must be a message id` }
+  return { value: value.trim() }
+}
+
+function latestHqReply(messages: InternalCsMessageRow[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role === "internal_note" && message.metadata?.kind === "hq_reply" && message.content.trim()) {
+      return message.content.trim()
+    }
+  }
+  return ""
+}
+
 export async function POST(req: NextRequest, context: Context) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  const admin = await requireVerifiedAdminContext(req, CS_COPILOT_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
+  // 모델 호출은 비용이 든다 — 사용자별 분당 30회(IC-16). 인스턴스별 메모리 제한이며 Upstash 설정 시 분산 제한이다.
+  const { allowed } = await checkRateLimitDistributed(
+    admin.userId || actorName(admin),
+    "admin-internal-cs-generate",
+    GENERATE_RATE_LIMIT
+  )
+  if (!allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429 })
+
   const body = await req.json().catch(() => null)
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
+  if (!isRecord(body)) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const raw = body as Record<string, unknown>
-  const question = typeof raw.question === "string" ? raw.question.trim() : ""
-  if (!question) {
+  const raw = body
+  const rerun = optionalId(raw.rerunOfUserMessageId, "rerunOfUserMessageId")
+  if ("error" in rerun) return NextResponse.json({ error: rerun.error }, { status: 400 })
+  const polish = optionalId(raw.draftToPolish, "draftToPolish")
+  if ("error" in polish) return NextResponse.json({ error: polish.error }, { status: 400 })
+  if (raw.resetContext !== undefined && typeof raw.resetContext !== "boolean") {
+    return NextResponse.json({ error: "resetContext must be a boolean" }, { status: 400 })
+  }
+  const resetContext = raw.resetContext === true
+  const resetSource = typeof raw.resetSource === "string" && RESET_SOURCES.has(raw.resetSource)
+    ? raw.resetSource
+    : "manual"
+  if (rerun.value && polish.value) {
+    return NextResponse.json({ error: "rerunOfUserMessageId and draftToPolish cannot be combined" }, { status: 400 })
+  }
+  if (rerun.value && resetContext) {
+    return NextResponse.json({ error: "rerunOfUserMessageId and resetContext cannot be combined" }, { status: 400 })
+  }
+
+  let question = typeof raw.question === "string" ? raw.question.trim() : ""
+  if (raw.question !== undefined && typeof raw.question !== "string") {
+    return NextResponse.json({ error: "question must be a string" }, { status: 400 })
+  }
+  // 재검토는 원 질문을 그대로 쓴다. 맥락 비우기는 질문 없이 경계만 저장할 수 있다. 다듬기는 기본 요청문이 있다.
+  if (!question && !rerun.value && !resetContext && !polish.value) {
     return NextResponse.json({ error: "question is required" }, { status: 400 })
   }
   if (question.length > MAX_QUESTION_LENGTH) {
@@ -149,14 +159,89 @@ export async function POST(req: NextRequest, context: Context) {
       )
     }
 
+    const messages = loaded.messages
+    let originalUserMessage: InternalCsMessageRow | null = null
+    let originalUserIndex = -1
+    if (rerun.value) {
+      originalUserIndex = messages.findIndex((message) => message.id === rerun.value)
+      originalUserMessage = originalUserIndex >= 0 ? messages[originalUserIndex] : null
+      if (!originalUserMessage || originalUserMessage.role !== "user" || !originalUserMessage.content.trim()) {
+        return NextResponse.json({ error: "rerunOfUserMessageId is not a user message of this conversation" }, { status: 404 })
+      }
+      question = originalUserMessage.content.trim()
+    }
+
+    let draftToPolishText = ""
+    if (polish.value) {
+      const draft = messages.find((message) => message.id === polish.value)
+      if (!draft || draft.role !== "assistant" || !(draft.corrected_content?.trim() || draft.content.trim())) {
+        return NextResponse.json({ error: "draftToPolish is not an assistant draft of this conversation" }, { status: 404 })
+      }
+      draftToPolishText = (draft.corrected_content?.trim() || draft.content).trim()
+      if (!question) question = DEFAULT_POLISH_QUESTION
+    }
+
+    // 맥락 비우기(IC-25): 경계 system 행만 저장한다. 질문 글은 담지 않고, 이후 이력은 마지막 경계 뒤만 쓴다.
+    let resetMessage: InternalCsMessageRow | null = null
+    if (resetContext) {
+      const segment = messagesAfterLastContextReset(messages)
+      resetMessage = await createInternalCsMessage({
+        conversationId: id,
+        role: "system",
+        content: RESET_MESSAGE,
+        metadata: {
+          kind: CONTEXT_RESET_KIND,
+          source: resetSource,
+          turnsBefore: {
+            userTurns: segment.filter((message) => message.role === "user").length,
+            assistantTurns: segment.filter((message) => message.role === "assistant").length,
+            fromMessageId: segment[0]?.id ?? null,
+            toMessageId: segment[segment.length - 1]?.id ?? null,
+          },
+          hadPendingDraft: segment.some(
+            (message) => message.role === "assistant" && message.review_state === "pending"
+          ),
+        },
+        actor,
+      })
+      if (!question) {
+        return NextResponse.json(
+          {
+            message: resetMessage,
+            result: {
+              contextReset: true,
+              resetMessageId: resetMessage.id,
+              userMessageSaved: false,
+              userMessageId: null,
+              assistantMessageSaved: false,
+            },
+          },
+          { status: 201 }
+        )
+      }
+    }
+
     // The generate endpoint owns user-message persistence. Clients must not pre-save the same
-    // question through /messages before calling this route.
-    userMessage = await createInternalCsMessage({
-      conversationId: id,
-      role: "user",
-      content: question,
-      actor,
-    })
+    // question through /messages before calling this route. 재검토·다듬기는 질문을 다시 저장하지 않는다.
+    if (!rerun.value && !polish.value) {
+      userMessage = await createInternalCsMessage({
+        conversationId: id,
+        role: "user",
+        content: question,
+        actor,
+      })
+    } else if (originalUserMessage) {
+      userMessage = originalUserMessage
+    }
+
+    // 이력: 마지막 경계 뒤만. 이번 요청이 경계를 만들었으면 이력은 비어 있다. 재검토는 원 질문 앞까지만 쓴다.
+    const historySource = resetContext
+      ? []
+      : rerun.value
+        ? messages.slice(0, originalUserIndex)
+        : messages
+    const history = buildApprovedHistory(historySource)
+    const hqReply = resetContext ? "" : latestHqReply(messagesAfterLastContextReset(messages))
 
     const copilotContext = await buildInternalCsCopilotContext(question, {
       queueTags: loaded.conversation.tags,
@@ -168,6 +253,7 @@ export async function POST(req: NextRequest, context: Context) {
     const effectiveRequiresEvidenceReview =
       raw.requiresEvidenceReview === true || curatedEvidence?.reviewRequired === true
     const normalizedTopic = normalizeTopicTags([...loaded.conversation.tags])
+    const customerContextBlock = formatCustomerContextBlock(loaded.conversation.customer_context)
     const queueContext = [
       "[현재 상담 큐]",
       `우선순위: ${loaded.conversation.priority}`,
@@ -176,6 +262,7 @@ export async function POST(req: NextRequest, context: Context) {
       curatedEvidence?.recommendedTags.length
         ? `권장 분류 태그(담당자 확인 전 미적용): ${curatedEvidence.recommendedTags.join(", ")}`
         : "",
+      customerContextBlock,
     ].filter(Boolean).join("\n")
     const generation = await generateInternalCsAnswer({
       question,
@@ -189,9 +276,55 @@ export async function POST(req: NextRequest, context: Context) {
         .filter(Boolean)
         .join("\n\n"),
       sourceRefs: [...copilotContext.sourceRefs, ...assetEvidence.sourceRefs],
-      history: buildApprovedHistory(loaded.messages),
+      history,
       deterministicFallback: copilotContext.deterministicFallback,
+      draftToPolish: draftToPolishText || undefined,
+      hqReply: hqReply || undefined,
     })
+
+    // 답 후검사(IC-04): 금액·약속·원가·다른 고객·식별자. 차단이 아니라 검토 경고다.
+    const currentInstitution = extractCustomerContextFields(loaded.conversation.customer_context).institution
+    const reviewWarnings = checkInternalCsAnswer(generation.answer, {
+      allowedNames: currentInstitution ? [currentInstitution] : [],
+      // 과거 상담 근거의 기관 이름은 구조화 목록으로 받는다(컨텍스트 글에는 이름을 싣지 않는다).
+      // 글 속 '기관 X' 줄 읽기는 예전 형식 근거를 위해 함께 둔다.
+      otherCustomerNames: [
+        ...(copilotContext.otherCustomerNames ?? []),
+        ...extractInstitutionNames(copilotContext.internalContext),
+      ],
+    })
+    const modelStatus = {
+      failureKinds: generation.failureKinds,
+      // 끝까지 쓰지 못한 글(길이 초과·안전 차단)이면 화면이 '불완전' 으로 표시한다.
+      ...(generation.incomplete ? { incomplete: true, finishReason: generation.finishReason ?? null } : {}),
+      attempts: generation.attempts,
+      latencyMs: generation.latencyMs,
+      timeBudget: generation.timeBudget,
+    }
+
+    // 다듬기: 결과는 저장하지 않고 응답으로만 돌려준다(검토 드로어의 최종 칸에만 들어간다). 모델이 실패해 대체 글이면 문안을 주지 않는다.
+    if (polish.value) {
+      return NextResponse.json(
+        {
+          polish: {
+            polishOf: polish.value,
+            answer: generation.origin === "model" && !generation.incomplete ? generation.answer : null,
+            origin: generation.origin,
+            model: generation.model,
+            reviewWarnings: generation.origin === "model" && !generation.incomplete ? reviewWarnings : [],
+            ...modelStatus,
+          },
+          result: {
+            ...generation,
+            reviewWarnings,
+            userMessageSaved: false,
+            userMessageId: null,
+            assistantMessageSaved: false,
+          },
+        },
+        { status: 200 }
+      )
+    }
 
     const message = await createInternalCsMessage({
       conversationId: id,
@@ -205,6 +338,7 @@ export async function POST(req: NextRequest, context: Context) {
         origin: generation.origin,
         fallbackUsed: generation.fallbackUsed,
         attemptedModels: generation.attemptedModels,
+        ...modelStatus,
         citations: generation.citations,
         guardrails: generation.guardrails,
         requestedMode,
@@ -220,15 +354,47 @@ export async function POST(req: NextRequest, context: Context) {
         recommendedTags: curatedEvidence?.recommendedTags ?? [],
         publicEvidenceSourceCount: copilotContext.publicEvidence.sources.length,
         internalAssetEvidenceCount: assetEvidence.count,
-        userMessageId: userMessage.id,
+        hqReplyIncluded: Boolean(hqReply),
+        reviewWarnings,
+        reviewWarningCodes: warningCodes(reviewWarnings),
+        userMessageId: userMessage?.id ?? null,
+        ...(rerun.value ? { rerunOf: rerun.value } : {}),
       },
       actor,
     })
 
-    // 모델이 전부 실패해 deterministic 폴백이 저장됐다 = 지식 공백 신호.
-    // 공개 챗봇과 같은 보강 큐로 유입한다. ingestInternalCsGap 은 절대 throw 하지 않으므로
-    // 본 응답 흐름을 막지 않는다.
-    if (generation.origin === "deterministic") {
+    // 재검토(Pro)로 새 모델 초안이 나왔으면 같은 질문의 옛 검토 대기 초안을 '사용 안 함'(superseded)으로 바꾼다(결정 9).
+    // 새 초안이 모델 장애로 대체 글이거나 끝까지 쓰지 못한(불완전) 글이면 옛 초안을 치우지 않는다.
+    let supersededMessageIds: string[] = []
+    if (rerun.value && generation.origin === "model" && !generation.incomplete) {
+      const olderPending = messages
+        .filter((candidate) => (
+          candidate.role === "assistant" &&
+          candidate.review_state === "pending" &&
+          (candidate.metadata?.userMessageId === rerun.value || candidate.metadata?.rerunOf === rerun.value)
+        ))
+        .map((candidate) => candidate.id)
+      try {
+        supersededMessageIds = await supersedeInternalCsPendingMessages({
+          conversationId: id,
+          messageIds: olderPending,
+          actor,
+          supersededBy: message.id,
+        })
+      } catch (error) {
+        console.error(`[POST /api/admin/cs-chat/conversations/${id}/generate] supersede failed`, error instanceof Error ? error.message : error)
+      }
+    }
+
+    // 지식 공백 신호(IC-03 model-6): 검색된 근거가 하나도 없고 모델 호출은 실패하지 않은 질문만 보강 큐로 보낸다.
+    // 모델 장애(키·한도·시간 초과)로 만들어진 대체 글은 공백이 아니므로 넣지 않는다.
+    // ingestInternalCsGap 은 절대 throw 하지 않으므로 본 응답 흐름을 막지 않는다.
+    const evidenceNone =
+      copilotContext.publicEvidence.sources.length === 0 &&
+      !copilotContext.sourceRefs.some((source) => source.id.startsWith("channel:")) &&
+      (copilotContext.incidentEvidence?.length ?? 0) === 0 &&
+      assetEvidence.count === 0
+    if (shouldIngestInternalCsGap({ failureKinds: generation.failureKinds, evidenceNone, isRerun: Boolean(rerun.value) })) {
       await ingestInternalCsGap({
         question,
         conversationId: id,
@@ -242,10 +408,14 @@ export async function POST(req: NextRequest, context: Context) {
         message,
         result: {
           ...generation,
-          userMessageSaved: true,
-          userMessageId: userMessage.id,
+          reviewWarnings,
+          userMessageSaved: Boolean(userMessage) && !rerun.value,
+          userMessageId: userMessage?.id ?? null,
           assistantMessageSaved: true,
           assistantMessageId: message.id,
+          ...(resetMessage ? { contextReset: true, resetMessageId: resetMessage.id } : {}),
+          ...(rerun.value ? { rerunOf: rerun.value } : {}),
+          supersededMessageIds,
         },
       },
       { status: 201 }
@@ -258,7 +428,7 @@ export async function POST(req: NextRequest, context: Context) {
           ? error.message
           : "Failed to generate internal CS draft",
         result: {
-          userMessageSaved: Boolean(userMessage),
+          userMessageSaved: Boolean(userMessage) && !rerun.value && !polish.value,
           userMessageId: userMessage?.id ?? null,
           assistantMessageSaved: false,
         },

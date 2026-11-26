@@ -1,8 +1,11 @@
+import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
+
 export type ChatbotIntent = "demo" | "support"
 
 export interface PageContext {
   key: string
   teaser: string
+  welcome?: string
   starters: string[]
   intent?: ChatbotIntent
   teaserEligible: boolean
@@ -12,15 +15,12 @@ export interface PageContext {
 // (2026-11-20 조사 G9). 소개 답은 '무엇인지 → 누가 쓰는지 → 다음 할 일' 순서다(lib/chatbot/service.ts getIdentityAnswer).
 const HOME: PageContext = {
   key: "home",
-  teaser: "도입부터 운영까지, 막히는 지점 편하게 물어보세요.",
+  teaser: "클래스인이 처음이라면, 학원 수업에 어떻게 쓰는지 물어보세요.",
+  welcome: CLASSIN_POSITIONING.chatbot.homeWelcome,
   starters: [
-    "클래스인이 뭐예요? 쉽게 알려 주세요",
-    "Classin이 Zoom이나 일반 전자칠판과 뭐가 다른가요?",
-    "요금/견적은 어떤 항목으로 구성되나요?",
-    // 학생·학부모도 홈으로 들어온다 — 앞 4개 안에 수업 들어가는 법 하나를 둔다(2026-11-25 CX-20)
+    ...CLASSIN_POSITIONING.chatbot.starterQuestions.slice(0, 3),
     "아이가 수업에 어떻게 들어가요?",
-    "우리 학원 90일 도입 순서를 어떻게 잡으면 좋을까요?",
-    "전자칠판·녹화·EDB·LMS를 수업 흐름으로 쓰는 방법이 궁금해요",
+    ...CLASSIN_POSITIONING.chatbot.starterQuestions.slice(3),
   ],
   intent: "demo",
   teaserEligible: true,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowRight, LayoutGrid, List, Lock, MessageSquare, Plus } from "lucide-react"
@@ -8,23 +8,28 @@ import { ArrowRight, LayoutGrid, List, Lock, MessageSquare, Plus } from "lucide-
 import { formatClock, formatTimeOfDay } from "@/lib/admin-ai/format"
 import {
   ADMIN_AI_TOOLS,
-  FORBIDDEN_ORDER_LABELS,
+  FORBIDDEN_ORDERS,
   ORDER_CATALOG,
 } from "@/lib/admin-ai/order-catalog"
+import { nextTabIndex } from "@/lib/admin-ai/a11y"
 import { canUndoOrder, isPendingOrder, remainingMs } from "@/lib/admin-ai/order-state"
 import {
   adminAiStore,
+  countActionableOrders,
   selectOrders,
   selectPendingOrders,
   type AdminAiState,
 } from "@/lib/admin-ai/store"
 import { ADMIN_AI_TABS, type AdminAiTab } from "@/lib/admin-ai/tabs"
 import type { OrderState, OrderTicket } from "@/lib/admin-ai/types"
+import { AdminAiAnnouncer } from "./AdminAiAnnouncer"
 import { AdminAiComposer } from "./AdminAiComposer"
 import { AdminAiConversation } from "./AdminAiConversation"
 import { AdminAiHome, RiskTag } from "./AdminAiHome"
 import { AiButton } from "./cards/CardShell"
+import { OrderCard } from "./cards/OrderCard"
 import { GalmaebotAvatar } from "./GalmaebotAvatar"
+import { NewConversationToast } from "./NewConversationToast"
 import { useAdminAiState } from "./use-admin-ai"
 
 const TAB_META: Record<AdminAiTab, { label: string; icon: typeof List }> = {
@@ -48,6 +53,7 @@ const STATE_META: Record<OrderState, { label: string; tone: string }> = {
   undone: { label: "되돌림", tone: "text-[#A39E98]" },
   aborted: { label: "발송 취소됨", tone: "text-[#A39E98]" },
   expired: { label: "만료됨", tone: "text-[#A39E98]" },
+  processed: { label: "이미 처리됨", tone: "text-[#A39E98]" },
 }
 
 function OrderStateText({ order, now }: { order: OrderTicket; now: number }) {
@@ -68,9 +74,11 @@ function OrderStateText({ order, now }: { order: OrderTicket; now: number }) {
 function ChatPane({
   state,
   onShowPending,
+  composerInputRef,
 }: {
   state: AdminAiState
   onShowPending: () => void
+  composerInputRef: React.Ref<HTMLInputElement>
 }) {
   const orders = selectOrders(state)
   const pending = selectPendingOrders(state)
@@ -95,6 +103,7 @@ function ChatPane({
                 context={WORKSPACE_CONTEXT}
                 pendingCount={pending.length}
                 onShowPending={onShowPending}
+                recentThreads={state.recentThreads}
               />
             </div>
           ) : (
@@ -103,6 +112,8 @@ function ChatPane({
         </div>
         <div className="px-[clamp(16px,4vw,48px)] pb-5">
           <AdminAiComposer
+            key={state.epoch}
+            inputRef={composerInputRef}
             busy={state.busy}
             context={WORKSPACE_CONTEXT}
             className="mx-auto w-full max-w-[620px]"
@@ -163,6 +174,9 @@ function ChatPane({
 
 function OrdersPane({ state }: { state: AdminAiState }) {
   const orders = selectOrders(state).slice().reverse()
+  // 확인·취소는 표에서 바로 하지 않는다 — 금액·전/후 값이 보이는 카드에서만 확인한다(점검 R5).
+  // 행의 "카드 열기" 가 같은 OrderCard 를 행 아래에 펼친다.
+  const [openId, setOpenId] = useState<string | null>(null)
 
   if (orders.length === 0) {
     return (
@@ -196,8 +210,11 @@ function OrdersPane({ state }: { state: AdminAiState }) {
           <tbody>
             {orders.map((order) => {
               const undoLeft = order.state === "done" ? remainingMs(order, state.now) : null
+              const needsCard = order.state === "draft" || order.state === "editing"
+              const open = openId === order.id
               return (
-                <tr key={order.id}>
+                <Fragment key={order.id}>
+                <tr>
                   <td className="border-b border-[#F0F0EC] px-2.5 py-[11px] tabular-nums text-[#615D59]">
                     {formatTimeOfDay(order.createdAt)}
                   </td>
@@ -214,23 +231,15 @@ function OrdersPane({ state }: { state: AdminAiState }) {
                     <OrderStateText order={order} now={state.now} />
                   </td>
                   <td className="whitespace-nowrap border-b border-[#F0F0EC] px-2.5 py-[11px] text-right">
-                    {order.state === "draft" ? (
-                      <span className="inline-flex gap-1.5">
-                        <AiButton
-                          variant={order.risk === "R3" ? "danger" : "primary"}
-                          className="!px-[9px] !py-1"
-                          onClick={() => adminAiStore.actOnOrder(order.id, { type: "confirm" })}
-                        >
-                          확인
-                        </AiButton>
-                        <AiButton
-                          variant="ghost"
-                          className="!px-[9px] !py-1"
-                          onClick={() => adminAiStore.actOnOrder(order.id, { type: "cancel" })}
-                        >
-                          취소
-                        </AiButton>
-                      </span>
+                    {needsCard ? (
+                      <AiButton
+                        className="!px-[9px] !py-1"
+                        aria-expanded={open}
+                        aria-controls={`admin-ai-order-card-${order.id}`}
+                        onClick={() => setOpenId(open ? null : order.id)}
+                      >
+                        {open ? "카드 닫기" : "카드 열기"}
+                      </AiButton>
                     ) : order.state === "grace" ? (
                       <AiButton
                         className="!px-[9px] !py-1"
@@ -253,6 +262,24 @@ function OrdersPane({ state }: { state: AdminAiState }) {
                     ) : null}
                   </td>
                 </tr>
+                {open ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      id={`admin-ai-order-card-${order.id}`}
+                      className="border-b border-[#F0F0EC] bg-[#FDFDFC] px-2.5 py-3"
+                    >
+                      <div className="max-w-[460px]">
+                        <OrderCard
+                          order={order}
+                          now={state.now}
+                          onAction={(action) => adminAiStore.actOnOrder(order.id, action)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+                </Fragment>
               )
             })}
           </tbody>
@@ -339,7 +366,21 @@ function CatalogPane() {
             <tr>
               <td className="border-b border-[#F0F0EC] px-2.5 py-[11px] text-[#615D59]">—</td>
               <td className="border-b border-[#F0F0EC] px-2.5 py-[11px] text-[#615D59]">
-                {FORBIDDEN_ORDER_LABELS.join(" · ")}
+                {FORBIDDEN_ORDERS.map((entry, index) => (
+                  <span key={entry.label}>
+                    {index > 0 ? " · " : null}
+                    {entry.href ? (
+                      <Link
+                        href={entry.href}
+                        className="underline decoration-[#E8E8E4] underline-offset-2 hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+                      >
+                        {entry.label}
+                      </Link>
+                    ) : (
+                      entry.label
+                    )}
+                  </span>
+                ))}
               </td>
               <td className="border-b border-[#F0F0EC] px-2.5 py-[11px]">
                 <RiskTag risk="R4" />
@@ -362,8 +403,29 @@ export default function AdminAiWorkspace({ initialTab }: { initialTab: AdminAiTa
   const router = useRouter()
   const state = useAdminAiState()
   const [tab, setTab] = useState<AdminAiTab>(initialTab)
-  const pendingCount = selectPendingOrders(state).length
+  const pendingCount = countActionableOrders(state)
   const demo = adminAiStore.mode === "demo"
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const composerInputRef = useRef<HTMLInputElement>(null)
+
+  // Esc — 수정 중인 카드를 수정 취소로 되돌린다(위젯 패널과 같은 규칙). 이 화면에는 닫을 패널이 없다.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return
+      if (adminAiStore.revertEditingOrders()) event.preventDefault()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [])
+
+  const onTabKeyDown = (event: React.KeyboardEvent, index: number) => {
+    const next = nextTabIndex(event.key, index, ADMIN_AI_TABS.length)
+    if (next === null) return
+    event.preventDefault()
+    const key = ADMIN_AI_TABS[next]
+    select(key)
+    tabRefs.current[key]?.focus()
+  }
 
   const select = (next: AdminAiTab) => {
     setTab(next)
@@ -390,9 +452,12 @@ export default function AdminAiWorkspace({ initialTab }: { initialTab: AdminAiTa
         </div>
         <AiButton
           variant="primary"
+          disabled={state.messages.length === 0}
           onClick={() => {
             adminAiStore.newConversation()
             select("chat")
+            // 누른 버튼이 꺼지므로 포커스를 입력창으로 옮긴다.
+            requestAnimationFrame(() => composerInputRef.current?.focus({ preventScroll: true }))
           }}
         >
           <Plus className="h-[15px] w-[15px]" aria-hidden="true" />새 대화
@@ -404,16 +469,23 @@ export default function AdminAiWorkspace({ initialTab }: { initialTab: AdminAiTa
         aria-label="AI 올인원 하위 탭"
         className="flex flex-wrap gap-1 border-b border-[#E8E8E4] bg-[#F6F5F4] px-3 py-2 lg:px-5"
       >
-        {ADMIN_AI_TABS.map((key) => {
+        {ADMIN_AI_TABS.map((key, index) => {
           const meta = TAB_META[key]
           const Icon = meta.icon
           const selected = tab === key
           return (
             <button
               key={key}
+              ref={(element) => {
+                tabRefs.current[key] = element
+              }}
+              id={`admin-ai-tab-${key}`}
               type="button"
               role="tab"
               aria-selected={selected}
+              aria-controls={`admin-ai-tabpanel-${key}`}
+              tabIndex={selected ? 0 : -1}
+              onKeyDown={(event) => onTabKeyDown(event, index)}
               onClick={() => select(key)}
               className={`inline-flex min-h-[38px] items-center gap-[7px] rounded-lg px-3.5 text-[13px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
                 selected ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
@@ -429,9 +501,24 @@ export default function AdminAiWorkspace({ initialTab }: { initialTab: AdminAiTa
         })}
       </div>
 
-      <div role="tabpanel" className="bg-white">
+      <AdminAiAnnouncer state={state} />
+      <NewConversationToast
+        state={state}
+        className="fixed bottom-4 left-1/2 z-50 w-[min(360px,calc(100vw-2rem))] -translate-x-1/2"
+      />
+
+      <div
+        role="tabpanel"
+        id={`admin-ai-tabpanel-${tab}`}
+        aria-labelledby={`admin-ai-tab-${tab}`}
+        className="bg-white"
+      >
         {tab === "chat" ? (
-          <ChatPane state={state} onShowPending={() => select("orders")} />
+          <ChatPane
+            state={state}
+            onShowPending={() => select("orders")}
+            composerInputRef={composerInputRef}
+          />
         ) : null}
         {tab === "orders" ? <OrdersPane state={state} /> : null}
         {tab === "tools" ? <ToolsPane /> : null}

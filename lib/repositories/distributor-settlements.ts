@@ -13,11 +13,13 @@ import {
   type DistributorIssueReason,
   type DistributorPriceRule,
   type DistributorPriceTemplate,
+  type DistributorReceivablePayment,
   type DistributorSettlementInput,
   type DistributorSettlementPayment,
   type DistributorSettlementRecord,
   type DistributorSettlementTotals,
 } from "@/lib/distributor-settlements"
+import { normalizeQuoteDiscount } from "@/lib/standard-quote-template"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 // 총판 정산 저장소(2026-10-23) — distributor_settlements · distributor_settlement_payments · distributor_price_templates.
@@ -30,7 +32,7 @@ const SETTLEMENTS = "distributor_settlements"
 const PAYMENTS = "distributor_settlement_payments"
 const TEMPLATES = "distributor_price_templates"
 
-const SETTLEMENT_COLUMNS = [
+const BASE_SETTLEMENT_COLUMNS = [
   "id", "quote_document_id", "deal_id", "fulfillment_mode", "source_version_id", "issued_version_id", "distributor_name",
   "distributor_contact_name", "distributor_email", "distributor_phone", "issue_trigger", "auto_email",
   "price_template_id", "lines", "vat_included", "subtotal_amount", "vat_amount", "total_amount",
@@ -38,6 +40,52 @@ const SETTLEMENT_COLUMNS = [
   "email_status", "emailed_at", "email_error", "review_required_reason", "notes", "cancelled_at",
   "installed_at", "created_at", "updated_at",
 ].join(", ")
+// 20261124 마이그레이션 칸(총판 확인·발행 후 수정·할인·문구). 미적용 DB 에서는 이 칸 없이 다시 읽는다(42703 폴백).
+const CONFIRM_REVISE_COLUMNS = [
+  "distributor_confirmed_at",
+  "distributor_confirmed_name",
+  "revised_at",
+  "discount",
+  "document_text",
+] as const
+let confirmReviseColumnsMissing = false
+
+function settlementColumns() {
+  return confirmReviseColumnsMissing
+    ? BASE_SETTLEMENT_COLUMNS
+    : `${BASE_SETTLEMENT_COLUMNS}, ${CONFIRM_REVISE_COLUMNS.join(", ")}`
+}
+
+/** 새 칸(20261124)을 쓸 수 있는지 — 한 번이라도 42703 을 봤으면 false. */
+export function areConfirmReviseColumnsKnownMissing() {
+  return confirmReviseColumnsMissing
+}
+
+function isConfirmReviseColumnMissing(error: PostgrestErrorLike | null | undefined) {
+  if (!error) return false
+  const text = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" ")
+  const mentionsColumn = CONFIRM_REVISE_COLUMNS.some((column) => text.includes(column))
+  return mentionsColumn && (text.includes("42703") || /does not exist|could not find/i.test(text))
+}
+
+/**
+ * 정산 행을 읽는 쿼리를 새 칸과 함께 실행하고, 새 칸이 없는 DB 면 기존 칸만으로 한 번 더 실행한다.
+ * select 목록의 칸 오류는 PostgREST 가 실행 전에 거절하므로 update/insert 를 다시 보내도 두 번 쓰이지 않는다.
+ */
+async function withSettlementColumns<R extends { error: PostgrestErrorLike | null }>(
+  run: (selectColumns: string) => PromiseLike<R>
+): Promise<R> {
+  const firstColumns = settlementColumns()
+  const first = await run(firstColumns)
+  if (isConfirmReviseColumnMissing(first.error)) {
+    // 새 칸을 넣어 보낸 조회가 거절됐으면 다시 읽는다 — 동시에 나간 다른 조회가 먼저 플래그를 세웠어도
+    // (미수·완납을 나란히 읽는 listDistributorReceivables) 이 조회는 아직 새 칸으로 실패한 상태다.
+    confirmReviseColumnsMissing = true
+    if (firstColumns !== BASE_SETTLEMENT_COLUMNS) return run(settlementColumns())
+  }
+  return first
+}
+
 const PAYMENT_COLUMNS = "id, settlement_id, amount, paid_on, memo, created_by, created_at"
 const TEMPLATE_COLUMNS = "id, name, rules, notes, updated_at"
 
@@ -45,11 +93,14 @@ export const DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE =
   "총판 정산 표가 아직 적용되지 않았습니다. supabase/migrations/20261023_distributor_settlements.sql 적용이 필요합니다."
 
 export class DistributorSettlementsNotReadyError extends Error {
-  constructor() {
-    super(DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE)
+  constructor(message: string = DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE) {
+    super(message)
     this.name = "DistributorSettlementsNotReadyError"
   }
 }
+
+export const DISTRIBUTOR_CONFIRM_REVISE_NOT_READY_MESSAGE =
+  "총판 확인·발행 후 수정·할인·문구 칸이 아직 적용되지 않았습니다. supabase/migrations/20261124_distributor_settlement_confirm_revise.sql 적용이 필요합니다."
 
 interface PostgrestErrorLike {
   code?: string | null
@@ -106,8 +157,38 @@ interface SettlementRow {
   notes: string | null
   cancelled_at: string | null
   installed_at: string | null
+  distributor_confirmed_at?: string | null
+  distributor_confirmed_name?: string | null
+  revised_at?: string | null
+  discount?: unknown
+  document_text?: unknown
   created_at: string
   updated_at: string
+}
+
+function readDocumentText(value: unknown): { documentTitle: string | null; generalNotes: string | null } {
+  const record = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+  return {
+    documentTitle: typeof record.title === "string" && record.title.trim() ? record.title.trim() : null,
+    generalNotes: typeof record.generalNotes === "string" ? record.generalNotes : null,
+  }
+}
+
+/** 할인·문구 칸 쓰기 값. 새 칸이 없는 DB 에서 할인·문구를 저장하려 하면 '적용 필요'로 막는다(조용히 버리지 않는다). */
+function extraWriteColumns(input: Pick<DistributorSettlementInput, "discount" | "documentTitle" | "generalNotes">) {
+  const discount = input.discount ?? null
+  const documentText =
+    input.documentTitle || typeof input.generalNotes === "string"
+      ? {
+          ...(input.documentTitle ? { title: input.documentTitle } : {}),
+          ...(typeof input.generalNotes === "string" ? { generalNotes: input.generalNotes } : {}),
+        }
+      : null
+  if (confirmReviseColumnsMissing) {
+    if (discount || documentText) throw new DistributorSettlementsNotReadyError(DISTRIBUTOR_CONFIRM_REVISE_NOT_READY_MESSAGE)
+    return {}
+  }
+  return { discount, document_text: documentText }
 }
 
 // NUMERIC 은 PostgREST 에서 문자열로 올 수 있다.
@@ -157,6 +238,11 @@ export function toDistributorSettlementRecord(row: SettlementRow): DistributorSe
     notes: row.notes,
     cancelledAt: row.cancelled_at,
     installedAt: row.installed_at,
+    confirmedAt: row.distributor_confirmed_at ?? null,
+    confirmedByName: row.distributor_confirmed_name ?? null,
+    revisedAt: row.revised_at ?? null,
+    discount: normalizeQuoteDiscount(row.discount) ?? null,
+    ...readDocumentText(row.document_text),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -211,11 +297,13 @@ export type DistributorRead<T> =
 export async function getDistributorSettlementByQuote(
   quoteDocumentId: string
 ): Promise<DistributorRead<DistributorSettlementRecord | null>> {
-  const { data, error } = await createSupabaseAdminClient()
-    .from(SETTLEMENTS)
-    .select(SETTLEMENT_COLUMNS)
-    .eq("quote_document_id", quoteDocumentId)
-    .maybeSingle()
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    createSupabaseAdminClient()
+      .from(SETTLEMENTS)
+      .select(selectColumns)
+      .eq("quote_document_id", quoteDocumentId)
+      .maybeSingle()
+  )
   if (error) {
     if (isDistributorTableMissing(error)) {
       return { available: false, warning: DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE, value: null }
@@ -230,11 +318,13 @@ export async function getDistributorSettlementByQuote(
 }
 
 export async function getDistributorSettlementByToken(token: string): Promise<DistributorSettlementRecord | null> {
-  const { data, error } = await createSupabaseAdminClient()
-    .from(SETTLEMENTS)
-    .select(SETTLEMENT_COLUMNS)
-    .eq("share_token", token)
-    .maybeSingle()
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    createSupabaseAdminClient()
+      .from(SETTLEMENTS)
+      .select(selectColumns)
+      .eq("share_token", token)
+      .maybeSingle()
+  )
   if (error) {
     if (isDistributorTableMissing(error)) return null
     throw new Error(error.message ?? "총판 견적서를 불러오지 못했습니다.")
@@ -281,26 +371,33 @@ export async function saveDistributorSettlementDraft(params: {
   if (!existing.available) throw new DistributorSettlementsNotReadyError()
   // 설치 완료 검토 요청은 발행할 때까지 남긴다(검토 대기 목록에서 빠지지 않게). 다른 보류 사유는 해소된다.
   columns.review_required_reason = reviewReasonAfterSave(existing.value?.reviewRequiredReason)
+  // 새 칸 유무는 바로 위 조회에서 알게 된다 — 그 뒤에 할인·문구 칸을 붙인다.
+  Object.assign(columns, extraWriteColumns(params.input))
 
   if (!existing.value) {
-    const { data, error } = await supabase
-      .from(SETTLEMENTS)
-      .insert({ ...columns, quote_document_id: params.quoteDocumentId, status: "draft", created_by: params.actor })
-      .select(SETTLEMENT_COLUMNS)
-      .single()
+    const { data, error } = await withSettlementColumns((selectColumns) =>
+      supabase
+        .from(SETTLEMENTS)
+        .insert({ ...columns, quote_document_id: params.quoteDocumentId, status: "draft", created_by: params.actor })
+        .select(selectColumns)
+        .single()
+    )
     if (error) throwDbError(error, "총판 정산을 저장하지 못했습니다.")
     return toDistributorSettlementRecord(data as unknown as SettlementRow)
   }
 
   // 취소된 건은 다시 저장하면 발행 전 상태로 되살린다(공유 토큰은 이미 지워져 있다).
   if (existing.value.status !== "draft" && existing.value.status !== "cancelled") return null
-  const { data, error } = await supabase
-    .from(SETTLEMENTS)
-    .update({ ...columns, status: "draft", cancelled_at: null })
-    .eq("id", existing.value.id)
-    .in("status", ["draft", "cancelled"])
-    .select(SETTLEMENT_COLUMNS)
-    .maybeSingle()
+  const existingId = existing.value.id
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    supabase
+      .from(SETTLEMENTS)
+      .update({ ...columns, status: "draft", cancelled_at: null })
+      .eq("id", existingId)
+      .in("status", ["draft", "cancelled"])
+      .select(selectColumns)
+      .maybeSingle()
+  )
   if (error) throwDbError(error, "총판 정산을 저장하지 못했습니다.")
   return data ? toDistributorSettlementRecord(data as unknown as SettlementRow) : null
 }
@@ -318,26 +415,28 @@ export async function markDistributorSettlementIssued(params: {
   customerTotalAmount: number
   actor: string
 }): Promise<DistributorSettlementRecord | null> {
-  const { data, error } = await createSupabaseAdminClient()
-    .from(SETTLEMENTS)
-    .update({
-      status: "issued",
-      issued_at: new Date().toISOString(),
-      issue_reason: params.reason,
-      issued_version_id: params.issuedVersionId,
-      share_token: params.shareToken,
-      subtotal_amount: params.totals.subtotalAmount,
-      vat_amount: params.totals.vatAmount,
-      total_amount: params.totals.totalAmount,
-      customer_total_amount: params.customerTotalAmount,
-      paid_amount: 0,
-      review_required_reason: null,
-      updated_by: params.actor,
-    })
-    .eq("id", params.id)
-    .eq("status", "draft")
-    .select(SETTLEMENT_COLUMNS)
-    .maybeSingle()
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    createSupabaseAdminClient()
+      .from(SETTLEMENTS)
+      .update({
+        status: "issued",
+        issued_at: new Date().toISOString(),
+        issue_reason: params.reason,
+        issued_version_id: params.issuedVersionId,
+        share_token: params.shareToken,
+        subtotal_amount: params.totals.subtotalAmount,
+        vat_amount: params.totals.vatAmount,
+        total_amount: params.totals.totalAmount,
+        customer_total_amount: params.customerTotalAmount,
+        paid_amount: 0,
+        review_required_reason: null,
+        updated_by: params.actor,
+      })
+      .eq("id", params.id)
+      .eq("status", "draft")
+      .select(selectColumns)
+      .maybeSingle()
+  )
   if (error) throwDbError(error, "총판 견적서를 발행하지 못했습니다.")
   return data ? toDistributorSettlementRecord(data as unknown as SettlementRow) : null
 }
@@ -351,21 +450,23 @@ export async function markDistributorSettlementInstalled(params: {
   customerTotalAmount: number
   actor: string
 }): Promise<DistributorSettlementRecord | null> {
-  const { data, error } = await createSupabaseAdminClient()
-    .from(SETTLEMENTS)
-    .update({
-      status: "completed",
-      installed_at: new Date().toISOString(),
-      issue_reason: "installation_completed",
-      customer_total_amount: params.customerTotalAmount,
-      review_required_reason: null,
-      updated_by: params.actor,
-    })
-    .eq("id", params.id)
-    .eq("fulfillment_mode", "H")
-    .eq("status", "draft")
-    .select(SETTLEMENT_COLUMNS)
-    .maybeSingle()
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    createSupabaseAdminClient()
+      .from(SETTLEMENTS)
+      .update({
+        status: "completed",
+        installed_at: new Date().toISOString(),
+        issue_reason: "installation_completed",
+        customer_total_amount: params.customerTotalAmount,
+        review_required_reason: null,
+        updated_by: params.actor,
+      })
+      .eq("id", params.id)
+      .eq("fulfillment_mode", "H")
+      .eq("status", "draft")
+      .select(selectColumns)
+      .maybeSingle()
+  )
   if (error) throwDbError(error, "설치 완료를 기록하지 못했습니다.")
   return data ? toDistributorSettlementRecord(data as unknown as SettlementRow) : null
 }
@@ -384,39 +485,147 @@ export async function recordDistributorEmailResult(
   id: string,
   result: { status: DistributorEmailStatus; error?: string | null }
 ) {
-  const { data, error } = await createSupabaseAdminClient()
-    .from(SETTLEMENTS)
-    .update({
-      email_status: result.status,
-      emailed_at: result.status === "sent" ? new Date().toISOString() : null,
-      email_error: result.error?.slice(0, 300) ?? null,
-    })
-    .eq("id", id)
-    .select(SETTLEMENT_COLUMNS)
-    .maybeSingle()
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    createSupabaseAdminClient()
+      .from(SETTLEMENTS)
+      .update({
+        email_status: result.status,
+        emailed_at: result.status === "sent" ? new Date().toISOString() : null,
+        email_error: result.error?.slice(0, 300) ?? null,
+      })
+      .eq("id", id)
+      .select(selectColumns)
+      .maybeSingle()
+  )
   if (error) throwDbError(error, "총판 이메일 발송 결과를 기록하지 못했습니다.")
   return data ? toDistributorSettlementRecord(data as unknown as SettlementRow) : null
 }
 
 /** 취소 — 공유 토큰을 지워 총판 링크를 막는다. 입금이 있는 건은 취소하지 않는다(null). */
 export async function cancelDistributorSettlement(id: string, actor: string) {
-  const { data, error } = await createSupabaseAdminClient()
-    .from(SETTLEMENTS)
-    .update({
-      status: "cancelled",
-      cancelled_at: new Date().toISOString(),
-      share_token: null,
-      issued_at: null,
-      issue_reason: null,
-      updated_by: actor,
-    })
-    .eq("id", id)
-    .in("status", ["draft", "issued"])
-    .eq("paid_amount", 0)
-    .select(SETTLEMENT_COLUMNS)
-    .maybeSingle()
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    createSupabaseAdminClient()
+      .from(SETTLEMENTS)
+      .update({
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        share_token: null,
+        issued_at: null,
+        issue_reason: null,
+        updated_by: actor,
+      })
+      .eq("id", id)
+      .in("status", ["draft", "issued"])
+      .eq("paid_amount", 0)
+      .select(selectColumns)
+      .maybeSingle()
+  )
   if (error) throwDbError(error, "총판 정산을 취소하지 못했습니다.")
   return data ? toDistributorSettlementRecord(data as unknown as SettlementRow) : null
+}
+
+/** 새 칸(20261124)이 실제로 있는지 확인한다 — 없으면 확인·수정 쓰기를 503 으로 막는다(빈 쓰기로 상태가 어긋나지 않게). */
+async function assertConfirmReviseColumns() {
+  if (confirmReviseColumnsMissing) throw new DistributorSettlementsNotReadyError(DISTRIBUTOR_CONFIRM_REVISE_NOT_READY_MESSAGE)
+  const { error } = await createSupabaseAdminClient()
+    .from(SETTLEMENTS)
+    .select(CONFIRM_REVISE_COLUMNS.join(", "))
+    .limit(1)
+  if (isConfirmReviseColumnMissing(error)) {
+    confirmReviseColumnsMissing = true
+    throw new DistributorSettlementsNotReadyError(DISTRIBUTOR_CONFIRM_REVISE_NOT_READY_MESSAGE)
+  }
+  if (error) throwDbError(error, "총판 정산을 확인하지 못했습니다.")
+}
+
+/**
+ * 발행 뒤 금액 수정(C방식 · 입금 대기/일부 입금/입금 완료). 공유 링크·토큰·발행 시각은 그대로 두고 금액만 바꾼다.
+ *  - 상태는 새 합계와 이미 받은 입금으로 다시 정한다(입금 완료였는데 금액을 올리면 일부 입금으로 돌아간다).
+ *  - 총판이 확인한 금액이 바뀌므로 총판 확인을 해제한다.
+ *  - 조건부 UPDATE(상태·입금 합계가 읽은 그대로일 때만) — 그사이 입금이 기록됐으면 null(다시 시도).
+ */
+export async function reviseIssuedDistributorSettlement(params: {
+  settlement: DistributorSettlementRecord
+  input: DistributorSettlementInput
+  totals: DistributorSettlementTotals
+  actor: string
+}): Promise<DistributorSettlementRecord | null> {
+  await assertConfirmReviseColumns()
+  const { settlement, input, totals } = params
+  const status = deriveSettlementStatus({
+    status: settlement.status,
+    totalAmount: totals.totalAmount,
+    paidAmount: settlement.paidAmount,
+  })
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    createSupabaseAdminClient()
+      .from(SETTLEMENTS)
+      .update({
+        distributor_name: input.distributorName,
+        distributor_contact_name: input.distributorContactName,
+        distributor_email: input.distributorEmail,
+        distributor_phone: input.distributorPhone,
+        auto_email: input.autoEmail,
+        price_template_id: input.priceTemplateId,
+        lines: input.lines,
+        vat_included: input.vatIncluded,
+        subtotal_amount: totals.subtotalAmount,
+        vat_amount: totals.vatAmount,
+        total_amount: totals.totalAmount,
+        due_date: input.dueDate,
+        notes: input.notes,
+        ...extraWriteColumns(input),
+        status,
+        revised_at: new Date().toISOString(),
+        distributor_confirmed_at: null,
+        distributor_confirmed_name: null,
+        updated_by: params.actor,
+      })
+      .eq("id", settlement.id)
+      .eq("fulfillment_mode", "C")
+      .in("status", ["issued", "partial", "paid"])
+      .eq("paid_amount", settlement.paidAmount)
+      .select(selectColumns)
+      .maybeSingle()
+  )
+  if (error) throwDbError(error, "총판 견적서 금액을 수정하지 못했습니다.")
+  return data ? toDistributorSettlementRecord(data as unknown as SettlementRow) : null
+}
+
+export type DistributorConfirmResult =
+  | { status: "confirmed"; settlement: DistributorSettlementRecord }
+  | { status: "already_confirmed"; settlement: DistributorSettlementRecord }
+  | { status: "not_found" }
+
+/**
+ * 총판이 공유 링크에서 "확인"을 누른다. 발행된 건(입금 대기·일부 입금·입금 완료)만, 아직 확인 전일 때만 기록한다.
+ * 조건부 UPDATE 라 여러 번 눌러도 첫 번째만 confirmed 이고 나머지는 already_confirmed(메일도 한 번만 간다).
+ */
+export async function confirmDistributorSettlementByToken(params: {
+  token: string
+  confirmedByName: string | null
+}): Promise<DistributorConfirmResult> {
+  await assertConfirmReviseColumns()
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    createSupabaseAdminClient()
+      .from(SETTLEMENTS)
+      .update({
+        distributor_confirmed_at: new Date().toISOString(),
+        distributor_confirmed_name: params.confirmedByName,
+        updated_by: "distributor:share-link",
+      })
+      .eq("share_token", params.token)
+      .in("status", ["issued", "partial", "paid"])
+      .is("distributor_confirmed_at", null)
+      .select(selectColumns)
+      .maybeSingle()
+  )
+  if (error) throwDbError(error, "총판 확인을 기록하지 못했습니다.")
+  if (data) return { status: "confirmed", settlement: toDistributorSettlementRecord(data as unknown as SettlementRow) }
+
+  const current = await getDistributorSettlementByToken(params.token)
+  if (!current || !["issued", "partial", "paid"].includes(current.status)) return { status: "not_found" }
+  return { status: "already_confirmed", settlement: current }
 }
 
 /* ─── 입금 ───────────────────────────────────────────────── */
@@ -437,13 +646,15 @@ async function syncSettlementPaidAmount(settlement: DistributorSettlementRecord,
   const payments = await listDistributorPayments(settlement.id)
   const paidAmount = payments.reduce((sum, payment) => sum + payment.amount, 0)
   const status = deriveSettlementStatus({ status: settlement.status, totalAmount: settlement.totalAmount, paidAmount })
-  const { data, error } = await createSupabaseAdminClient()
-    .from(SETTLEMENTS)
-    .update({ paid_amount: paidAmount, status, updated_by: actor })
-    .eq("id", settlement.id)
-    .in("status", ["issued", "partial", "paid"])
-    .select(SETTLEMENT_COLUMNS)
-    .maybeSingle()
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    createSupabaseAdminClient()
+      .from(SETTLEMENTS)
+      .update({ paid_amount: paidAmount, status, updated_by: actor })
+      .eq("id", settlement.id)
+      .in("status", ["issued", "partial", "paid"])
+      .select(selectColumns)
+      .maybeSingle()
+  )
   if (error) throwDbError(error, "총판 미수금을 갱신하지 못했습니다.")
   return {
     settlement: data ? toDistributorSettlementRecord(data as unknown as SettlementRow) : settlement,
@@ -505,34 +716,99 @@ interface ReceivableJoinRow extends SettlementRow {
   } | null
 }
 
-/** 발행된 정산(미수·완납). includePaid=false 면 아직 다 받지 못한 건만. */
+/** 미수금 목록 한 조회(미수 / 완납)의 행 수 한도. 닿으면 truncated 로 알린다. */
+export const RECEIVABLES_LIST_LIMIT = 500
+
+/** 합치기·정렬·잘림 판정 — issued_at 내림차순(null 은 뒤). 조회가 한도 행 수를 채웠으면 잘렸을 수 있다고 본다. */
+export function mergeReceivableLists<T extends { issuedAt: string | null }>(
+  lists: readonly (readonly T[])[],
+  limit: number = RECEIVABLES_LIST_LIMIT
+): { rows: T[]; truncated: boolean } {
+  const rows = lists.flat().sort((a, b) => {
+    if (a.issuedAt === b.issuedAt) return 0
+    if (a.issuedAt === null) return 1
+    if (b.issuedAt === null) return -1
+    return a.issuedAt < b.issuedAt ? 1 : -1
+  })
+  return { rows, truncated: lists.some((list) => list.length >= limit) }
+}
+
+/**
+ * 발행된 정산(미수·완납). includePaid=false 면 아직 다 받지 못한 건만.
+ * 미수(issued·partial)와 완납(paid)을 따로 조회한다 — 완납이 한도를 채워 오래된 미수를 밀어내지 않게.
+ * truncated = 어느 한 조회가 한도에 닿았다(그 너머는 읽지 못했다).
+ */
 export async function listDistributorReceivables(
   options: { includePaid?: boolean } = {}
-): Promise<DistributorRead<DistributorReceivableRow[]>> {
-  const statuses = options.includePaid ? ["issued", "partial", "paid"] : ["issued", "partial"]
-  const { data, error } = await createSupabaseAdminClient()
-    .from(SETTLEMENTS)
-    .select(`${SETTLEMENT_COLUMNS}, quote_documents(quote_number, deals(title, customers(name)))`)
-    .in("status", statuses)
-    .order("issued_at", { ascending: false })
-    .limit(500)
-  if (error) {
-    if (isDistributorTableMissing(error)) {
-      return { available: false, warning: DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE, value: null }
+): Promise<DistributorRead<DistributorReceivableRow[]> & { truncated: boolean }> {
+  const statusGroups = options.includePaid ? [["issued", "partial"], ["paid"]] : [["issued", "partial"]]
+  const results = await Promise.all(
+    statusGroups.map((statuses) =>
+      withSettlementColumns((selectColumns) =>
+        createSupabaseAdminClient()
+          .from(SETTLEMENTS)
+          .select(`${selectColumns}, quote_documents(quote_number, deals(title, customers(name)))`)
+          .in("status", statuses)
+          .order("issued_at", { ascending: false })
+          .limit(RECEIVABLES_LIST_LIMIT)
+      )
+    )
+  )
+  const lists: DistributorReceivableRow[][] = []
+  for (const { data, error } of results) {
+    if (error) {
+      if (isDistributorTableMissing(error)) {
+        return { available: false, warning: DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE, value: null, truncated: false }
+      }
+      throw new Error(error.message ?? "총판 미수금을 불러오지 못했습니다.")
     }
-    throw new Error(error.message ?? "총판 미수금을 불러오지 못했습니다.")
+    const rows = (data ?? []) as unknown as ReceivableJoinRow[]
+    lists.push(
+      rows.map((row) => ({
+        ...toDistributorSettlementRecord(row),
+        quoteNumber: row.quote_documents?.quote_number ?? null,
+        customerName: row.quote_documents?.deals?.customers?.name ?? null,
+        dealTitle: row.quote_documents?.deals?.title ?? null,
+      }))
+    )
   }
-  const rows = (data ?? []) as unknown as ReceivableJoinRow[]
-  return {
-    available: true,
-    warning: null,
-    value: rows.map((row) => ({
-      ...toDistributorSettlementRecord(row),
-      quoteNumber: row.quote_documents?.quote_number ?? null,
-      customerName: row.quote_documents?.deals?.customers?.name ?? null,
-      dealTitle: row.quote_documents?.deals?.title ?? null,
-    })),
+  const { rows, truncated } = mergeReceivableLists(lists)
+  return { available: true, warning: null, value: rows, truncated }
+}
+
+const PAYMENT_SUMMARY_ID_CHUNK = 200
+const PAYMENT_SUMMARY_PAGE_SIZE = 1000
+
+/**
+ * 미수금 보드용 입금 요약 — 정산 id 들의 (settlementId, amount, paidOn) 만. 메모·기록자는 싣지 않는다.
+ * id 는 200개씩 끊어 부르고, 청크마다 1000행 상한에 잘리지 않게 range 로 끝까지 읽는다.
+ */
+export async function listDistributorReceivablePayments(
+  settlementIds: readonly string[]
+): Promise<DistributorReceivablePayment[]> {
+  const ids = [...new Set(settlementIds)]
+  if (ids.length === 0) return []
+  const sb = createSupabaseAdminClient()
+  const out: DistributorReceivablePayment[] = []
+  for (let i = 0; i < ids.length; i += PAYMENT_SUMMARY_ID_CHUNK) {
+    const chunk = ids.slice(i, i + PAYMENT_SUMMARY_ID_CHUNK)
+    for (let from = 0; ; from += PAYMENT_SUMMARY_PAGE_SIZE) {
+      const { data, error } = await sb
+        .from(PAYMENTS)
+        .select("settlement_id, amount, paid_on")
+        .in("settlement_id", chunk)
+        .order("paid_on", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PAYMENT_SUMMARY_PAGE_SIZE - 1)
+      if (error) throwDbError(error, "총판 입금 요약을 불러오지 못했습니다.")
+      const page = (data ?? []) as Pick<PaymentRow, "settlement_id" | "amount" | "paid_on">[]
+      for (const row of page) {
+        out.push({ settlementId: row.settlement_id, amount: toNumber(row.amount), paidOn: row.paid_on })
+      }
+      if (page.length < PAYMENT_SUMMARY_PAGE_SIZE) break
+    }
   }
+  return out
 }
 
 /**
@@ -540,13 +816,15 @@ export async function listDistributorReceivables(
  * 총판 미수금 탭 위쪽 목록이다. 발행·매출 잡기·취소하면 사유가 지워져 빠진다.
  */
 export async function listDistributorSettlementReviews(): Promise<DistributorRead<DistributorReceivableRow[]>> {
-  const { data, error } = await createSupabaseAdminClient()
-    .from(SETTLEMENTS)
-    .select(`${SETTLEMENT_COLUMNS}, quote_documents(quote_number, deals(title, customers(name)))`)
-    .eq("status", "draft")
-    .not("review_required_reason", "is", null)
-    .order("updated_at", { ascending: false })
-    .limit(200)
+  const { data, error } = await withSettlementColumns((selectColumns) =>
+    createSupabaseAdminClient()
+      .from(SETTLEMENTS)
+      .select(`${selectColumns}, quote_documents(quote_number, deals(title, customers(name)))`)
+      .eq("status", "draft")
+      .not("review_required_reason", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(200)
+  )
   if (error) {
     if (isDistributorTableMissing(error)) {
       return { available: false, warning: DISTRIBUTOR_SETTLEMENTS_NOT_READY_MESSAGE, value: null }

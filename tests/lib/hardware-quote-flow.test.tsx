@@ -25,6 +25,7 @@ import {
 import { buildSalesOrderLines, summarizeSalesOrderProducts } from "@/lib/orders/order-lines"
 import type { PartnerQuoteDetailsInput } from "@/lib/partners-types"
 import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
+import { createQuoteChargeLine, QUOTE_CHARGE_OPTIONS } from "@/lib/quote-custom-charges"
 import {
   STANDARD_QUOTE_SUPPLIER,
   STANDARD_QUOTE_TEMPLATES,
@@ -35,6 +36,7 @@ import {
   getStandardQuoteQuickPresets,
   isRetiredQuoteTemplate,
   isSoftwareQuoteTemplate,
+  moveQuoteLine,
   resolveQuoteProductLine,
   resolveQuoteSupplier,
   type StandardQuoteTemplateId,
@@ -111,6 +113,41 @@ function savePayload(quote: PartnerQuoteDetailsInput) {
 }
 
 describe("1. HW 템플릿·프리셋 → 품목과 금액", () => {
+  it("배송비·설치비·추가 항목 금액과 옮긴 행 순서를 구성 변경 및 고객 문서까지 유지한다", () => {
+    const original = composeHardwareQuote("board_86")
+    const { shipping, installation } = QUOTE_CHARGE_OPTIONS
+    const items = original.lineItems ?? []
+    const additions = [
+      { ...createQuoteChargeLine("shipping", shipping.itemCode, items.length + 1), unitPrice: 80_000 },
+      { ...createQuoteChargeLine("installation", installation.itemCode, items.length + 2), quantity: 2, unitPrice: 200_000 },
+      { ...createQuoteChargeLine("custom", "quote-custom-fee-test", items.length + 3), itemName: "현장 출장비", unitPrice: 20_000 },
+    ]
+    const moved = moveQuoteLine([...items, ...additions], items.length, 0)
+    const rebuilt = buildConfigurableStandardQuoteDetails({
+      templateId: "board_86",
+      input: { ...original, lineItems: moved },
+      optionSelections: { mounting_option: "stand" },
+      baseQuantity: 2,
+    })
+    const saved = normalizeQuoteDetailsFromStructuredJson(savePayload(rebuilt).structured_json)
+    expect(saved.grandTotalAmount).toBe(14_100_000)
+    expect(saved.lineItems?.map((line) => line.itemCode)).toEqual([
+      shipping.itemCode, "board-86", "install-training", "support-1y", installation.itemCode, "quote-custom-fee-test", "stand",
+    ])
+    expect(saved.lineItems?.map((line) => [line.sortOrder, line.lineNumber])).toEqual(
+      [1, 2, 3, 4, 5, 6, 7].map((number) => [number, number])
+    )
+    expect(saved.lineItems?.find((line) => line.itemCode === installation.itemCode)).toMatchObject({
+      itemType: "installation", isUserAdded: true, quantity: 2, unitPrice: 200_000, lineSupplyAmount: 400_000,
+    })
+    const document = renderToStaticMarkup(<QuoteDocumentPreview quote={saved} documentNumber="검증" />)
+    const shippingPosition = document.indexOf("배송비</strong>")
+    expect(shippingPosition).toBeGreaterThan(-1)
+    expect(document.indexOf("전자칠판 86")).toBeGreaterThan(shippingPosition)
+    expect(document).toContain("현장 출장비")
+    expect(document).toContain("14,100,000")
+  })
+
   it.each([
     // [템플릿, 프리셋, 수량, 공급가 합계, 품목 코드(금액 있는 줄)]
     ["board_86", undefined, 1, 6_300_000, ["board-86"]],
@@ -291,15 +328,19 @@ describe("5. C방식 총판용 견적서(배 대표님 · 퀴드러닝 앞)", ()
     })
   })
 
-  it("공급자 = 회사(클래스인), 수신 = 퀴드러닝(배철웅), 참조 = 고객사", () => {
+  it("공급자 = 회사(클래스인), 수신 = 퀴드러닝(대표 조혜리), 참조 = 배철웅, 고객사는 본문 첫 문장", () => {
+    // 2026-11-20 결정: 총판 견적서 수신 담당 칸은 대표 조혜리, 참조는 배철웅.
     const details = buildDistributorQuoteDetails(customer, settlementFor(customer, lines), { customerName: "성남여고" })
     expect(details).toMatchObject({
       supplierBusinessName: "이이오클래스인코리아 유한회사",
       recipientCompanyName: "퀴드러닝",
-      recipientContactName: "배철웅",
+      recipientContactName: "조혜리",
       recipientPhone: "010-9238-5874",
-      referenceName: "고객사 성남여고",
+      referenceName: "배철웅",
+      subjectText: "고객사 성남여고 건으로 아래와 같이 견적서를 제출합니다.",
     })
+    const html = renderToStaticMarkup(<QuoteDocumentPreview quote={details} />)
+    expect(html).toContain("고객사 성남여고 건으로")
   })
 
   it("문서 총액 = 정산 합계(입금 요청 금액) — 고객 할인·할부 조건·고객 단가가 섞이지 않는다", () => {

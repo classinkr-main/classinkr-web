@@ -9,6 +9,8 @@ import { getDeal } from "@/lib/portal/repositories/deals";
 import {
   ensureQuoteDocumentShare,
   getQuoteDocument,
+  markQuoteDraftShared,
+  QuoteDraftVersionConflictError,
   updateQuoteDocument,
 } from "@/lib/portal/repositories/quote-documents";
 
@@ -44,12 +46,18 @@ export async function POST(
       );
     }
 
+    const expectedVersionId = req.headers.get("x-quote-version-id") ?? undefined;
+    if (expectedVersionId && document.current_version_id !== expectedVersionId) {
+      throw new QuoteDraftVersionConflictError();
+    }
+
     // 견적 발송의 목적은 고객 응답(검토 확인/진행 요청) 수집이므로 "sign" 모드로 발급한다.
     // "view"로 발급하면 공유 페이지가 응답 버튼을 숨겨 응답 퍼널이 끊긴다.
     const ensured = await ensureQuoteDocumentShare({
       quote_document_id: id,
       access_mode: "sign",
       created_by: ctx.userId ?? null,
+      ...(expectedVersionId && { expectedVersionId }),
     });
 
     // 동의(accepted)·계약 전환(archived)된 견적은 링크만 돌려주고 상태를 되돌리지 않는다 —
@@ -62,6 +70,8 @@ export async function POST(
       ensured.document.status === "archived";
     const nextDocument = keepStatus
       ? ensured.document
+      : ensured.document.status === "draft" && ensured.document.current_version_id
+      ? await markQuoteDraftShared(id, ensured.version.id)
       : await updateQuoteDocument(id, { status: "shared" });
 
     const origin = req.nextUrl.origin;
@@ -79,6 +89,9 @@ export async function POST(
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof QuoteDraftVersionConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     console.error("[portal/quotes/[id]/share] POST error:", error);
     return NextResponse.json({ error: "견적 공유 링크 생성 실패" }, { status: 500 });
   }

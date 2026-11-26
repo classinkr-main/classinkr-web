@@ -1,0 +1,28 @@
+{
+ "_note": "바꾸기 전(16698bad) lib/mcp/tools.ts callTool 이 옛 형식 토큰에 낸 결과. tests/mcp/home-mcp-safety.test.ts 의 같은 가짜 데이터로 떴다. 옛 형식 토큰은 이 출력과 같아야 한다(연락처 원문).",
+ "quote_get": {
+  "content": [
+   {
+    "type": "text",
+    "text": "{\n \"document\": {\n  \"id\": \"3f2b9c1e-7a4d-4e8b-9c2f-1a2b3c4d5e6f\",\n  \"quote_number\": \"Q-2026-0001\",\n  \"title\": \"견적\",\n  \"status\": \"draft\",\n  \"customer_name\": \"가나학원 010-5555-6666\"\n },\n \"version\": {\n  \"id\": \"v1\",\n  \"structured_json\": {\n   \"quoteDetails\": {\n    \"recipientContactName\": \"김담당\",\n    \"recipientPhone\": \"010-1234-5678\",\n    \"recipientEmail\": \"teacher@school.example.kr\",\n    \"supplierContactPhone\": \"02 3456 7890\",\n    \"generalNotes\": \"연락은 +82 10-9876-5432 또는 boss@academy.co.kr 로\"\n   }\n  }\n }\n}"
+   }
+  ]
+ },
+ "hw_plan_movement": {
+  "content": [
+   {
+    "type": "text",
+    "text": "[\n {\n  \"id\": \"m1\",\n  \"product\": \"T1\",\n  \"quantity\": 2,\n  \"planned_date\": \"2026-12-01\",\n  \"to\": \"A학원 원장 010-2222-3333\",\n  \"status\": \"배송 예정\",\n  \"lot_no\": null\n }\n]"
+   }
+  ]
+ },
+ "hw_plan_movement_rule_error": {
+  "content": [
+   {
+    "type": "text",
+    "text": "이미 같은 CRM 오더가 반영되어 있습니다(담당 010-1234-5678)."
+   }
+  ],
+  "isError": true
+ }
+}

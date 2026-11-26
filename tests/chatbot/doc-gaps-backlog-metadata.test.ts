@@ -91,4 +91,51 @@ describe("listDocGapBacklog cluster metadata pass-through", () => {
     // select 가 metadata 컬럼을 포함해야 위 값이 채워질 수 있다.
     expect(gapChain.select).toHaveBeenCalledWith(expect.stringContaining("metadata"))
   })
+
+  it("counts real question_cluster_events beyond capped sample_questions and exposes notHelpfulCount", async () => {
+    const gapChain = chain({
+      data: [
+        {
+          id: "cluster-frequent",
+          label: "가격 문의",
+          canonical_question: "가격 알려주세요",
+          category: "pricing",
+          status: "candidate",
+          last_seen_at: "2026-11-23T00:00:00.000Z",
+          sample_questions: ["가격 알려주세요"],
+          metadata: {
+            source: "chatbot_mvp_exact_match",
+            notHelpfulCount: 3,
+          },
+        },
+      ],
+      error: null,
+    })
+    const eventsChain = chain({ data: [], error: null })
+    const mappedChain = chain({ data: [], error: null })
+    const clusterEventsChain = chain({
+      data: Array.from({ length: 12 }, () => ({ cluster_id: "cluster-frequent" })),
+      error: null,
+    })
+    mocks.createSupabaseAdminClient.mockReturnValue({
+      from: vi
+        .fn()
+        .mockReturnValueOnce(gapChain)
+        .mockReturnValueOnce(eventsChain)
+        .mockReturnValueOnce(mappedChain)
+        .mockReturnValueOnce(clusterEventsChain),
+    })
+
+    const backlog = await listDocGapBacklog()
+
+    expect(backlog.warning).toBeUndefined()
+    expect(backlog.gapClusters[0]).toMatchObject({
+      id: "cluster-frequent",
+      sampleCount: 12,
+      metadata: {
+        source: "chatbot_mvp_exact_match",
+        notHelpfulCount: 3,
+      },
+    })
+  })
 })

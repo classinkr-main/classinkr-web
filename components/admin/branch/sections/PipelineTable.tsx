@@ -1,4 +1,5 @@
 "use client"
+import { matchesRegionSelection } from "@/lib/branch/region-heatmap"
 import Link from "next/link"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronLeft, ChevronRight, RotateCcw, Search } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
@@ -80,6 +81,8 @@ export default function PipelineTable({
   onFilterChange,
   summaryMode = false,
   onViewFullPipeline,
+  regionFilterKey = null,
+  onClearRegionFilter,
 }: {
   scopeManager?: string
   team: Team
@@ -109,6 +112,11 @@ export default function PipelineTable({
    *  같은 페이지 내 다른 탭(파이프라인)으로 전환하는 것이라 <Link href>가 아니라
    *  콜백으로 받는다(BranchDashboardClient.selectTab을 그대로 넘겨받는 용도). */
   onViewFullPipeline?: () => void
+  /** 히트맵에서 고른 지역(표준 라벨, 지도 밖 지역은 원문)으로 행을 거른다. null이면 전체.
+   *  툴바의 지역 MultiSelect와는 별개 — 부모(히트맵)가 소유하는 필터라 여기선 읽기만 한다. */
+  regionFilterKey?: string | null
+  /** 걸러진 상태 칩의 "전체 보기" 버튼 핸들러. */
+  onClearRegionFilter?: () => void
 }) {
   const initialTeams: Set<string> = team === "ALL" ? new Set() : new Set([team])
   const [query, setQuery] = useState(initialQuery ?? "")
@@ -157,12 +165,13 @@ export default function PipelineTable({
     if (managerList.length > 0) base.set("mgr", managerList[0])
     const regionList = Array.from(selectedRegions)
     if (regionList.length > 0) base.set("region", regionList[0])
+    else if (regionFilterKey) base.set("region", regionFilterKey)
     return (extra?: Record<string, string>) => {
       const params = new URLSearchParams(base)
       if (extra) for (const [k, v] of Object.entries(extra)) params.set(k, v)
       return `/admin/branch/ledger?${params.toString()}`
     }
-  }, [team, period, selectedMonth, query, selectedManagers, selectedRegions])
+  }, [team, period, selectedMonth, query, selectedManagers, selectedRegions, regionFilterKey])
 
   // 멀티선택(담당/지역) 중 장부로 전달되지 않는 나머지 선택값을 링크 title로 고지.
   const crossLinkNotice = useMemo(() => {
@@ -192,10 +201,11 @@ export default function PipelineTable({
     return rows
       .filter((row) => selectedTeams.size === 0 || (row.team !== null && selectedTeams.has(row.team)))
       .filter((row) => selectedManagers.size === 0 || (row.manager !== null && selectedManagers.has(row.manager)))
+      .filter((row) => matchesRegionSelection(row.region, regionFilterKey))
       .filter((row) => selectedRegions.size === 0 || (row.region !== null && selectedRegions.has(row.region)))
       .filter((row) => matchesTokens(tokens, [row.customer, row.manager, row.team, row.region]))
       .sort((a, b) => compareRows(a, b, sortKey, sortDir))
-  }, [query, sortKey, sortDir, rows, selectedManagers, selectedRegions, selectedTeams])
+  }, [query, sortKey, sortDir, rows, selectedManagers, selectedRegions, selectedTeams, regionFilterKey])
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   const safePage = Math.min(page, totalPages)
@@ -265,7 +275,21 @@ export default function PipelineTable({
     <section>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          {!hideHeader && <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">{headerLabel}</h2>}
+          {!hideHeader && <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">{regionFilterKey ? `${regionFilterKey} · ${headerLabel}` : headerLabel}</h2>}
+          {regionFilterKey && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F6F5F4] pl-2.5 text-[11px] text-[#615D59]">
+              선택 지역으로 걸러짐
+              {onClearRegionFilter && (
+                <button
+                  type="button"
+                  onClick={onClearRegionFilter}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full px-2.5 font-semibold text-[#084734] hover:underline md:min-h-7"
+                >
+                  전체 보기
+                </button>
+              )}
+            </span>
+          )}
           <Link
             href={ledgerHref()}
             title={crossLinkNotice}

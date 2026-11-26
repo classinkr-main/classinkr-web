@@ -14,7 +14,9 @@
     "test:watch": "vitest --dir tests",
     "generate:segment-landings": "node scripts/generate-segment-landings.mjs",
     "check:vercel-crons": "node scripts/check-vercel-crons.mjs",
+    "check:trace-size": "node scripts/check-function-trace-size.mjs",
     "check:design-tokens": "node scripts/check-design-tokens.mjs",
+    "check:client-secrets": "node scripts/check-client-bundle-secrets.mjs",
     "check:public-content": "node scripts/check-public-content-visibility.mjs",
     "sync:cs-figma-guides": "node scripts/generate-cs-figma-guides.mjs",
     "sync:cs-figma-assets": "node scripts/generate-cs-figma-assets-manifest.mjs",
@@ -43,7 +45,7 @@
     "answer-index:judge": "npx tsx scripts/answer-index/judge/judge.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.8.0",
+    "@anthropic-ai/sdk": "^1.14.0",
     "@fontsource/ibm-plex-sans-kr": "5.3.0",
     "@google/generative-ai": "^0.24.1",
     "@next/third-parties": "^16.2.4",

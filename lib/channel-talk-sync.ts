@@ -17,6 +17,7 @@ import {
   type ChannelUserChat,
 } from "@/lib/channel-talk-api"
 import { redactPii } from "@/lib/chatbot/service"
+import { extractHandoffCustomerQuestion } from "@/lib/chatbot/handoff-message"
 import { normalizePhoneKey } from "@/lib/compass/normalize"
 import { normalizeTopicTags } from "@/lib/chatbot/topic-crosswalk"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
@@ -362,6 +363,14 @@ async function runChannelConversationSync(
     if (matched) matchedLeads += 1
 
     const firstCustomer = transcript.find((message) => message.author === "customer")
+    // 챗봇이 만든 상담방은 첫 글이 봇의 "[챗봇 상담 전환]" 글이라 고객 글이 없을 수 있다(handoff-1) — 그 글의 [고객 질문]을
+    // 첫 질문 대체값으로 쓴다(옛·새 형식 둘 다 읽는다). 고객이 직접 쓴 글이 있으면 그쪽이 우선이다.
+    const handoffQuestion = firstCustomer
+      ? undefined
+      : transcript
+          .filter((message) => message.author !== "customer")
+          .map((message) => extractHandoffCustomerQuestion(message.text))
+          .find((question): question is string => Boolean(question))
     const last = transcript[transcript.length - 1]
 
     records.push({
@@ -374,7 +383,7 @@ async function runChannelConversationSync(
       state: toState(chat.state),
       tags: Array.isArray(chat.tags) ? chat.tags : [],
       messageCount: transcript.length,
-      firstQuestion: firstCustomer?.text,
+      firstQuestion: firstCustomer?.text ?? handoffQuestion,
       firstAskedAt: firstCustomer?.at ?? toIso(chat.createdAt),
       lastMessageText: last?.text,
       lastMessageAt: last?.at ?? toIso(chat.openedAt) ?? toIso(chat.createdAt),

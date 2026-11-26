@@ -16,8 +16,16 @@ function enableEnv() {
   vi.stubEnv("GEMINI_API_KEY", "gemini-key")
 }
 
+// 키는 주소(?key=)가 아니라 x-goog-api-key 헤더로 간다.
+function expectKeyInHeaderOnly(fetchMock: ReturnType<typeof vi.fn>) {
+  const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+  expect(String(url)).not.toContain("key=")
+  expect(String(url)).not.toContain("gemini-key")
+  expect(init.headers).toMatchObject({ "x-goog-api-key": "gemini-key" })
+}
+
 function stubEmbeddingFetch(values: number[] = Array.from({ length: 768 }, () => 0.01)) {
-  const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+  const fetchMock = vi.fn<(url: string | URL | Request, init?: RequestInit) => Promise<Response>>(async (url) => {
     if (String(url).includes(":embedContent")) {
       return { ok: true, json: async () => ({ embedding: { values } }) } as unknown as Response
     }
@@ -85,6 +93,7 @@ describe("searchConsultationEvidence", () => {
     const embedBody = JSON.parse(String(embedInit?.body))
     expect(embedBody.taskType).toBe("RETRIEVAL_QUERY")
     expect(embedBody.outputDimensionality).toBe(768)
+    expectKeyInHeaderOnly(fetchMock)
 
     // RPC 인자는 계약 3 shape + pgvector 문자열 직렬화.
     expect(rpc).toHaveBeenCalledWith("match_channel_conversation_chunks", {
@@ -193,10 +202,8 @@ describe("searchConsultationEvidence", () => {
 
     expect(await searchConsultationEvidence("질문")).toEqual([])
     expect(rpc).not.toHaveBeenCalled()
-    expect(warn).toHaveBeenCalledWith(
-      "[internal-cs] consultation search embed error:",
-      "network fail"
-    )
+    // 실패 사유는 model-transport 가 분류한다(네트워크 예외 = server). 키·질문은 로그에 없다.
+    expect(warn).toHaveBeenCalledWith("[internal-cs] consultation search embed failed: server")
   })
 
   it("returns [] when the RPC reports an error (never throws)", async () => {

@@ -11,8 +11,8 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
-const REVENUE_CALL = /revalidateTag\(ADMIN_CRM_REVENUE_CACHE_TAG, "max"\)/g
-const SHEET_CALL = /revalidateTag\(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, "max"\)/g
+const REVENUE_CALL = /revalidateTag\(ADMIN_CRM_REVENUE_CACHE_TAG, \{ expire: 0 \}\)/g
+const SHEET_CALL = /revalidateTag\(ADMIN_CRM_REVENUE_SHEET_CACHE_TAG, \{ expire: 0 \}\)/g
 
 function readRoute(relativePath: string) {
   return readFileSync(join(process.cwd(), relativePath), "utf8")

@@ -145,7 +145,18 @@ describe("buildInternalCsCopilotContext", () => {
     expect(result.publicEvidence.warning).toContain("검색에 실패")
     expect(result.internalContext).toContain("본사 확인·소통 기준")
     expect(result.internalContext).toContain("정리된 내부 CS 지식")
+    // 정리 지식(본사 확인 요청 구성)이 잡혔으므로 "근거를 찾지 못했습니다" 줄은 나오지 않고 확인 상태가 먼저 온다(IC-05).
+    expect(result.deterministicFallback).not.toContain("찾지 못했습니다")
+    expect(result.deterministicFallback).toContain("## 확인 상태")
+  })
+
+  it("says nothing was found only when no curated knowledge or precedent matched", async () => {
+    mocks.evaluateChatbotQuery.mockResolvedValue({ answer: null, sources: [] })
+
+    const result = await buildInternalCsCopilotContext("일반 문의")
+
     expect(result.deterministicFallback).toContain("직접 일치하는 근거를 찾지 못했습니다")
+    expect(result.sourceRefs).toEqual([])
   })
 
   it("answers S110 net weight directly without unrelated lineup copy", async () => {
@@ -203,5 +214,22 @@ describe("buildInternalCsCopilotContext", () => {
     expect(result.curatedEvidence.reviewRequired).toBe(true)
     expect(result.curatedEvidence.reviewReasons.join(" ")).toContain("자료 충돌")
     expect(result.curatedEvidence.reviewReasons.join(" ")).toContain("본사 확인 필요")
+  })
+
+  it("keeps matched institution names out of the model context but hands them to the answer check", async () => {
+    // cs2 는 '기관 {이름}' 을 과거 상담 서술에서 뺐고, cs1 의 생성 라우트는 그 줄에서 다른 고객 이름을 읽었다.
+    // 합친 뒤에는 구조화된 이름 목록(otherCustomerNames)으로 넘겨야 다른 고객 이름 경고가 살아 있다.
+    mocks.evaluateChatbotQuery.mockResolvedValue({ answer: null, sources: [] })
+    mocks.searchConsultationEvidence.mockResolvedValue([
+      { conversationId: "c-1", excerpt: "녹화가 안 된다는 문의", category: null, tags: ["녹화"], matchedOrg: "테스트기관Z", occurredAt: null, similarity: 0.81 },
+      { conversationId: "c-2", excerpt: "녹화 권한 문의", category: null, tags: [], matchedOrg: "  ", occurredAt: null, similarity: 0.7 },
+      { conversationId: "c-3", excerpt: "녹화 저장 위치 문의", category: null, tags: [], matchedOrg: "테스트기관Z", occurredAt: null, similarity: 0.6 },
+    ])
+
+    const result = await buildInternalCsCopilotContext("녹화가 안 돼요")
+
+    expect(result.internalContext).toContain("[과거 상담 사례]")
+    expect(result.internalContext).not.toContain("테스트기관Z")
+    expect(result.otherCustomerNames).toEqual(["테스트기관Z"])
   })
 })

@@ -453,12 +453,28 @@ export interface LedgerSimpleViewProps {
   onShowQueue: () => void
   onOpenRow: (row: LedgerRevenueRow) => void
   onOpenManager: (manager: string) => void
+  /**
+   * 바깥(장부 머리줄의 보기 선택)이 표를 정한다 — accounts: 고객 합산 표(기관별), managers: 담당자 합계(매니저별),
+   * none: 표 없이 요약·칩만(건별 시트의 "요약·필터 펼치기" 안). 생략하면 예전처럼 이 화면이 스스로 고른다.
+   */
+  view?: "accounts" | "managers" | "none"
+  /** 요약 띠·묶기·칩·범례·설명 문구를 보일지. false 면 표(와 경고·변경 대기 줄)만 남는다. 기본 true. */
+  chrome?: boolean
+  /** 제품·계약·경로 칩을 바깥에서 들고 있을 때(건별 시트도 같은 칩으로 거른다). 생략하면 이 화면 안 상태. */
+  chips?: Set<string>
+  onChipsChange?: (next: Set<string>) => void
 }
 
-export default function LedgerSimpleView({ notices = [], rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, edit, pendingDrafts, serverQueue, sheetWriteMode = "off", sheetWriteHealthMessage = null, onCheckDrafts, onApplyDrafts, onShowQueue, onOpenRow, onOpenManager }: LedgerSimpleViewProps) {
+export default function LedgerSimpleView({ notices = [], rows, months, currentMonth, monthlyGoals, personal, managerGoals, loading, edit, pendingDrafts, serverQueue, sheetWriteMode = "off", sheetWriteHealthMessage = null, onCheckDrafts, onApplyDrafts, onShowQueue, onOpenRow, onOpenManager, view, chrome = true, chips: controlledChips, onChipsChange }: LedgerSimpleViewProps) {
   const [groupBy, setGroupBy] = useState<SimpleGroupBy>("none")
   const [teamView, setTeamView] = useState<"members" | "deals">("members")
-  const [chips, setChips] = useState<Set<string>>(() => new Set())
+  const [localChips, setLocalChips] = useState<Set<string>>(() => new Set())
+  const chips = controlledChips ?? localChips
+  const setChips = (update: Set<string> | ((current: Set<string>) => Set<string>)) => {
+    const next = typeof update === "function" ? update(chips) : update
+    if (onChipsChange) onChipsChange(next)
+    else setLocalChips(next)
+  }
   const [expandPast, setExpandPast] = useState(false)
   const pace = fiscalPace(months, currentMonth)
   const shown = useMemo(() => rows.filter((row) => rowMatchesChips(row, chips)), [rows, chips])
@@ -472,19 +488,21 @@ export default function LedgerSimpleView({ notices = [], rows, months, currentMo
     if (!next.delete(key)) next.add(key)
     return next
   })
-  const showMembers = !personal && teamView === "members"
+  const showMembers = view ? view === "managers" : !personal && teamView === "members"
+  const tableHidden = view === "none"
 
   return (
     <div className="space-y-4">
-      {notices.length > 0 ? (
+      {!tableHidden && notices.length > 0 ? (
         <div role="status" className="space-y-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-4 py-2.5 text-[12.5px] font-semibold text-[#7A520F]">
           {notices.map((notice) => <p key={notice}>⚠ {notice}</p>)}
         </div>
       ) : null}
-      <SummaryBand bucket={total} goal={fyGoal > 0 ? fyGoal : null} pace={pace} goalNote={loading ? "불러오는 중" : goals ? "목표 미등록" : "필터 중 — 목표 비교 생략"} />
+      {chrome ? <SummaryBand bucket={total} goal={fyGoal > 0 ? fyGoal : null} pace={pace} goalNote={loading ? "불러오는 중" : goals ? "목표 미등록" : "필터 중 — 목표 비교 생략"} /> : null}
+      {chrome ? (
       <div className="flex flex-wrap items-center gap-2">
-        {!personal ? <SegButtons label="표 형태" value={teamView} options={[{ id: "members", label: "담당자별" }, { id: "deals", label: "딜 전체" }]} onChange={setTeamView} /> : null}
-        {!showMembers ? (
+        {!view && !personal ? <SegButtons label="표 형태" value={teamView} options={[{ id: "members", label: "담당자별" }, { id: "deals", label: "딜 전체" }]} onChange={setTeamView} /> : null}
+        {!showMembers && !tableHidden ? (
           <>
             <span className="text-[12.5px] text-[#615D59]">묶기</span>
             <SegButtons label="묶기 기준" value={groupBy} options={SIMPLE_GROUP_BY_OPTIONS} onChange={setGroupBy} />
@@ -509,7 +527,7 @@ export default function LedgerSimpleView({ notices = [], rows, months, currentMo
           })}
           {chips.size > 0 ? <button type="button" onClick={() => setChips(new Set())} className="min-h-8 px-2 text-[12.5px] text-[#084734] underline-offset-2 hover:underline">초기화</button> : null}
         </div>
-        {!showMembers && hasPast ? (
+        {!showMembers && !tableHidden && hasPast ? (
           <button type="button" aria-pressed={expandPast} onClick={() => setExpandPast((value) => !value)} className="min-h-8 px-2 text-[12.5px] text-[#615D59] underline-offset-2 hover:text-[#111110] hover:underline">
             {expandPast ? "지난달 접기" : "지난달 펼치기"}
           </button>
@@ -528,19 +546,22 @@ export default function LedgerSimpleView({ notices = [], rows, months, currentMo
           <span className="inline-flex items-center gap-1.5"><span aria-hidden className="inline-block h-3 w-4 rounded-sm border border-[rgba(0,0,0,0.08)]" style={{ backgroundColor: CONFIDENCE_TOKENS.confirmed.tintBg }} />전액 확정</span>
         </span>
       </div>
-      {loading ? (
+      ) : null}
+      {tableHidden ? null : loading ? (
         <p role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-6 py-10 text-center text-[13px] text-[#615D59]">장부를 불러오는 중입니다.</p>
       ) : showMembers ? (
         <ManagerTable rows={shown} months={months} currentMonth={currentMonth} managerGoals={managerGoals} pace={pace} onOpenManager={onOpenManager} />
       ) : (
         <DealTable rows={shown} months={months} currentMonth={currentMonth} monthlyGoals={goals} groupBy={groupBy} expandPast={expandPast} edit={edit} onOpenRow={onOpenRow} />
       )}
+      {chrome && !tableHidden ? (
       <p className="text-[12px] text-[#615D59]">
         {showMembers
           ? "담당자 이름을 누르면 그 사람 장부로 바뀝니다."
           : "금액 칸을 누르면 그 자리에서 고칩니다(E·H·C 확도, Enter 저장, Esc 취소). 배경이 칠해진 전액 확정 칸과 지난달 묶음 칸은 고칠 수 없습니다. 점선 칸은 아직 반영 전, 고객 이름은 상세를 엽니다."}
       </p>
-      <ApprovalBar drafts={pendingDrafts} serverQueue={serverQueue} sheetWriteMode={sheetWriteMode} onCheck={onCheckDrafts} onApply={onApplyDrafts} onShowAll={onShowQueue} />
+      ) : null}
+      {tableHidden ? null : <ApprovalBar drafts={pendingDrafts} serverQueue={serverQueue} sheetWriteMode={sheetWriteMode} onCheck={onCheckDrafts} onApply={onApplyDrafts} onShowAll={onShowQueue} />}
     </div>
   )
 }

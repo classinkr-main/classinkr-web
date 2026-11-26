@@ -3,12 +3,13 @@
 // - 새로고침·같은 탭 이동·/checkout 왕복(위젯이 언마운트된다) 뒤에도 대화가 이어지고, 탭을 닫으면 사라진다.
 //   localStorage 는 쓰지 않는다(학원 공용 PC).
 // - 쓰는 때: 턴이 끝난 뒤·새 대화·되돌리기(위젯 훅이 정한다). 스트리밍 중의 미완성 글은 쓰지 않는다.
-// - 남기는 것: 환영을 뺀 최근 20개, 글은 2000자까지. 사용자 글과 상담 요약은 redactPii 로 가린 뒤 남긴다(복원 화면에도 가린 글).
+// - 남기는 것: 환영을 뺀 최근 20개, 글은 2000자까지. 사용자 글과 상담 요약은 redactPii 로 가리고 한국어 표기([전화번호] 등)로 바꾼 뒤 남긴다(복원 화면에도 가린 글).
 //   출처는 제목·소제목·경로만, 추천 칩은 마지막 답만. 다시 시도 버튼·오류 말풍선·끊긴 부분 답·카드 열림 상태는 남기지 않는다.
 // - 마지막 활동 뒤 30분(문의폼 요약 전달 CONTACT_PREFILL 과 같은 시간)이 지나면 세션 id 와 함께 버린다.
 // - 모든 접근은 browser-storage 도우미가 감싼다. 저장이 막히면 복원 없이 메모리로만 동작한다.
 import { readBrowserStorage, removeBrowserStorage, writeBrowserStorage } from "@/lib/chatbot/browser-storage"
 import { redactPii } from "@/lib/chatbot/pii"
+import { localizeRedactionPlaceholders } from "@/components/ui/chatbot/consultation-draft"
 import type { ChatbotSource, ChatMessage, HandoffIntent } from "@/components/ui/chatbot/types"
 
 export const CHATBOT_CONVERSATION_STORAGE_KEY = "classinkr.chatbot.conversation.v1"
@@ -99,7 +100,7 @@ function toStoredMessage(input: unknown, keepSuggestions: boolean): ChatMessage 
     if (message.errorKind || message.interrupted) return null
 
     if (message.role === "user") {
-        const content = clip(redactPii(message.content))
+        const content = clip(localizeRedactionPlaceholders(redactPii(message.content)))
         return content.trim() ? { id, role: "user", content } : null
     }
 
@@ -120,7 +121,7 @@ function toStoredMessage(input: unknown, keepSuggestions: boolean): ChatMessage 
     if (handoffIntent) stored.handoffIntent = handoffIntent
     if (message.showHandoffCTA === true) stored.showHandoffCTA = true
     if (typeof message.handoffSummary === "string" && message.handoffSummary.trim()) {
-        stored.handoffSummary = clip(redactPii(message.handoffSummary))
+        stored.handoffSummary = clip(localizeRedactionPlaceholders(redactPii(message.handoffSummary)))
     }
     return stored
 }

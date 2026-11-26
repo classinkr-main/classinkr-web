@@ -49,8 +49,10 @@ vi.mock("@/components/admin/ai/AdminAiWorkspace", () => ({
   },
 }))
 
+// 전체 사이드바 계정 기준 — 간소 계정(2026-11-20)에게는 Overview 도 AI 올인원도 기본 숨김이다
+// (그쪽은 아래 "간소 사이드바 계정" 테스트가 본다).
 const SESSION: AdminShellSession = {
-  role: "ADMIN",
+  role: "SUPER_ADMIN",
   name: "테스터",
   email: "t@classin.com",
   navPreset: null,
@@ -74,7 +76,7 @@ type Loaded = Awaited<ReturnType<typeof loadWithFlag>>
 
 function renderSidebar({ AdminSidebar }: Loaded) {
   return renderToStaticMarkup(
-    <AdminSidebar role="ADMIN" name="테스터" email="t@classin.com" navOverrides={{}} />
+    <AdminSidebar role="SUPER_ADMIN" name="테스터" email="t@classin.com" navOverrides={{}} />
   )
 }
 
@@ -117,7 +119,7 @@ describe("isAdminAiPreviewEnabled — 글자 그대로 \"1\" 만 켠다", () => 
 })
 
 describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 않는다", () => {
-  it("ADMIN_NAV·상시 목록에 AI 올인원이 없다 — 16개, 상시 8", async () => {
+  it("ADMIN_NAV·상시 목록에 AI 올인원이 없다 — 16개, 상시 9", async () => {
     const { nav, access } = await loadWithFlag("")
     const hrefs = nav.ADMIN_NAV.map((item) => item.href)
     expect(hrefs).not.toContain("/admin/ai")
@@ -125,7 +127,7 @@ describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 �
     expect(nav.ADMIN_NAV).toHaveLength(16)
     expect(access.DEFAULT_PRIMARY_HREFS).not.toContain("/admin/ai")
     // 2026-11-04 마케팅 허브가 상시로 올라와 9 → 10. 2026-11-09 D안 KR Team·매출 장부 접힘 10 → 8.
-    expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(8)
+    expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(9)
   })
 
   it("사이드바 자리·⌘K 원천(accessible)·편집기 행 어디에도 없다", async () => {
@@ -133,10 +135,11 @@ describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 �
     const resolved = access.resolveAdminNavAccess({ role: "SUPER_ADMIN", overrides: {} })
     expect(resolved.primary.map((item) => item.href)).toEqual([
       "/admin/overview",
-      "/admin/calendar",
-      "/admin/crm",
+      "/admin/branch/ledger",
       "/admin/quotes",
       "/admin/hardware",
+      "/admin/calendar",
+      "/admin/crm",
       "/admin/campaigns",
       "/admin/blog",
       "/admin/chatbot",
@@ -172,34 +175,48 @@ describe("꺼짐(기본) — 시안이 운영 화면 어디에도 드러나지 �
 })
 
 describe("켜짐(NEXT_PUBLIC_ADMIN_AI_PREVIEW=1) — 시안 미리보기", () => {
-  it("AI 올인원이 Overview 바로 아래 home 범주로 들어온다 — 17개, 범주 연속 블록 유지", async () => {
+  it("AI 올인원은 네 업무 메뉴 뒤에 home 범주로 들어온다", async () => {
     const { nav } = await loadWithFlag("1")
     expect(nav.ADMIN_NAV).toHaveLength(17)
-    expect(nav.ADMIN_NAV.slice(0, 2).map((item) => item.href)).toEqual(["/admin/overview", "/admin/ai"])
-    const ai = nav.ADMIN_NAV[1]
+    expect(nav.ADMIN_NAV.slice(0, 5).map((item) => item.href)).toEqual([
+      "/admin/overview",
+      "/admin/branch/ledger",
+      "/admin/quotes",
+      "/admin/hardware",
+      "/admin/ai",
+    ])
+    const ai = nav.ADMIN_NAV[4]
     expect(ai?.category).toBe("home")
     expect(ai?.badge).toBe("시안")
     expect(ai?.maturity).toBe("wip")
-    const blocks: string[] = []
-    for (const item of nav.ADMIN_NAV) {
-      const category = item.category ?? "system"
-      if (blocks[blocks.length - 1] !== category) blocks.push(category)
-    }
-    expect(blocks).toEqual(["home", "customer", "revenue", "growth", "support", "system"])
   })
 
-  it("상시 9 / 접힘 7 / 숨김 1 — 상시 첫 묶음(home)이 Overview·AI 올인원이다", async () => {
+  it("상시 10 / 접힘 6 / 숨김 1 — AI는 상시 목록 5번째다", async () => {
     const { access } = await loadWithFlag("1")
-    expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(9)
-    expect(access.DEFAULT_PRIMARY_HREFS[1]).toBe("/admin/ai")
-    const resolved = access.resolveAdminNavAccess({ role: "ADMIN", overrides: {} })
-    expect(resolved.primary).toHaveLength(9)
+    expect(access.DEFAULT_PRIMARY_HREFS).toHaveLength(10)
+    expect(access.DEFAULT_PRIMARY_HREFS[4]).toBe("/admin/ai")
+    const resolved = access.resolveAdminNavAccess({ role: "SUPER_ADMIN", overrides: {} })
+    expect(resolved.primary).toHaveLength(10)
     expect(resolved.primaryGroups[0]?.items.map((item) => item.href)).toEqual([
       "/admin/overview",
-      "/admin/ai",
     ])
-    expect(resolved.folded.flatMap((group) => group.items)).toHaveLength(7)
+    expect(resolved.primary[4]?.href).toBe("/admin/ai")
+    expect(resolved.folded.flatMap((group) => group.items)).toHaveLength(6)
     expect(resolved.hidden).toHaveLength(1)
+    expect(access.getAccessibleAdminNavItems(resolved).map((item) => item.href)).toContain("/admin/ai")
+  })
+
+  it("간소 사이드바 계정에게는 켜져 있어도 기본 숨김이다 — 상시는 공통 업무 메뉴 네 개", async () => {
+    const { access } = await loadWithFlag("1")
+    const resolved = access.resolveAdminNavAccess({ role: "ADMIN", overrides: {} })
+    expect(resolved.primary.map((item) => item.href)).toEqual([
+      "/admin/overview",
+      "/admin/branch/ledger",
+      "/admin/quotes",
+      "/admin/hardware",
+    ])
+    expect(resolved.hidden.map((item) => item.href)).toContain("/admin/ai")
+    // 숨김은 목록 정리일 뿐이다 — 도달 가능한 집합에는 그대로 있다.
     expect(access.getAccessibleAdminNavItems(resolved).map((item) => item.href)).toContain("/admin/ai")
   })
 

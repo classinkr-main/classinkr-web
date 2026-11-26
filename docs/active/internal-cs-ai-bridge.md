@@ -10,8 +10,11 @@
 
 - 관리자 이미지 업로드: `POST /api/admin/cs-chat/conversations/{conversationId}/assets`
 - 이미지 분석 검토: `PATCH /api/admin/cs-chat/conversations/{conversationId}/assets/{assetId}`
+- 첨부 원본 삭제(되돌릴 수 없음): `DELETE` 같은 경로, `cs.asset.delete` capability(기본 부여는 코파일럿 역할 전체)
 - 서명된 AI/MCP 수신: `POST /api/webhook/internal-cs`
-- 관리자 명시적 외부 분석 요청: `POST /api/admin/cs-chat/conversations/{conversationId}/dispatch`
+  - 같은 멱등 키의 재요청은 처리 상태만 돌려준다(`duplicate: true`, `status`, `result`). `ok` 는 사본이 `completed` 일 때만 `true` 이고, 처리 중·실패 사본에는 `false` 다(HTTP 는 200). 재시도 여부는 `ok` 가 아니라 `status` 로 판단한다.
+- 관리자 명시적 외부 분석 요청: `POST /api/admin/cs-chat/conversations/{conversationId}/dispatch`(`cs.dispatch` capability)
+- 권한: 코파일럿 라우트(`/api/admin/cs-chat/*`)는 모두 `CS_COPILOT_API_ROLES`(지금 값은 CRM 직원 역할과 같다)로 들어온다. 위험 동작은 capability 를 더 본다 — 외부 분석 요청 `cs.dispatch`, 지식 승격 `cs.knowledge.promote`, 회귀 자동 평가 `cs.regression.run`, 첨부 원본 삭제 `cs.asset.delete`. 기본 부여는 코파일럿 역할 전체이고, `CS_COPILOT_STRICT_CAPABILITIES=1` 이면 명시 부여(또는 SUPER_ADMIN)만 인정한다([`lib/admin-auth.ts`](../../lib/admin-auth.ts)).
 - 연동 준비 상태: `GET /api/admin/cs-chat/integrations/status`
 - 데이터 모델: [`../../supabase/migrations/20260716_internal_cs_multimodal_bridge.sql`](../../supabase/migrations/20260716_internal_cs_multimodal_bridge.sql)
 - 저장소 계층: [`../../lib/repositories/internal-cs-chat.ts`](../../lib/repositories/internal-cs-chat.ts)
@@ -130,6 +133,8 @@ flowchart LR
 event 저장 로그에는 원본 base64나 메시지 본문을 복제하지 않는다. event type, source, model, 본문 길이, asset id 같은 redacted metadata와 처리 결과 ID만 남긴다.
 
 `sourceSystem + direction + idempotencyKey`는 DB unique 제약으로 중복 누적을 막는다. 전달 방식은 at-least-once로 보고, 호출자는 동일 작업 재시도 시 같은 idempotency key를 재사용해야 한다. 처리 중 장애가 난 event는 `failed` 상태와 일반화된 오류만 기록한다.
+
+같은 키의 재요청 처리: `completed` 이벤트는 다시 처리하지 않고 저장된 결과(`ok:true`, `duplicate:true`)를 돌려준다. `failed` 이벤트와 5분 넘게 `accepted`/`processing` 에 머문 이벤트(처리하던 요청이 죽은 경우)는 같은 키로 다시 보내면 **다시 처리**한다(상태·갱신 시각을 조건으로 한 조건부 갱신이라 동시에 여러 요청이 와도 한 요청만 선점한다). 방금 시작한 `processing` 이벤트는 `ok:false`, `duplicate:true`, `status:"processing"` 으로 답하므로 호출자는 잠시 뒤 같은 키로 다시 보낸다. 새 대화(`conversation`)를 만드는 이벤트는 이벤트를 먼저 선점한 요청만 대화를 만들어 중복 요청이 빈 대화를 남기지 않는다(`internal_cs_integration_events.conversation_id` NULL 허용 마이그레이션 `20261125_internal_cs_event_claim_before_conversation.sql` 적용 후. 적용 전에는 옛 순서로 물러나되 선점에 진 요청이 만든 빈 대화를 지운다).
 
 ## context request와 원본 공개 범위
 

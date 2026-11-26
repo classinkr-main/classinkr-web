@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { dataOwnerFromRequest } from "@/lib/admin/data-owner"
 import { adminCachedJson } from "@/lib/admin-api-response"
+import { isCompassFreshRequest, runWithFreshCompassReads } from "@/lib/compass/bridge"
 import { buildCompassSummary } from "@/lib/compass/summary"
 import { COMPASS_SUMMARY_DEFAULT_PERIOD, isCompassSummaryPeriodKey } from "@/lib/compass/summary-contract"
 
@@ -22,7 +23,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    return adminCachedJson(await buildCompassSummary(rawPeriod, new Date(), await dataOwnerFromRequest(new URL(req.url), admin)))
+    const url = new URL(req.url)
+    const owner = await dataOwnerFromRequest(url, admin)
+    // 새로고침(?force=1)은 브리지 60초 메모까지 건너뛴다(lib/compass/bridge.ts runWithFreshCompassReads).
+    return adminCachedJson(
+      await runWithFreshCompassReads(isCompassFreshRequest(url), () => buildCompassSummary(rawPeriod, new Date(), owner))
+    )
   } catch (error) {
     console.error("[GET /api/admin/crm/compass-summary]", error)
     return NextResponse.json({ error: "Failed to fetch Compass summary" }, { status: 500 })

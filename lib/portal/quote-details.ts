@@ -79,6 +79,9 @@ function normalizeLineItem(value: unknown, index: number): PartnerQuoteLineItemI
     quantityUnit: pickString(item, "quantityUnit", "quantity_unit"),
     unitPrice,
     originalUnitPrice: pickNumber(item, "originalUnitPrice", "original_unit_price"),
+    discountDisplayText: pickString(item, "discountDisplayText"),
+    discountRateDisplayText: pickString(item, "discountRateDisplayText"),
+    discountDisplayBasis: item.discountDisplayBasis === "line_total" ? "line_total" : undefined,
     lineSupplyAmount,
     vatIncluded: pickBoolean(item, "vatIncluded", "vat_included") ?? true,
     lineStatus:
@@ -174,6 +177,7 @@ export function normalizeQuoteDetailsFromStructuredJson(
       vatPolicyLabel: pickString(details, "vatPolicyLabel", "vat_policy_label"),
       // 견적 할인 입력 — finalize 가 할인 금액·부가세·총액을 다시 계산한다.
       quoteDiscount: normalizeQuoteDiscount(details.quoteDiscount),
+      showDiscountDetails: pickBoolean(details, "showDiscountDetails"),
       optionSelections: isRecord(details.optionSelections)
         ? (details.optionSelections as Record<string, QuoteOptionSelectionValue | undefined>)
         : undefined,

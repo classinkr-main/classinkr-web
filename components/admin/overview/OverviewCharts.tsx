@@ -97,3 +97,49 @@ export function SourcePie({
     </ResponsiveContainer>
   )
 }
+
+/**
+ * 누적 추이(히어로) — 한 계열이라 범례 없이 제목이 계열을 말한다. 면은 단색 옅은 워시(그라데이션 없음),
+ * 선 2px. 축은 숨기고 툴팁(월·누적)으로 값을 읽는다 — 큰 숫자가 바로 위에 있어 눈금이 중복이다.
+ */
+export function CumulativeTrendChart({ data, suffix, height = 120 }: { data: TrendPoint[]; suffix: string; height?: number }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <AreaChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: 6 }}>
+        <XAxis dataKey="label" hide />
+        <YAxis hide domain={["dataMin", "dataMax"]} />
+        <Tooltip content={<ChartTooltip suffix={suffix} />} cursor={cursorLine} />
+        <Area
+          type="monotone"
+          dataKey="count"
+          stroke={CHART.brand}
+          strokeWidth={2}
+          fill={CHART.brand}
+          fillOpacity={0.08}
+          dot={false}
+          activeDot={{ r: 4, fill: CHART.brand, stroke: "#FFFFFF", strokeWidth: 2 }}
+          isAnimationActive={false}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  )
+}
+
+/** 월별 막대 — 지난달까지는 웜 그레이, 이번 달(마지막 막대)만 브랜드 그린. 한 계열이라 범례 없음. */
+export function MonthlyHighlightBarChart({ data, suffix, height = 150 }: { data: TrendPoint[]; suffix: string; height?: number }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+        <CartesianGrid {...gridProps} />
+        <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} interval={0} />
+        <YAxis tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
+        <Tooltip content={<ChartTooltip suffix={suffix} />} cursor={{ fill: CHART.grid }} />
+        <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false}>
+          {data.map((_, index) => (
+            <Cell key={index} fill={index === data.length - 1 ? CHART.brand : CHART.barMuted} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}

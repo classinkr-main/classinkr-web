@@ -5,11 +5,22 @@ export const INSIGHT_SYSTEM_PROMPT = `너는 Sales Branding Dashboard 의 시니
 1. summary_metrics 의 gap_to_goal, worst_region, worst_manager 를 즉시 살펴 가장 위험한 신호 1~2개를 찾는다.
 2. deal_mix 가 비어있지 않으면 (team=ALL 인 경우만) Software/Hardware × New/Renew × Direct/Channel 중 어느 조합이 부진한지 짚는다.
 3. bottleneck_kpi 는 활동량 기준 병목이다 — 매출 부진의 원인이 활동 부족인지(LD/ACC 낮음), 전환율 문제인지(SOL/VST 는 높은데 결과 없음), 계약 확정 지연인지(deals_total 많은데 deals_confirmed 적음) 구분한다.
-4. data_caveats 가 있으면 next_actions 또는 one_liner 에 그 한계를 직설적으로 언급한다 (예: "캠페인 부재로 신규 리드 흐름 약함").
+4. ka_quarter(KA = 핵심 고객, REV 매출)를 매출 다음으로 가장 중요하게 본다 — 분기 확정(confirmed)과 미확정(open, 고확도·예정) 잔량, 상위 고객의 확정 지연을 짚는다.
+5. compass_weekly 가 state="ready" 이면 영업 활동(리드 퍼널)을 지난 주(this_week)와 그 전 주(prev_week)로 비교한다 — 유입·데모·BD인계·결제 단계 중 어디서 줄었는지, 담당별(owners) 편중과 이탈 사유(top_lost_reasons)를 짚는다. evaluation 이 있으면 Compass 과정 평가 달성률이 낮은 사람과 약한 항목(weakest)을 활동 병목의 근거로 쓴다.
+6. data_caveats 가 있으면 next_actions 또는 one_liner 에 그 한계를 직설적으로 언급한다 (예: "캠페인 부재로 신규 리드 흐름 약함").
 
 ## 출력 규칙
 - 출력은 반드시 다음 JSON 스키마를 따른다:
-  { "one_liner": "한 줄 정의 (50자 이내)", "next_actions": [ { "title": "...", "why": "...", "owner": "매니저명", "due": "YYYY-MM-DD" } ] }
+  { "one_liner": "한 줄 정의 (50자 이내)", "next_actions": [ { "title": "...", "why": "...", "owner": "매니저명", "due": "YYYY-MM-DD", "module": "KA" } ], "weekly_report": { "performance": "...", "collections": "...", "ka": [ { "customer": "...", "stage": "商机推进", "change": "...", "issue": "...", "next_action": "...", "hq_support": "-" } ], "activities": "...", "key_points": ["..."], "next_week": [ { "plan": "...", "module": "KA", "due": "YYYY-MM-DD" } ] } }
+- next_actions 의 module 은 본사 주간 보고서 모듈 중 하나다: "KA"(핵심 고객) · "market"(설명회·행사·광고 등 마케팅 활동) · "partner"(파트너·공교육) · "other". next_actions 는 다음 주 계획의 근거가 되므로 매출·KA 액션을 먼저 둔다.
+- weekly_report 는 본사에 보내는 주간 보고서(韩国业务周报) 양식의 간이 초안이다. **간체 중국어**로 쓰고, 고객·사람 이름은 입력 그대로(한글·영문) 둔다. 금액은 입력 CNY 를 万 단위 소수 1~2자리로 쓴다(예: 46,250 → 4.6万). 매출과 KA가 보고의 핵심이다.
+  · performance(一): performance.rows 의 월·분기·연 회수 달성률과 HW/SW 중 부진한 쪽을 한 문장(120자 이내)으로.
+  · collections(二): month_collections 의 이번 달 확정·미확정 회수와 금액이 큰 고객(新客/续费, 硬件/软件 구분)을 한두 문장으로.
+  · ka(三): ka_quarter.top_customers 중 최대 8곳, 한 고객 한 행. stage 는 触达·拜访·方案·试用·商机推进·签约 중 하나 — compass.stage 를 따른다(유입·컨택→触达, 상담·미팅→拜访, 데모→方案 또는 试用, BD인계→商机推进, 결제→签约, 확정 금액만 있고 compass 가 없으면 签约). change(本周阶段变化)·issue(现存问题)·next_action(下一步落地动作)은 **compass.recent·compass.next_action 과 금액(confirmed/open)에만 근거**한다. compass 가 null 이거나 recent 가 비면 change 에 "本周无 Compass 记录" 라고 쓰고 사실을 지어내지 않는다. hq_support(总部支持)는 근거가 없으면 "-".
+  · activities(四): compass_weekly 지난 주 vs 그 전 주 리드 퍼널(유입·데모 등)과 events_30d 행사를 한두 문장으로. compass_weekly.state 가 ready 가 아니면 "Compass 线索漏斗暂不可用。".
+  · key_points(5.1): 이번 주 요점 2~4개(각 120자 이내) — 매출 → KA → 활동 → KPI(bottleneck_kpi, Compass 평가) 순.
+  · next_week(5.2): 다음 주 계획 최대 6개 — plan(80자 이내, 담당자 포함), module(위 4개 중 하나), due(YYYY-MM-DD). KA·매출 계획을 먼저.
+  매출·KA 숫자와 Compass 숫자를 한 문장 안에서 더하거나 비율로 엮지 않는다.
 - next_actions 는 정확히 5개. 각 title 은 100자 이내, why 는 80자 이내.
 - title 은 동사로 시작 (예: "재정비", "재시도", "추진", "신설").
 - owner 는 입력의 managers[].name 또는 "BD팀"/"MKT팀"/"전사" 중 하나만 사용한다. **여러 사람을 콤마로 나열하지 말고 단일 owner 를 고른다** — 공동 작업이 필요해도 책임자 1명을 지정한다.
@@ -21,6 +32,7 @@ export const INSIGHT_SYSTEM_PROMPT = `너는 Sales Branding Dashboard 의 시니
 - 회계연도는 4월 시작 3월 종료. fiscalPeriod 의 Q는 이 회계연도 기준이다.
 - CSM은 폐지된 이전 조직이다. 장부에 남은 팀·담당은 이력으로 해석하고, CSM에 신규 업무를 배정하거나 현재 팀 이동으로 과거 매출을 재귀속하지 않는다.
 - NEO 본사 매출·오더·수금, REV 확정액, Compass 활동·평가를 서로 더하거나 같은 지표로 대체하지 않는다. 원천 정의·기간·통화가 다르면 그 차이를 명시한다.
+- compass_weekly 의 퍼널은 "그 주에 유입된 리드가 지금 어느 단계까지 갔는가"의 누적이다. 그 주에 일어난 데모·결제 건수가 아니다. 금액이 없다.
 - 한 액션이 한 가지 명확한 결과를 만들도록 작성 — "전반적 개선" 같은 모호한 표현 금지.
 
 ## 한 줄 정의 (one_liner)
@@ -43,12 +55,52 @@ export const INSIGHT_RESPONSE_SCHEMA = {
           why: { type: "string", maxLength: 100 },
           owner: { type: "string", maxLength: 30 },
           due: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+          module: { type: "string", enum: ["KA", "market", "partner", "other"] },
         },
-        required: ["title", "why", "owner"],
+        required: ["title", "why", "owner", "module"],
       },
     },
+    weekly_report: {
+      type: "object",
+      properties: {
+        performance: { type: "string", maxLength: 200 },
+        collections: { type: "string", maxLength: 260 },
+        ka: {
+          type: "array",
+          maxItems: 8,
+          items: {
+            type: "object",
+            properties: {
+              customer: { type: "string", maxLength: 60 },
+              stage: { type: "string", enum: ["触达", "拜访", "方案", "试用", "商机推进", "签约"] },
+              change: { type: "string", maxLength: 200 },
+              issue: { type: "string", maxLength: 160 },
+              next_action: { type: "string", maxLength: 160 },
+              hq_support: { type: "string", maxLength: 80 },
+            },
+            required: ["customer", "stage", "change", "issue", "next_action", "hq_support"],
+          },
+        },
+        activities: { type: "string", maxLength: 260 },
+        key_points: { type: "array", minItems: 2, maxItems: 4, items: { type: "string", maxLength: 180 } },
+        next_week: {
+          type: "array",
+          maxItems: 6,
+          items: {
+            type: "object",
+            properties: {
+              plan: { type: "string", maxLength: 140 },
+              module: { type: "string", enum: ["KA", "market", "partner", "other"] },
+              due: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+            },
+            required: ["plan", "module", "due"],
+          },
+        },
+      },
+      required: ["performance", "collections", "ka", "activities", "key_points", "next_week"],
+    },
   },
-  required: ["one_liner", "next_actions"],
+  required: ["one_liner", "next_actions", "weekly_report"],
 } as const
 
 export const MANAGER_INSIGHT_SYSTEM_PROMPT = `너는 BD/MKT 운영 컨설턴트로, 한 명의 매니저를 코칭하는 1:1 상황이다.

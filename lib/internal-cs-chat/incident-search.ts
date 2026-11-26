@@ -1,6 +1,7 @@
 import "server-only"
 
 import type { InternalCsSourceRef } from "@/lib/internal-cs-chat/gemini"
+import { buildMatchHaystack, matchesKeyword, normalizePlain } from "@/lib/internal-cs-chat/match-text"
 
 export interface IncidentCase {
   id: string
@@ -34,9 +35,11 @@ export interface WorkflowFlow {
 export interface IncidentEvidence {
   id: string
   caseId?: string
+  /** 케이스 ID · 증상. 고객사 이름은 싣지 않는다. */
   title: string
   category: string
-  org?: string
+  /** 선례 케이스의 원인 확정 상태. 점검 흐름(workflow)에는 없다. */
+  causeStatus?: IncidentCase["causeStatus"]
   summary: string
   workflowSteps?: string[]
   resolution?: string
@@ -412,12 +415,78 @@ export const WORKFLOW_FLOWS: readonly WorkflowFlow[] = [
   },
 ]
 
-function normalizeToken(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim()
+const PLACEHOLDER_CUSTOMER_RE = /고객\s*미상|지사\s*재고\s*검수|^미상$/
+
+/** 실제 고객사가 아니라 자리표시로 적어 둔 값("고객 미상", "지사 재고 검수"). 질문과 맞추지 않고 이름 가리기에서도 뺀다. */
+export function isPlaceholderCustomer(customer: string) {
+  return PLACEHOLDER_CUSTOMER_RE.test(customer.trim())
+}
+
+const ORG_MASK = "고객사"
+
+function deriveOrgNames() {
+  const names = new Set<string>()
+  const add = (value: string) => {
+    const trimmed = value.trim()
+    if (trimmed.length >= 3) names.add(trimmed)
+  }
+  for (const c of INCIDENT_CASES) {
+    if (isPlaceholderCustomer(c.customer)) continue
+    const withoutBranchCode = c.customer.replace(/\s+[A-Za-z]\d{1,2}\b/g, " ")
+    const flat = withoutBranchCode.replace(/[()]/g, " ").replace(/\s+/g, " ").trim()
+    add(flat)
+    for (const part of flat.split(/\s*\/\s*/)) {
+      add(part)
+      for (const token of part.split(" ")) add(token)
+    }
+    // 키워드에 줄임 표기로 들어 있는 고객사 이름도 같이 가린다.
+    const compactCustomer = normalizePlain(c.customer, "strip").replace(/\s+/g, "")
+    for (const keyword of c.keywords) {
+      const compactKeyword = normalizePlain(keyword, "strip").replace(/\s+/g, "")
+      if (compactKeyword.length >= 3 && /[\p{L}]/u.test(compactKeyword) && compactCustomer.includes(compactKeyword)) add(keyword)
+    }
+  }
+  return Array.from(names).sort((a, b) => b.length - a.length)
+}
+
+let orgMaskPattern: RegExp | null = null
+
+/** 선례 본문과 제목에서 고객사 이름을 가린다. 모델 컨텍스트·결정형 초안·구조화 근거가 모두 이 함수를 거친다. */
+export function maskOrgNames(text: string) {
+  if (!orgMaskPattern) {
+    const escaped = deriveOrgNames().map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    orgMaskPattern = escaped.length > 0 ? new RegExp(escaped.join("|"), "giu") : /(?!)/
+  }
+  return text.replace(orgMaskPattern, ORG_MASK)
+}
+
+function isOrgAlias(keyword: string) {
+  const compact = normalizePlain(keyword, "strip").replace(/\s+/g, "")
+  return compact.length >= 3 && maskOrgNames(keyword) !== keyword
+}
+
+const GENERIC_SYMPTOM_WORDS = new Set(["수업", "고객", "학생", "기록", "화면", "확인", "설정", "문의", "오류", "발생", "관리자", "사용", "상태"])
+
+const CODE_MARKER_WORDS = new Set(["error", "code", "코드", "오류", "에러"])
+
+/** 증상 문장에서 연속한 두 낱말("네트워크 끊김")이 질문에 그대로 있으면 증상이 맞은 것으로 본다. 흔한 낱말 쌍은 제외한다. */
+function symptomPhraseMatches(haystack: ReturnType<typeof buildMatchHaystack>, symptom: string) {
+  const tokens = normalizePlain(symptom, "strip").split(" ").filter((token) => token.length >= 2)
+  for (let i = 0; i + 1 < tokens.length; i += 1) {
+    const [a, b] = [tokens[i], tokens[i + 1]]
+    if (GENERIC_SYMPTOM_WORDS.has(a) && GENERIC_SYMPTOM_WORDS.has(b)) continue
+    if (a.length + b.length < 6) continue
+    // 오류 표지어만으로 된 쌍("error code")은 증상이 아니다. match-text 가 "코드 N"·"N 오류"를 모두 "error code N"으로 바꾸므로 오탐이 된다.
+    if (CODE_MARKER_WORDS.has(a) && CODE_MARKER_WORDS.has(b)) continue
+    if (matchesKeyword(haystack, `${a} ${b}`)) return true
+  }
+  return false
+}
+
+function mentionsCaseId(haystackText: string, id: string) {
+  const normalizedId = normalizePlain(id, "strip")
+  const escaped = normalizedId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`).test(haystackText)
 }
 
 export function searchIncidentEvidence(
@@ -425,52 +494,51 @@ export function searchIncidentEvidence(
   options: { limit?: number } = {}
 ): IncidentEvidence[] {
   const limit = options.limit ?? 3
-  const normalizedQuestion = normalizeToken(question)
+  const normalizedQuestion = normalizePlain(question, "strip")
   if (!normalizedQuestion) return []
+  const haystack = buildMatchHaystack(question, "strip")
 
   const results: IncidentEvidence[] = []
 
   // 1. 케이스 매칭 (76건 선례)
   for (const c of INCIDENT_CASES) {
     let score = 0
-    const normCustomer = normalizeToken(c.customer)
-    const normId = c.id.toLowerCase()
+    let anchored = false
 
     // 케이스 ID 직접 언급 (예: "D-02", "D-21", "S-03")
-    if (normalizedQuestion.includes(normId)) {
+    if (mentionsCaseId(normalizedQuestion, c.id)) {
       score += 150
+      anchored = true
     }
 
-    // 고객사명 매칭 (예: "정율사관", "과사람", "12inedu", "에듀온픽", "kj영재")
-    if (normCustomer && normalizedQuestion.includes(normCustomer)) {
-      score += 120
-    } else if (normCustomer) {
-      const parts = normCustomer.split(" ").filter((p) => p.length >= 2)
-      for (const part of parts) {
-        if (normalizedQuestion.includes(part)) {
-          score += 60
-        }
-      }
-    }
-
-    // 키워드 매칭
+    // 증상·키워드가 하나 이상 맞아야 통과한다(anchored). 고객사 이름·두 글자 이하 키워드는 점수만 더하고 통과 근거가 되지 못한다.
     for (const kw of c.keywords) {
-      const normKw = normalizeToken(kw)
-      if (normKw && normalizedQuestion.includes(normKw)) {
-        score += Math.max(10, Math.min(40, normKw.length * 5))
-      }
+      if (isOrgAlias(kw) || !matchesKeyword(haystack, kw)) continue
+      const normKw = normalizePlain(kw, "strip")
+      score += Math.max(10, Math.min(40, normKw.length * 5))
+      if (normKw.replace(/\s+/g, "").length >= 3) anchored = true
+    }
+    if (symptomPhraseMatches(haystack, c.symptom)) {
+      score += 30
+      anchored = true
     }
 
-    if (score >= 25) {
+    // 고객사명은 전체 이름이 질문에 그대로 있을 때만 가산한다(조각 매칭 없음). 자리표시 고객은 매칭하지 않는다.
+    if (anchored && !isPlaceholderCustomer(c.customer)) {
+      const normCustomer = normalizePlain(c.customer, "strip")
+      if (normCustomer && normalizedQuestion.includes(normCustomer)) score += 120
+    }
+
+    if (anchored && score >= 25) {
       results.push({
         id: `incident:${c.id}`,
         caseId: c.id,
-        title: `${c.id} · ${c.customer} · ${c.symptom}`,
+        title: maskOrgNames(`${c.id} · ${c.symptom}`),
         category: c.category,
-        org: c.customer,
-        summary: `증상: ${c.symptom} / 원인(${c.causeStatus}): ${c.cause} / 조치: ${c.resolution}`,
-        resolution: c.resolution,
-        workflowSteps: c.workflowTips,
+        causeStatus: c.causeStatus,
+        summary: maskOrgNames(`증상: ${c.symptom} / 원인(${c.causeStatus}): ${c.cause} / 조치: ${c.resolution}`),
+        resolution: maskOrgNames(c.resolution),
+        workflowSteps: c.workflowTips?.map(maskOrgNames),
         sourceFile: c.sourceDoc,
         score,
       })
@@ -488,18 +556,14 @@ export function searchIncidentEvidence(
 
     // 증상명 직접 매칭
     for (const sym of flow.symptoms) {
-      const normSym = normalizeToken(sym)
-      if (normSym && normalizedQuestion.includes(normSym)) {
-        flowScore += 50
-      }
+      if (matchesKeyword(haystack, sym)) flowScore += 50
     }
 
     // 흐름 키워드 매칭
     for (const kw of flow.keywords) {
-      const normKw = normalizeToken(kw)
-      if (normKw && normalizedQuestion.includes(normKw)) {
-        flowScore += Math.max(15, Math.min(45, normKw.length * 6))
-      }
+      if (!matchesKeyword(haystack, kw)) continue
+      const normKw = normalizePlain(kw, "strip")
+      flowScore += Math.max(15, Math.min(45, normKw.length * 6))
     }
 
     // "확인 흐름", "점검 순서", "절차", "방법" 등의 맥락 가산

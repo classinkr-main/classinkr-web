@@ -68,6 +68,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 하드웨어 재고관리 프로세스 정의서(2026-10-27)와 현재 구현의 차이, 결정 대기 질문, 만드는 순서
 - [hardware-ops/distributor-settlement.md](./hardware-ops/distributor-settlement.md)
   - **하드웨어 C방식/H방식 총판 정산.** 총판용 견적서 발행(고객 동의·설치 완료·직접), 원가 미수금, 방식별 매출 원장 초안 시점
+- [active/distributor-quote-with-customer-quote-plan-2026-11-20.md](./active/distributor-quote-with-customer-quote-plan-2026-11-20.md)
+  - **고객 견적 작성 시 총판(퀴드러닝) 견적서 같이 만들기(구현 · 결정 확정).** FY2026 정책표 → 원가 템플릿 공급가, 작성기 총판 공급가 표·저장 시 정산 초안, 수신 대표 조혜리·참조 배철웅, 프로모션 증정 토글, 누적 대수 구간가 추천
 - [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 - [active/marketing-tab-dashboard-restructure-2026-09-14.md](./active/marketing-tab-dashboard-restructure-2026-09-14.md)
@@ -78,6 +80,12 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **어드민 첫 화면 방문·문의 바로 보기 기획(결정 대기).** Overview 리드 숫자가 "내 담당·확인됨"만 세어 새 문의가 0으로 보이는 원인, 최상단 "지금" 띠·전사 범위·사이드바 문의 배지(P0), 방문·문의 추이·화면 안 알림(P1), 담당 원천(P2), 결정 D1~D8
 - [active/admin-sidebar-reorder-fold-plan-2026-11-09.md](./active/admin-sidebar-reorder-fold-plan-2026-11-09.md)
   - **어드민 사이드바 순서 재배치·접기 — D안(상시 고정 + 범주별 접기) 구현, CS 콘솔은 콘텐츠 밑.** 지금 배열의 문제(한 소제목 아래 7개, CRM·CS 콘솔 5·8번째, 마케팅·분석 소제목 중복, 이름 없는 "기타"), 공통 바닥 F1~F6(업무 단위 범주·하루 동선 순서·도달성 불변), 시안 A 순서만 · B 범주 아코디언 · C 상시 최소 · D 상시 고정 + 범주별 접기(권장), 결정 D1~D6. 목업 [mockups/admin-sidebar-reorder-fold-2026-11-09.html](./active/mockups/admin-sidebar-reorder-fold-2026-11-09.html)
+- [active/sales-workspace-simplification-plan-2026-11-20.md](./active/sales-workspace-simplification-plan-2026-11-20.md)
+  - **매출 장부 · 견적 문서 · 사이드바 간소화 기획.** 2026-11-20 회의 결정(12월 1일 시트 잠금 · 장부가 원본, 시트와 같은 건별 표, 확도 5단계, 견적 탭 셋 · 첫 화면 템플릿, 관리자 외 간소 사이드바)과 현재 코드의 차이, 작업 묶음 W0~W5, 결정 D1~D9, 진행 중 세션과 겹치는 곳
+- [active/ledger-filter-plan-2026-11-24.md](./active/ledger-filter-plan-2026-11-24.md)
+  - **매출 장부 필터 고도화 · 편의 기능 · 디자인 디벨롭 기획 — P0 구현됨(2026-11-25, §8), P1 · P2 결정 대기.** 로컬에서 써 본 결과(주 칸 금액 앞자리 잘림, `#`이 시트 행 번호가 아님, 기본 필터와 열 필터가 몰래 겹침, 접힌 필터가 안 보임, 체크 큐 카드가 커서 3건만 보임), 회의 업무별 클릭 수, P0 5개(12월 1일 시트 잠금 전) · P1(기한 지난 예정 알림 · 한 주 자동 연장 포함 — D8~D10 확정, 경고 아닌 알림 톤) · P2, 결정 D1~D10
+- [active/ledger-revenue-usage-review-2026-11-25.md](./active/ledger-revenue-usage-review-2026-11-25.md)
+  - **매출 장부 전체 평가 · 매출 정보 활용 방안 · 예상 피드백 점검(결정 대기).** 8개 기준 평가표(종합 C+ — 정확성 · 원본 전환 준비도가 관건), 화면별 매출 숫자 지도와 불일치 10건(장부 한 화면 안 3건), 시트 잠금 때 같이 멈추는 숫자(DSH 실적 · Compass 매출), 활용 방안 U-1~U-10, 견적 피드백에서 옮겨 온 예상 피드백 E-1~E-26, 12월 1일 전 우선순위, 결정 D1~D10
 - [active/admin-usage-triage-2026-09-25.md](./active/admin-usage-triage-2026-09-25.md)
   - **어드민 사용 실측·탭 정리.** 운영 DB 읽기 전용 집계로 본 화면별 사람 사용 흔적(Home 어드민 쓰기 ≈0, 매니저 업무는 Compass), 멈춘 원천(NEO env 누락·시트 권한), 기본 숨김·매니저별 숨기기, 심폐소생 Top 5, 결정 대기 D1~D8
 - [active/crm-tab-develop-plan-2026-09-12.md](./active/crm-tab-develop-plan-2026-09-12.md)
@@ -111,6 +119,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **갈매봇(어드민 전역 AI 위젯)·AI 올인원 탭·원격 오더 기획.** 오더 등급(R0~R4), 오더 카드 사양, 안전 설계, 프론트 구현 현황과 서버 연결 지점
 - [active/admin-ai-structure-worklist-2026-09-29.md](./active/admin-ai-structure-worklist-2026-09-29.md)
   - **갈매봇 실행 로드맵.** 서버 구조(조율기·오더 레지스트리·확인 API), 조회·쓰기 후보 함수와 되돌리기 가능 여부, 단계별 작업 id(S0~S5, F)와 완료 기준
+- [active/home-mcp-operations.md](./active/home-mcp-operations.md)
+  - **홈페이지 MCP(`/api/mcp`) 운영.** 토큰 두 형식(옛 `이름:토큰`·넓힌 scope/만료), 범위 뜻, 옮기는 절차, 쓰기 안전장치(묶음 1개·분당 상한·idempotency_key)와 인스턴스 메모리 한계, 연락처 가림·감사, 공용 도구 레지스트리
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 내부 동료가 매일 쓰는 자체 CRM의 기록 입력, 회의록/녹음 모으기, 고객 360, 다음 액션 운영 기준
 - [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
