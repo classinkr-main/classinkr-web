@@ -61,6 +61,9 @@ import { isNavActive as matchNavActive } from "./nav-active"
 import { isFoldGroupExpanded, toggleFoldGroup, type ClosedActiveFold } from "./sidebar-fold-state"
 import { formatNavCount, useAdminNavCounts, type AdminNavCount } from "./useAdminNavCounts"
 
+// 빠른 요청 양식은 위젯을 열 때 내려받는다.
+const QuickRequestWidget = dynamic(() => import("./requests/QuickRequestWidget"), { ssr: false })
+
 // 본인 사이드바 편집 드로어 — 열 때만 내려받는다(사이드바는 모든 어드민 화면에 실린다).
 const MyNavEditorDrawer = dynamic(() => import("./settings/MyNavEditorDrawer"), {
   ssr: false,
@@ -526,18 +529,8 @@ export default function AdminSidebar(props: Props) {
 
 function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNavOverridesChange }: Props) {
   const pathname = usePathname()
-  const requestContext = new URLSearchParams({ screen: cleanRequestScreen(pathname) ?? "/admin" })
-  const quickRequest = canSubmitAdminRequest(role) && pathname !== ADMIN_REQUESTS_HREF ? (
-    <Link
-      href={ADMIN_REQUESTS_HREF + "?" + requestContext}
-      prefetch={false}
-      aria-label="요청·오류 신고"
-      title="요청·오류 신고"
-      className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-fg-accent hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg-accent lg:size-8"
-    >
-      <MessageSquarePlus className="size-4" aria-hidden="true" />
-    </Link>
-  ) : null
+  const requestLauncher = useRef<HTMLAnchorElement>(null)
+  const [quickReport, setQuickReport] = useState<{ screen: string; screenLabel: string } | null>(null)
   const searchParams = useSearchParams()
   const router = useRouter()
   const navCounts = useAdminNavCounts()
@@ -1051,6 +1044,35 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNav
     )
   }
 
+  const requestScreen = cleanRequestScreen(pathname) ?? "/admin"
+  const canReport = canSubmitAdminRequest(role)
+  const quickRequest = canReport && pathname !== ADMIN_REQUESTS_HREF ? (
+    <Link
+      href={ADMIN_REQUESTS_HREF + "?" + new URLSearchParams({ screen: requestScreen })}
+      prefetch={false}
+      aria-label="요청·오류 신고"
+      title="요청·오류 신고"
+      aria-haspopup="dialog"
+      aria-expanded={quickReport !== null}
+      aria-controls={quickReport ? "admin-quick-request" : undefined}
+      onClick={(event) => { requestLauncher.current = event.currentTarget }}
+      onNavigate={(event) => {
+        event.preventDefault()
+        if (quickReport) {
+          const panel = document.getElementById("admin-quick-request")
+          const target = panel?.querySelector("form") ?? panel
+          target?.focus()
+          return
+        }
+
+        setQuickReport({ screen: requestScreen, screenLabel: currentCrmRouteLabel ?? currentNavItem?.label ?? "어드민" })
+      }}
+      className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-fg-accent hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fg-accent lg:size-8"
+    >
+      <MessageSquarePlus className="size-4" aria-hidden="true" />
+    </Link>
+  ) : null
+
   return (
     <>
     <header className="fixed inset-x-0 top-0 z-40 flex h-16 items-center gap-3 border-b border-[#e8e8e4] bg-white/95 px-3 pr-16 shadow-sm backdrop-blur lg:hidden">
@@ -1429,6 +1451,15 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides, onNav
       </button>
     </aside>
 
+    {canReport && quickReport && (
+      <QuickRequestWidget
+        {...quickReport}
+        onClose={() => {
+          setQuickReport(null)
+          requestLauncher.current?.focus()
+        }}
+      />
+    )}
     {navEditorOpen ? (
       <MyNavEditorDrawer
         role={role}
