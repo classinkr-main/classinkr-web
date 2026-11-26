@@ -167,8 +167,13 @@ export function clampLines(lines: string[], maxChars = MAX_CHARS): string {
 }
 
 export function formatTurnMarkdown(input: { blocks: AiBlock[]; orders: OrderTicket[]; siteUrl: string; maxChars?: number }): string {
-  // 상담 내역 카드는 늘 사내 자료다(상담 근거) — 내부용 줄을 단다.
-  const internalOnly = input.blocks.some((block) => (block.kind === "answer" && isInternalOnlyAnswer(block.card)) || block.kind === "consultations")
+  // 상담 내역 카드는 늘 사내 자료다(상담 근거) — 내부용 줄을 단다. 사내 자료라고 표시한 조회 카드(고객 이력)도 같다.
+  const internalOnly = input.blocks.some(
+    (block) =>
+      (block.kind === "answer" && isInternalOnlyAnswer(block.card)) ||
+      block.kind === "consultations" ||
+      (block.kind === "read" && block.card.internalOnly === true)
+  )
   const lines: string[] = []
   if (internalOnly) lines.push(INTERNAL_ONLY_LINE)
   for (const block of input.blocks) {

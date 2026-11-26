@@ -36,10 +36,11 @@ export function getWecomDedupStore(env: Record<string, string | undefined> = pro
   return allowsMemoryClaims(env) ? memoryDedup : null
 }
 
+/** 단체방 — 상담 내역·관련 상담 건수·고객 이력을 떼어 낸다(브리지 groupScopedDeps 가 한 번 더 막는다). */
 function withoutConsultations(deps: OrchestratorDeps): OrchestratorDeps {
   const { consultationCount: _consultationCount, ...knowledge } = deps.knowledge
   void _consultationCount
-  return { ...deps, knowledge, consultations: undefined }
+  return { ...deps, knowledge, consultations: undefined, customerHistory: undefined }
 }
 
 export function buildWecomBridgeDeps(config: WecomAibotConfig): BridgeDeps {

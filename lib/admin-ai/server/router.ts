@@ -10,7 +10,7 @@
 //  4. 1·2위 점수가 가까우면 되묻는다(후보 2개 카드). 모델 어댑터가 있으면 그 둘 중에서만 고르게 한다.
 // 순수 모듈이다(I/O·server-only 없음) — 시험과 이후 위컴 방 어댑터가 그대로 부른다.
 
-export type AskBranch = "knowledge" | "contact" | "link" | "read" | "consultations"
+export type AskBranch = "knowledge" | "contact" | "link" | "read" | "consultations" | "customer_history"
 export type Branch = AskBranch | "write" | "unknown"
 
 /** 조회 도구(lib/ops-tools 레지스트리의 R0, mcpName). screen 은 도구가 없는 조회 — 화면 링크로 안내한다. */
@@ -307,6 +307,44 @@ export function isConsultationAsk(text: string): boolean {
   return CONSULT_FORM.test(text) || CONSULT_CUSTOMER.test(text) || CONSULT_RECORD.test(text)
 }
 
+// 고객 이력 — 고객사 하나의 CRM 활동 기록(결제·견적·AS·API·CS 케이스 태그)과 담당 영업. "가나학원 결제 문제 있었나?",
+// "이 고객 견적 이슈 있었어?", "가나학원 고객 이력 알려 줘". 상담·문의·채팅(상담 내역 갈래), CRM 단계·일정, 방법·규정 질문,
+// 목록·금액 조회(견적 목록·수금 현황), 담당자·화면 위치를 묻는 말은 이 갈래가 아니다.
+// 시험: tests/admin-ai/fixtures/customer-history-table.ts(판정 표)·customer-history-router.test.ts.
+const HISTORY_TOPIC =
+  /결제|입금|수금|미수|미납|정산|환불|청구|견적|(?<![a-z])a\/?s(?![a-z])|에이에스|수리|고장|파손|불량|교체|(?<![a-z])api(?![a-z])|연동|(?<![a-z])cs\s*케이스|씨에스\s*케이스/i
+/** 문제를 가리키는 말 — 고장·파손·불량은 고객이 있을 때만 문제로 친다("칠판 고장 있었나?"만으로는 어느 고객인지 모른다). */
+const HISTORY_ISSUE = /문제|이슈|사고|클레임|컴플레인|불만|트러블|분쟁|민원|케이스/
+const HISTORY_DEFECT = /고장|파손|불량/
+/**
+ * 이력을 가리키는 말 — "고객 이력", "문제 이력", "AS 이력", "가나학원 이력". 견적·결제 이력은 넣지 않는다(견적 목록 조회·수금 화면 몫).
+ * 통화·컨택 기록은 활동 조회 몫이라 "기록"은 문제·이슈 뒤에서만 받는다.
+ */
+const HISTORY_RECORD_WORD =
+  /고객\s*이력|(?:이슈|문제|클레임|사고|민원)\s*(?:이력|기록|내역)|(?:(?<![a-z])a\/?s|(?<![a-z])api|연동|cs\s*케이스|수리)\s*(?:이력|기록|내역)|(?:학원|에듀|교육|스쿨|센터|학교|아카데미|교습소|기관)(?:의)?\s*(?:전체\s*)?이력/i
+/** 고객이 있을 때 받는 묻는 꼴 — 있었나·이력·보여 줘·뭐였지·최근. */
+const HISTORY_FORM = /있었|있어|있나|있는지|났었|났어|났나|생겼|터졌|이력|기록|내역|보여|알려|찾아|정리해|뭐였|언제|최근|요즘/
+/** 고객이 없을 때는 지난 일을 묻는 꼴만 — "결제 문제 있나요?"(지금 알려진 문제가 있나)는 정보 질문으로 둔다. */
+const HISTORY_PAST = /있었|났었|생겼|터졌|이력|기록|내역|뭐였/
+const HISTORY_NOT = /방법|어떻게|절차|정책|규정|규칙|하려면|하면|되면|가능|기능|설정|버튼|뜻|의미|차이|기준|조건|왜/
+const HISTORY_LIST = /목록|현황|합계|얼마|금액|몇\s*(?:대|개|번)|버전|비교|단가|초안/
+/** 여러 고객을 거꾸로 찾는 말 — "결제 문제 있었던 고객 알려 줘". 고객 하나의 이력이 아니다. */
+const HISTORY_MANY = /(?:어느|어떤|무슨)\s*(?:고객|학원|기관|곳)|(?:고객|학원|기관|곳)\s*들|(?:있었던|났던|생긴)\s*(?:고객|학원|기관|곳)/
+
+/** 고객 이력을 묻는 말인가 — 상담 내역 갈래(isConsultationAsk)와 겹치지 않는다(상담·문의·채팅 낱말이 있으면 아니다). */
+export function isCustomerHistoryAsk(text: string): boolean {
+  if (CONSULT_OBJ.test(text) || CONSULT_CRM.test(text) || HISTORY_NOT.test(text) || HISTORY_LIST.test(text) || HISTORY_MANY.test(text)) return false
+  if (WHO.test(text.replace(INDIRECT_WHO, " ")) || LINK_FORM.test(text)) return false
+  const record = HISTORY_RECORD_WORD.test(text)
+  // 고객이 없으면 주제·문제·지난 일이 모두 있어야 하고, 제품 질문("클래스인 결제 문제 있었어?" — 알려진 장애)은 정보 답에 둔다.
+  if (!CONSULT_CUSTOMER.test(text)) {
+    return HISTORY_TOPIC.test(text) && (HISTORY_ISSUE.test(text) || record) && HISTORY_PAST.test(text) && !PRODUCT.test(text)
+  }
+  if (record) return true
+  const issue = HISTORY_ISSUE.test(text) || HISTORY_DEFECT.test(text)
+  return issue && (HISTORY_TOPIC.test(text) ? HISTORY_FORM.test(text) : HISTORY_PAST.test(text))
+}
+
 const READ_TOOLS: Array<{ match: RegExp; tool: Extract<ReadTarget, { kind: "tool" }>["tool"] }> = [
   { match: /재고|가용|남은\s*수량|몇\s*대\s*(?:남|있)|주문\s*권장/, tool: "hw_stock" },
   {
@@ -337,7 +375,7 @@ function matchRead(text: string): ReadTarget | undefined {
 }
 
 export function scoreBranches(text: string): { scores: Record<AskBranch, number>; read?: ReadTarget } {
-  const scores: Record<AskBranch, number> = { knowledge: 1, contact: 0, link: 0, read: 0, consultations: 0 }
+  const scores: Record<AskBranch, number> = { knowledge: 1, contact: 0, link: 0, read: 0, consultations: 0, customer_history: 0 }
   const symptom = SYMPTOM.test(text)
   const knowledgeForm = KNOWLEDGE_FORM.test(text)
 
@@ -359,6 +397,7 @@ export function scoreBranches(text: string): { scores: Record<AskBranch, number>
   }
 
   if (isConsultationAsk(text)) scores.consultations += CONSULT_RECORD.test(text) ? 8 : 7
+  if (isCustomerHistoryAsk(text)) scores.customer_history += 8
 
   if (knowledgeForm) scores.knowledge += 2
   if (PRODUCT.test(text)) scores.knowledge += 1
@@ -410,4 +449,5 @@ export const BRANCH_LABEL: Record<AskBranch, string> = {
   link: "화면·주소 링크",
   read: "데이터 조회",
   consultations: "상담 내역 찾기",
+  customer_history: "고객 이력 찾기",
 }

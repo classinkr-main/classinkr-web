@@ -7,11 +7,13 @@ import "server-only"
 //  - 모델: 연결 전(null) — 결정형만 돈다
 //  - 쓰기: preview 까지(writes.ts) + 서명 표(ADMIN_AI_TICKET_SECRET 이 있을 때만)
 //  - 상담 내역: consultation-deps.ts(채널톡 경량 목록·내부 CS 목록 — 최근 N건을 읽어 거른다). 상담 글은 코파일럿 역할만 본다.
+//  - 고객 이력: customer-history-deps.ts(CRM 활동 기록 태그 조회 + NEO 스냅숏 담당). 기록 글은 상담 내역과 같은 역할만 본다.
+//    고객 조회를 끈 연결(customerContacts:false — 위컴 단체방)에는 싣지 않는다.
 import { randomUUID } from "crypto"
 
 import { routeAnswerIndex, getRouterAnswerIndex } from "@/lib/chatbot/answer-index"
 import { redactPii } from "@/lib/chatbot/pii"
-import { resolveContact } from "@/lib/internal-cs-chat/contact"
+import { resolveContact, type CustomerRef } from "@/lib/internal-cs-chat/contact"
 import { buildContactDeps } from "@/lib/internal-cs-chat/contact-deps"
 import { buildInternalEvidence } from "@/lib/internal-cs-chat/context"
 import { hasScope } from "@/lib/ops-tools/actor"
@@ -23,6 +25,8 @@ import { isWriteDef } from "@/lib/ops-tools/types"
 
 import { buildConsultationDeps } from "./consultation-deps"
 import { countRelatedConsultations, findConsultations } from "./consultations"
+import { findCustomerHistory } from "./customer-history"
+import { buildCustomerHistoryDeps } from "./customer-history-deps"
 import type { CustomerPhrasing } from "./knowledge"
 import { getAdminAiModelAdapter } from "./llm/adapter"
 import type { OrchestratorDeps } from "./orchestrator"
@@ -75,6 +79,9 @@ export function buildServerOrchestratorDeps(options: {
 }): OrchestratorDeps {
   const contactDeps = buildContactDeps({ customers: options.customerContacts !== false })
   const consultationDeps = buildConsultationDeps()
+  // 고객 이력은 고객 조회를 켠 연결에서만 — 담당자 찾기의 고객 이름 일치(findCustomersInText)를 같이 쓴다.
+  const customerHistoryDeps =
+    options.customerContacts !== false ? buildCustomerHistoryDeps({ findCustomersInText: contactDeps.findCustomersInText }) : null
   // 카드에 표를 실을지(확인 버튼) — 표 비밀 + 일회용 저장소가 있을 때만(ticket-claims.ts 한 곳에서 판정).
   const ticketSecret = readConfirmSetup().cardSecret
   return {
@@ -85,6 +92,12 @@ export function buildServerOrchestratorDeps(options: {
     },
     consultations: (question, openCustomer, now) =>
       findConsultations(question, consultationDeps, { openCustomer, actor: { canReadContent: options.canReadConsultations }, now }),
+    ...(customerHistoryDeps
+      ? {
+          customerHistory: (question: string, openCustomer: CustomerRef | null, now: number) =>
+            findCustomerHistory(question, customerHistoryDeps, { openCustomer, actor: { canReadContent: options.canReadConsultations }, now }),
+        }
+      : {}),
     resolveContact: (question, openCustomer) => resolveContact(question, contactDeps, { openCustomer }),
     ops: serverOpsDeps,
     model: getAdminAiModelAdapter(),
