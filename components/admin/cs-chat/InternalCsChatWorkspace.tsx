@@ -77,6 +77,7 @@ import {
   summarizeDocsGaps,
   type DocsGapsDeskSummary,
 } from "./ops-desk"
+import { CONVERSATION_PAGE_SIZE, fetchRemainingConversationPages, type ConversationPagesResult } from "./conversation-pages"
 import ChatPanel from "./panels/ChatPanel"
 import HqPanel from "./panels/HqPanel"
 import QueuePanel from "./panels/QueuePanel"
@@ -126,6 +127,12 @@ export interface InflightTurn {
   question: string | null
   startedAt: number
   kind: "ask" | "rerun"
+}
+
+function incompleteListMessage(result: ConversationPagesResult) {
+  return result.incomplete
+    ? `내부 CS 대화 ${result.conversations.length} / ${result.total}건만 표시 중입니다. 배지·큐 건수는 전체가 아닙니다.`
+    : null
 }
 
 function InternalCsChatWorkspaceInner() {
@@ -552,6 +559,16 @@ function InternalCsChatWorkspaceInner() {
     }
   }, [demoMode, metricsDays])
 
+  // 첫 100건 뒤의 대화를 pagination.total 까지 이어 받는다 — 오래된 열린·본사 대기 대화가 큐에서 빠지지 않게.
+  const loadRemainingConversations = useCallback(
+    (first: ConversationListResponse): Promise<ConversationPagesResult> =>
+      fetchRemainingConversationPages(first, (offset) =>
+        adminFetchJson<ConversationListResponse>(
+          `/api/admin/cs-chat/conversations?status=all&limit=${CONVERSATION_PAGE_SIZE}&offset=${offset}`
+        )
+      ),
+    []
+  )
   const loadConversations = useCallback(async (preferredId?: string | null) => {
     setLoading(true)
     try {
@@ -572,13 +589,21 @@ function InternalCsChatWorkspaceInner() {
               return
             }
             setConversations(data.conversations)
+            // 배경 갱신이 목록을 첫 페이지로 줄이지 않도록 나머지 페이지를 다시 이어 붙인다.
+            void loadRemainingConversations(data).then((full) => {
+              if (!mountedRef.current) return
+              setConversations(full.conversations)
+              const message = incompleteListMessage(full)
+              if (message) setError(message)
+            })
           },
         }
       )
-      setConversations(response.conversations)
+      const full = await loadRemainingConversations(response)
+      setConversations(full.conversations)
       const nextId = preferredId ?? selectedIdRef.current ?? response.conversations.find((item) => item.status !== "archived")?.id
       if (nextId) await loadConversation(nextId)
-      setError(null)
+      setError(incompleteListMessage(full))
       setListError(null)
     } catch (loadError) {
       if (process.env.NODE_ENV === "development") {
@@ -600,7 +625,7 @@ function InternalCsChatWorkspaceInner() {
     } finally {
       setLoading(false)
     }
-  }, [loadConversation, switchActiveConversation])
+  }, [loadConversation, loadRemainingConversations, switchActiveConversation])
 
   // 목록과 배지만 새로 받는다. 선택·입력·검토 초안은 건드리지 않는다(헤더 새로고침, 늦게 온 응답 뒤).
   const refreshList = useCallback(async () => {
@@ -608,10 +633,12 @@ function InternalCsChatWorkspaceInner() {
     try {
       const response = await adminFetchJson<ConversationListResponse>("/api/admin/cs-chat/conversations?status=all&limit=100")
       if (!mountedRef.current) return null
-      setConversations(response.conversations)
-      setError(null)
+      const full = await loadRemainingConversations(response)
+      if (!mountedRef.current) return null
+      setConversations(full.conversations)
+      setError(incompleteListMessage(full))
       setListError(null)
-      return response
+      return { ...response, conversations: full.conversations }
     } catch (listError) {
       if (mountedRef.current) {
         setError(listError instanceof Error ? listError.message : "내부 CS 대화 목록을 새로 받지 못했습니다.")
@@ -620,7 +647,7 @@ function InternalCsChatWorkspaceInner() {
     } finally {
       if (mountedRef.current) setLoading(false)
     }
-  }, [])
+  }, [loadRemainingConversations])
 
   useEffect(() => {
     if (loading && conversations.length === 0 && !detail && !error) {
