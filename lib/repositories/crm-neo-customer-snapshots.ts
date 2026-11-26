@@ -424,36 +424,60 @@ function buildResolvedRegionHintMap(entries: Array<[string, CrmNeoCustomerRegion
   return resolved
 }
 
-export async function loadBranchRevRegionHints(sb: SupabaseAdminClient): Promise<CrmNeoCustomerRegionHints> {
-  const [revResult, branchLinksResult, neoLinksResult] = await Promise.all([
-    sb
-      .from("branch_rev_deals")
-      .select("sheet_row, customer_name, region, product_version, first_payment, contract_target")
-      .limit(5000),
-    sb
-      .from("crm_source_links")
-      .select("source_record_key, target_type, target_id")
-      .eq("source_system", "branch_rev_sheet")
-      .eq("source_object", "branch_rev_deals")
-      .eq("status", "confirmed")
-      .limit(5000),
-    sb
-      .from("crm_source_links")
-      .select("source_record_key, target_type, target_id")
-      .eq("source_system", SOURCE_SYSTEM)
-      .eq("source_object", ACCOUNT_OBJECT_API_KEY)
-      .eq("status", "confirmed")
-      .limit(5000),
-  ])
+const REGION_HINT_SCAN_LIMIT = 20_000
 
-  if (revResult.error || branchLinksResult.error || neoLinksResult.error) {
-    return emptyRegionHints()
+export async function loadBranchRevRegionHints(sb: SupabaseAdminClient): Promise<CrmNeoCustomerRegionHints> {
+  // 단일 .limit(5000)은 PostgREST max-rows(1000)에서 조용히 잘린다. id 정렬 range 로 끝까지 읽고,
+  // 오류·절단은 빈 힌트로 숨기지 않고 던진다 — 빈 힌트가 스냅샷에 구워지면 지역·과금 유형이 전 행에서 덮어써진다.
+  const readAll = async <T>(
+    label: string,
+    build: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null; count?: number | null }>
+  ): Promise<T[]> => {
+    const result = await fetchSupabasePages<T>({ maxRows: REGION_HINT_SCAN_LIMIT, fetchPage: build })
+    if (result.error) {
+      throw new Error(`[crm-neo-customer-snapshots] 지역 힌트 조회 실패(${label}): ${result.error.message ?? "unknown"}`)
+    }
+    if (result.truncated) {
+      throw new Error(`[crm-neo-customer-snapshots] 지역 힌트 조회가 ${REGION_HINT_SCAN_LIMIT}행 상한을 넘었습니다(${label})`)
+    }
+    return result.data
   }
+  const countOption = (from: number) => (from === 0 ? { count: "exact" as const } : undefined)
+
+  const [revRows, branchLinkRows, neoLinkRows] = await Promise.all([
+    readAll<BranchRevRegionRow>("branch_rev_deals", (from, to) =>
+      sb
+        .from("branch_rev_deals")
+        .select("id, sheet_row, customer_name, region, product_version, first_payment, contract_target", countOption(from))
+        .order("id", { ascending: true })
+        .range(from, to)
+    ),
+    readAll<SourceLinkRow>("crm_source_links(branch_rev_sheet)", (from, to) =>
+      sb
+        .from("crm_source_links")
+        .select("id, source_record_key, target_type, target_id", countOption(from))
+        .eq("source_system", "branch_rev_sheet")
+        .eq("source_object", "branch_rev_deals")
+        .eq("status", "confirmed")
+        .order("id", { ascending: true })
+        .range(from, to)
+    ),
+    readAll<SourceLinkRow>("crm_source_links(neo)", (from, to) =>
+      sb
+        .from("crm_source_links")
+        .select("id, source_record_key, target_type, target_id", countOption(from))
+        .eq("source_system", SOURCE_SYSTEM)
+        .eq("source_object", ACCOUNT_OBJECT_API_KEY)
+        .eq("status", "confirmed")
+        .order("id", { ascending: true })
+        .range(from, to)
+    ),
+  ])
 
   const revHintsBySourceKey = new Map<string, CrmNeoCustomerRegionHint>()
   const exactNameEntries: Array<[string, CrmNeoCustomerRegionHint]> = []
 
-  for (const row of (revResult.data ?? []) as BranchRevRegionRow[]) {
+  for (const row of revRows) {
     const label = normalizeRegionLabel(row.region)
     const productVersion = row.product_version?.trim() || null
     // 지역만 보던 시절엔 지역 없는 행을 버렸다. 이제 과금 유형도 실어 나르므로
@@ -481,7 +505,7 @@ export async function loadBranchRevRegionHints(sb: SupabaseAdminClient): Promise
   }
 
   const branchHintsByTarget: Array<[string, CrmNeoCustomerRegionHint]> = []
-  for (const link of (branchLinksResult.data ?? []) as SourceLinkRow[]) {
+  for (const link of branchLinkRows) {
     const hint = revHintsBySourceKey.get(link.source_record_key)
     if (!hint) continue
     branchHintsByTarget.push([targetKey(link), hint])
@@ -489,7 +513,7 @@ export async function loadBranchRevRegionHints(sb: SupabaseAdminClient): Promise
 
   const resolvedBranchHintsByTarget = buildResolvedRegionHintMap(branchHintsByTarget)
   const accountEntries: Array<[string, CrmNeoCustomerRegionHint]> = []
-  for (const link of (neoLinksResult.data ?? []) as SourceLinkRow[]) {
+  for (const link of neoLinkRows) {
     const hint = resolvedBranchHintsByTarget.get(targetKey(link))
     if (!hint) continue
     accountEntries.push([link.source_record_key, hint])
@@ -892,6 +916,7 @@ async function listCrmNeoCustomerSnapshotsFromExternalRecords(
   const sourceSystem = options.sourceSystem ?? SOURCE_SYSTEM
   const limit = clampInteger(options.limit, LIST_LIMIT, 1, LIST_LIMIT)
   const offset = clampInteger(options.offset, 0, 0, 100_000)
+  let regionHintsFailed = false
 
   const [accountResult, shroffResult, opportunityResult, financialResult, ownerNames, excludedOwnerIds, regionHints] = await Promise.all([
     fetchExternalRows<AccountSnapshotRow>(
@@ -920,7 +945,12 @@ async function listCrmNeoCustomerSnapshotsFromExternalRecords(
     ),
     getXiaoshouyiOwnerNameMap(sb),
     getExcludedXiaoshouyiOwnerIds(sb),
-    loadBranchRevRegionHints(sb),
+    loadBranchRevRegionHints(sb).catch((error) => {
+      // 읽기 전용 폴백 목록 — 힌트 없이도 목록은 보이되 partial 로 드러낸다(스냅샷에 쓰지 않는다).
+      console.error("[crm-neo-customer-snapshots] 지역 힌트 조회 실패", error)
+      regionHintsFailed = true
+      return emptyRegionHints()
+    }),
   ])
 
   if (accountResult.error) {
@@ -928,6 +958,7 @@ async function listCrmNeoCustomerSnapshotsFromExternalRecords(
   }
 
   const partialParts: string[] = ["crm_neo_customer_snapshots 미적용"]
+  if (regionHintsFailed) partialParts.push("branch_rev 지역 힌트")
   if (accountResult.truncated) partialParts.push("account")
   if (shroffResult.error || shroffResult.truncated) partialParts.push(SHROFF_OBJECT_API_KEY)
   if (opportunityResult.error || opportunityResult.truncated) partialParts.push(OPPORTUNITY_OBJECT_API_KEY)
