@@ -58,7 +58,8 @@ describe("CrmCustomerPicker 검색 범위", () => {
     expect(effect).toMatch(/\bconst query = customerPickerQuery\(term, sources\)/)
     expect(effect).toContain("adminFetchJsonCached<UnifiedResponse>(`/api/admin/crm/customers/unified?${query}`")
     // 캐시 키도 같은 쿼리(담당 범위 포함)로 갈린다.
-    expect(effect).toContain("cacheKey: `picker:${query}`")
+    expect(effect).toContain("cacheKey: `/api/admin/crm#picker:${query}`")
+    expect(effect).toContain("persist: false")
     // 통합 API 주소는 effect 의 그 한 곳뿐이다(담당을 빠뜨린 사본이 생기지 않게).
     expect(source.split("/api/admin/crm/customers/unified").length - 1).toBe(1)
   })

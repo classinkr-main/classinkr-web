@@ -156,6 +156,17 @@ describe("무효화", () => {
     expect(client.getCachedAdminJson(OTHER_URL, { allowExpired: true })).toEqual({ v: 2 })
   })
 
+  it("CRM 스코프를 담은 커스텀 캐시 키는 CRM 변경 스코프 무효화로 비워진다 — 스코프 없는 키는 남는다", () => {
+    const scoped = "/api/admin/crm#picker:q=가나"
+    client.seedAdminRequestCache("/api/admin/crm/customers/unified?q=가나", { v: 1 }, { cacheKey: scoped, ttlMs: 30_000, persistTo: "session" })
+    client.seedAdminRequestCache("/api/admin/crm/customers/unified?q=다라", { v: 2 }, { cacheKey: "picker:q=다라", ttlMs: 30_000, persistTo: "session" })
+
+    client.clearAdminRequestCache("/api/admin/crm")
+
+    expect(client.getCachedAdminJson("/api/admin/crm/customers/unified?q=가나", { cacheKey: scoped, allowExpired: true })).toBeNull()
+    expect(client.getCachedAdminJson("/api/admin/crm/customers/unified?q=다라", { cacheKey: "picker:q=다라", allowExpired: true })).toEqual({ v: 2 })
+  })
+
   it("로그아웃 정리가 두 계층을 모두 비운다", () => {
     client.seedAdminRequestCache(CRM_URL, { v: 1 }, { ttlMs: 120_000 })
     client.seedAdminRequestCache(OTHER_URL, { v: 2 }, { ttlMs: 120_000 })
