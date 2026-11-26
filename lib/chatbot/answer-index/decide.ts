@@ -603,7 +603,59 @@ export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAn
       })
     : null
   const base = combineSegments(resolveSegment(index, analysis.whole, threshold), parts, analysis.parts, analysis.overflow, cautionsOf(analysis.whole))
-  return applyVoteRescue(index, analysis, base)
+  return annotateSegments(index, analysis, applyVoteRescue(index, analysis, base), threshold)
+}
+
+const SEGMENT_LABEL_MAX = 14
+
+/**
+ * 머리 줄 이름(손님 글이 아닌 사전 형태): 조각 주절의 비일반 개념 형태(없으면 일반 개념) 앞 두 개를 '·'로 잇는다. 14자를 넘으면 앞 하나만.
+ */
+function segmentLabel(index: CompiledAnswerIndex, analysis: SegmentAnalysis): string | null {
+  const main = normalizeText(mainClauseOf(analysis.text)).replace(/\s+/g, "")
+  const inMain = (concept: { form: string }) => main.includes(concept.form.replace(/\s+/g, "").toLowerCase())
+  const own = analysis.query.concepts.filter((concept) => index.lexicon.concepts.has(concept.id))
+  const specific = topicConcepts(index, analysis)
+  const pool = [specific.filter(inMain), specific, own.filter(inMain), own].find((list) => list.length > 0) ?? []
+  // 동사 꼴 형태("바꿔요"·"채점해요"·"안 켜져요")는 이름으로 쓰지 않고, 띄어쓰기만 다른 형태는 하나로 본다.
+  const seen = new Set<string>()
+  const forms = pool
+    .map((concept) => concept.form.trim())
+    .filter((form) => form.length >= 2 && !/(?:요|다|해|돼|되|하|죠)$/.test(form))
+    .filter((form) => {
+      const key = form.replace(/\s+/g, "")
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  if (forms.length === 0) return null
+  const two = forms.slice(0, 2).join("·")
+  if (two.length <= SEGMENT_LABEL_MAX) return two
+  return forms[0].length <= SEGMENT_LABEL_MAX ? forms[0] : null
+}
+
+/**
+ * 조각 판정에 답 꼴이 쓰는 표시를 붙인다(R2 검토 품질-3·품질-10·품질-12): 머리 줄 이름(label), 증상 조각(symptom), 못 정한 조각을
+ * 그 글만 따로 물었을 때의 판정(alone, 단일 질문 문턱 θ — 주제를 이어 붙여 점수를 냈으면 원문 조각으로 다시 본다). 판정 자체는 바꾸지 않는다.
+ */
+function annotateSegments(index: CompiledAnswerIndex, analysis: QuestionAnalysis, decision: AnswerIndexDecision, threshold: ThresholdFn): AnswerIndexDecision {
+  if (!decision.segments || !analysis.parts) return decision
+  const parts = analysis.parts
+  const segments = decision.segments.map((segment, at) => {
+    const part = at < parts.length ? parts[at] : null
+    const alone = () => {
+      if (part && part.scoringText === part.text) return part
+      return analyzeSegment(index, segment.text, { votes: analysis.partVotes[at] ?? [] })
+    }
+    const own = part ?? alone()
+    const extra: Partial<AnswerIndexSegmentDecision> = {}
+    const label = segmentLabel(index, own)
+    if (label) extra.label = label
+    if (own.fallback.abstainReason === "symptom") extra.symptom = true
+    if (!isDecided(segment)) extra.alone = resolveSegment(index, alone(), threshold).kind
+    return { ...segment, ...extra }
+  })
+  return { ...decision, segments }
 }
 
 /**
@@ -921,6 +973,7 @@ function traceSegmentOf(segment: AnswerIndexSegmentDecision): AnswerIndexTraceSe
     ...(segment.source ? { source: segment.source } : {}),
     ...(segment.topCard ? { topCard: segment.topCard, topConf: segment.topConf ?? 0 } : {}),
     notice: !decided,
+    ...(segment.alone ? { alone: segment.alone } : {}),
   }
 }
 

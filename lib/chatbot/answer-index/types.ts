@@ -801,6 +801,15 @@ export interface AnswerIndexSegmentDecision {
   /** 이 조각만 물었을 때 1위 실제 카드와 확신도(못 답한 조각 알림 줄이 '카드가 있을 법한지'를 가리는 데 쓴다. 답 글에는 쓰지 않는다). */
   topCard?: string
   topConf?: number
+  /**
+   * 못 정한 조각을 그 글만 따로 물었을 때의 판정(단일 질문 문턱 θ, R2 검토 품질-3). answer 면 '따로 한 번 더 물어봐 주세요' 알림이
+   * 막다른 길이 아니다. 정한 조각에는 없다.
+   */
+  alone?: AnswerIndexDecisionKind
+  /** 이 조각이 증상·문제 신고인지(원문이 증상 못 찾음이어도 조각마다 따로 알림을 낸다, 품질-10). */
+  symptom?: boolean
+  /** 머리 줄 이름(조각 주절의 비일반 개념의 문서 형태, 손님 글이 아니다). 정하지 못하면 없음. */
+  label?: string
 }
 
 /**
@@ -832,9 +841,16 @@ export interface AnswerIndexTraceSegment {
   topConf?: number
   /** 답 글에서 이 조각 자리를 '못 답함' 알림으로 채우는지(answer·gap 이 아니면 true). */
   notice: boolean
-  /** 알림 종류: retry(카드가 있을 법한데 이번에 못 고름 — 따로 한 번 더 물어봐 달라), absent(공개 안내에 없음 — 상담으로 확인). */
-  noticeKind?: "retry" | "absent"
+  /**
+   * 알림 종류: retry(그 조각만 물으면 답이 나옴 — 따로 한 번 더 물어봐 달라), notfound(공개 안내에서 바로 찾지 못함 — 상담 버튼),
+   * absent(공백 카드·없는 개념으로 공개 안내에 없음 확인 — 상담으로 확인), symptom(증상 조각 — 증상을 남겨 달라).
+   */
+  noticeKind?: AnswerIndexNoticeKind
+  /** 못 정한 조각을 따로 물었을 때의 판정(측정용). */
+  alone?: AnswerIndexDecisionKind
 }
+
+export type AnswerIndexNoticeKind = "retry" | "notfound" | "absent" | "symptom"
 
 export interface AnswerIndexDecision {
   kind: AnswerIndexDecisionKind
@@ -883,7 +899,8 @@ export interface AnswerIndexTrace {
   /** 질문을 나눠 정했을 때 조각별 판정(질문 순서). 나누지 않았으면 없다. */
   parts?: AnswerIndexTraceSegment[]
   /** 복합 질문 답 합치기 기록(R2 B4): 본문 글자 수·상한·결론만 남긴 조각 수·알림으로 바꾼 조각 수. 단일 답이면 없다. */
-  compound?: { chars: number; cap: number; compacted: number; dropped: number }
+  /** 복합 답 길이: chars 는 합친 본문 글자 수, cap 은 결정 1 상한, budget 은 서비스 후속 줄 몫을 뺀 본문 상한. */
+  compound?: { chars: number; cap: number; budget: number; compacted: number; dropped: number }
   /**
    * 고른 카드 id(answer 는 답 카드, gap 은 공백 카드 — absentHit 으로 간 gap 이면 absent.gapCard).
    * 측정 스크립트가 decidedBy index:<card>·index-gap:<card> 로 쓴다(scripts/lib/chatbot-live-eval-checks.ts).

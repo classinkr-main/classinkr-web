@@ -841,6 +841,10 @@ function resolvePart(
   const targets = targetAbsent(part)
   const base: AnswerIndexSegmentDecision = { text: segment.text, kind: segment.kind, card: null, conf: segment.conf, by: "assist" }
   if (segment.scoringText) base.scoringText = segment.scoringText
+  // 답 꼴이 쓰는 표시(머리 줄 이름·증상 조각·따로 물었을 때의 판정)는 그대로 넘긴다.
+  if (segment.label) base.label = segment.label
+  if (segment.symptom) base.symptom = segment.symptom
+  if (segment.alone) base.alone = segment.alone
 
   if (pick === -1) {
     if (targets.length > 0) return keep("absent")
