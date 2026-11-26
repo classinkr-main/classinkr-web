@@ -1488,7 +1488,9 @@ export async function deleteLead(id: string): Promise<boolean> {
   const supabase = createSupabaseAdminClient();
   const { error } = await supabase.from("leads").delete().eq("id", id);
 
-  return error ? false : returnAfterLeadMutation(true);
+  // DB 오류를 false(=없음, 라우트 404)로 바꾸면 일시 장애가 "이미 삭제됨"으로 보인다 — 던져서 500으로 드러낸다.
+  if (error) throw new Error(`[leads] 삭제 실패: ${error.message ?? "unknown database error"}`);
+  return returnAfterLeadMutation(true);
 }
 
 /* ─── 집계 ─── */

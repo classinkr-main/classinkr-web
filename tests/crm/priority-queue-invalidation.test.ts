@@ -146,6 +146,19 @@ describe("리드 쓰기 → 우선순위 큐·지역 지도 직접 무효화", (
     expect(mocks.revalidateTag).toHaveBeenCalledWith(PRIORITY_TAG, "max")
     expect(mocks.revalidateTag).toHaveBeenCalledWith(REGION_MAP_TAG, "max")
   })
+
+  it("deleteLead는 DB 오류를 false(없음)로 숨기지 않고 던지며 캐시도 건드리지 않는다", async () => {
+    vi.stubEnv("USE_SUPABASE_LEADS", "true")
+    vi.doMock("@/lib/supabase/admin", () => ({
+      createSupabaseAdminClient: () => ({
+        from: () => ({ delete: () => ({ eq: async () => ({ error: { message: "connection reset" } }) }) }),
+      }),
+    }))
+    const { deleteLead } = await import("@/lib/repositories/leads")
+
+    await expect(deleteLead("lead-1")).rejects.toThrow("connection reset")
+    expect(mocks.revalidateTag).not.toHaveBeenCalled()
+  })
 })
 
 describe("순환 금지 — 쓰기 저장소는 큐 모듈을 import하지 않고 cache-tags만 본다", () => {
