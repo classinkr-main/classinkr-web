@@ -236,6 +236,7 @@ ID는 행 번호와 무관해서 정렬해도 행과 같이 움직인다. 단 �
 2026-12-01 00:00 KST부터 '2. REV'는 12/1 스냅샷으로만 남고 새 매출의 원본은 장부(`branch_sales_ledger_entries`)다
 ([검토 문서 D5](ledger-revenue-usage-review-2026-11-25.md)). 스위치는 날짜 기반이라 당일 배포가 필요 없다.
 
+0. **먼저** [미리 디버깅 기록 §6](ledger-prelock-debug-2026-11-25.md#6-남은-일-순서대로)의 막는 것 4건이 고쳐져 배포됐는지 확인한다. 그다음 Production에서 `BRANCH_REV_SHEET_WRITE_ENABLED`를 지우고 재배포한 뒤 `GET /api/admin/branch/ledger-drafts`의 `sheetWrite.mode`가 `"off"`인지 본다(고정이 켜지면 어차피 꺼지지만, 날짜 전에 시트를 먼저 잠그면 반영이 `sheet_locked`로 실패한다). 11월 DSH 실적 입력이 끝났는지도 확인한다(11월까지 DSH 실적은 시트 값 그대로다).
 1. D-3까지 Production(리허설은 Preview)에 `BRANCH_REV_SHEET_LOCKED_AT=2026-12-01`을 넣고 재배포한다. 값은 글자 그대로
    `YYYY-MM-DD`다. `12/1`·`2026-12-1`은 무시되고(서버 로그에 경고 한 번) 지금처럼 동작한다.
 2. 확인: 장부에서 Network의 `GET /api/admin/branch/ledger-drafts` 응답에 `sheetWrite.lock = {"lockedAt":"2026-12-01","active":false}`가
