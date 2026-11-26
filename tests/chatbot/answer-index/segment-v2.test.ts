@@ -6,13 +6,17 @@ import { decide, mainClauseOf, toAnswerIndexTrace } from "@/lib/chatbot/answer-i
 import { adjectivalEndingAt, compactWithBoundaries } from "@/lib/chatbot/answer-index/lexicon"
 import {
   askingSentencesOf,
+  explicitQuestionCount,
   hasOwnTopicWords,
   isAskingSegment,
+  isQuestionSentence,
   prepareText,
   segmentQuestion,
+  segmentStandsAlone,
   splitQuestion,
 } from "@/lib/chatbot/answer-index/normalize"
 import { CARDS, compileFixture } from "./index-fixture"
+import { legacyEquivalenceCases } from "./legacy-equivalence-lib"
 
 // R2 B2(결정형): 질문 나누기 v2·주제 이어 붙이기·질문 순서·없는 개념 묻는 대상·공백 답 조건·승격 가드·관형형 끝.
 // 시험 문장은 이 파일에서 새로 썼다.
@@ -45,8 +49,10 @@ describe("질문 나누기 v2", () => {
     expect(segments("중국에서도 되나요 느리진 않나")).toEqual(["중국에서도 되나요", "느리진 않나"])
   })
 
-  it("명사를 잇는 '이랑·하고'는 v1 처럼 묻는 꼬리를 나눠 붙인다", () => {
+  it("명사를 잇는 '이랑'은 v1 처럼 묻는 꼬리를 나눠 붙인다(머리 명사 '방법·법·가격' 앞 관형형은 된다)", () => {
     expect(segments("녹화랑 출석 체크 되나요")).toEqual(["녹화 되나요", "출석 체크 되나요"])
+    expect(segments("PC 설치 방법이랑 요금제 가격 알려주세요")).toEqual(["PC 설치 방법", "요금제 가격 알려주세요"])
+    expect(segments("숙제 내는 법하고 다시보기 켜는 법")).toEqual(["숙제 내는 법", "다시보기 켜는 법"])
   })
 
   it("나누지 않는다: 상황 절 + 질문 하나, 동사 '-하고', 조건으로 받는 쉼표, 고르는 질문, 비교, 내용 없는 되물음", () => {
@@ -62,6 +68,80 @@ describe("질문 나누기 v2", () => {
       "수업하고 싶어요",
     ]
     for (const text of single) expect(segments(text)).toEqual([text])
+  })
+
+  it("과분할 회귀(R2 검토): 쉼표 문장 성분·비교·대상 '이랑'·동사 '-하고'·고르는 질문·수 '하나'·사과 머리말은 나누지 않는다", () => {
+    const single = [
+      "강사 한 명이, 오후 시간에, 반 두 개를 번갈아 가르칠 수 있나요?",
+      "칠판에 쓴 글을, 수업 뒤에도, 이미지로 저장해서 보낼 수 있나요?",
+      "개인 레슨이랑 단체 수업 요금 차이 있어요?",
+      "기존 출결 앱이랑 겹치지 않아요?",
+      "해외에 사는 학부모랑 상담 가능해요?",
+      "담당 매니저랑 바로 연락 되나요",
+      "가입하고 첫 결제까지 며칠 걸려요",
+      "연간 계약인가요 월 계약인가요?",
+      "인원마다 받나요 고정 요금인가요?",
+      "교실을 하나 늘리면서 칠판을 더 사려는데 예전 칠판도 계속 쓸 수 있나요?",
+      "칠판 한 대랑 1년 이용권 묶으면 얼마예요?",
+    ]
+    for (const text of single) expect(segments(text), text).toEqual([text])
+    // 사과·인사 머리말은 조각이 되지 않는다.
+    const apology = segments("죄송합니다만, 강사 계정을 만들었는데 그 강사가 로그인 화면에서 막힌다고 해요. 제가 뭘 더 해 줘야 하나요?")
+    expect(apology.some((piece) => /^죄송합니다만[,.]?$/.test(piece))).toBe(false)
+    expect(segments("안녕하세요. 녹화는 어떻게 켜요? 출석은 어디서 봐요?")).toEqual(["안녕하세요. 녹화는 어떻게 켜요?", "출석은 어디서 봐요?"])
+  })
+
+  it("서비스가 줄바꿈을 공백으로 접은 점·원 숫자 목록도 항목마다 나눈다(품질-9)", () => {
+    expect(segments("- 출석 확인 방법\n- 숙제 채점 방법")).toEqual(["출석 확인 방법", "숙제 채점 방법"])
+    expect(segments("- 출석 확인 방법 - 숙제 채점 방법")).toEqual(["출석 확인 방법", "숙제 채점 방법"])
+    expect(segments("① 녹화 켜는 법 ② 다시보기 보는 법")).toEqual(["녹화 켜는 법", "다시보기 보는 법"])
+    expect(segments("• 화면 공유 되나요 • 판서 저장 되나요")).toEqual(["화면 공유 되나요", "판서 저장 되나요"])
+  })
+
+  it("증상 문장 뒤 요청·한도 질문과 신고만 이어진 글도 나눈다(회귀-13)", () => {
+    expect(segments("로그인이 안 돼요. 그리고 결제를 취소하고 싶어요")).toEqual(["로그인이 안 돼요.", "결제를 취소하고 싶어요"])
+    expect(segments("비밀번호를 잊었어요. 체험 계정은 몇 명까지 들어와요?")).toEqual(["비밀번호를 잊었어요.", "체험 계정은 몇 명까지 들어와요?"])
+    expect(segments("마이크가 안 켜져요. 화면 공유도 안 돼요.")).toEqual(["마이크가 안 켜져요.", "화면 공유도 안 돼요."])
+    // 그리고 없이 이어진 요청은 앞 질문을 풀어 말한 것이다.
+    expect(segments("음성 수업도 되나요? 카메라 없이 수업하고 싶어요")).toEqual(["음성 수업도 되나요? 카메라 없이 수업하고 싶어요"])
+  })
+
+  it("legacy 평가셋 전 문항: 나뉜 조각마다 술어가 서 있고, 비교 질문을 '이랑'에서 가르지 않는다", () => {
+    const LIST_RE = /(?:^|\n)\s*(?:\d{1,2}\s*[.)]|[-•·*])\s|[①-⑨]|(?:^|\s)1\s*[.)]\s/
+    const COMPARE_JOIN_RE = /(?:이랑|랑)\s[^.?!]*(?:달라|다르|차이|중복|겹치|비교|어느\s*게|나아|낫|같아요|대신)/
+    const predicateless: string[] = []
+    const compareSplits: string[] = []
+    let split = 0
+    const cases = legacyEquivalenceCases()
+    for (const item of cases) {
+      const pieces = segments(item.question)
+      if (pieces.length < 2) continue
+      split += 1
+      if (!LIST_RE.test(item.question) && pieces.some((piece) => !piece.split(/(?<=[.!?？！…])\s+/).some(segmentStandsAlone))) predicateless.push(item.key)
+      if (COMPARE_JOIN_RE.test(item.question)) {
+        const joins = Array.from(item.question.matchAll(/(?:이랑|랑)\s+/g)).map((match) => (match.index ?? 0) + match[0].length)
+        if (pieces.slice(1).some((piece) => joins.includes(item.question.indexOf(piece.slice(0, 6))))) compareSplits.push(item.key)
+      }
+    }
+    expect(predicateless).toEqual([])
+    expect(compareSplits).toEqual([])
+    // 나뉘는 몫(R2 HEAD 670/1897 → 이번 판): 묻는 문장이 둘 이상인 긴 문의가 대부분이다. 크게 늘면 규칙을 다시 본다.
+    expect(split / cases.length).toBeLessThan(0.34)
+    for (const key of ["fresh-open/fresh-contract-04", "first-contact/fresh-compare-11", "fresh-open/fresh-messy-11", "fresh-open/fresh-start-06", "fresh-open/fresh-support-18"]) {
+      const item = cases.find((entry) => entry.key === key)
+      expect(item, key).toBeDefined()
+      expect(segments(item!.question), key).toHaveLength(1)
+    }
+  })
+
+  it("문장 끝으로 본 묻는 꼴·혼자 서는 조각·보수적 물음 수(legacy 지시문 스위치용)", () => {
+    expect(isQuestionSentence("어떻게 되는지 해 봤는데, 녹화본이 하나만 생겼습니다.")).toBe(false)
+    expect(isQuestionSentence("다시보기는 어디서 봄")).toBe(true)
+    expect(segmentStandsAlone("클래스인 소형학원")).toBe(false)
+    expect(segmentStandsAlone("설치는 어떻게 하고")).toBe(true)
+    expect(explicitQuestionCount("녹화는 어떻게 켜요? 출석은 어디서 봐요?")).toBe(2)
+    expect(explicitQuestionCount("녹화랑 출석 되나요")).toBe(1)
+    expect(explicitQuestionCount("1. 녹화 방법\n2. 출석 방법\n3. 숙제 방법\n4. 채팅 방법")).toBe(3)
   })
 
   it("최대 3조각, 넘는 조각은 overflow 로 돌려준다", () => {
