@@ -296,6 +296,9 @@ function fetchExternalRows<T>(
         .eq("source_system", sourceSystem)
         .eq("object_api_key", objectApiKey)
         .eq("is_stale", false)
+        // (source_system, object_api_key, external_id) 는 UNIQUE — 정렬 없는 OFFSET 페이지는 동시 갱신·플랜 변경 때
+        // 행이 겹치거나 빠지는데도 count 로 끝나 truncated=false 가 되므로 유일 키로 고정한다.
+        .order("external_id", { ascending: true })
         .range(from, to)
       return { data, error, count }
     },

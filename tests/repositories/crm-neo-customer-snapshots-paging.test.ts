@@ -71,6 +71,11 @@ describe("crm-neo-customer-snapshots external record paging", () => {
     expect(countedPages.length).toBeGreaterThanOrEqual(3)
     expect(countedPages.every((query) => query.range?.from === 0)).toBe(true)
 
+    // 페이지 경계가 흔들리지 않도록 모든 스캔 페이지는 유일 키(external_id)로 정렬한다.
+    const externalPages = queries.filter((query) => query.table === "external_crm_records")
+    expect(externalPages.length).toBeGreaterThanOrEqual(3)
+    expect(externalPages.every((query) => JSON.stringify(query.order) === JSON.stringify([{ column: "external_id", ascending: true }]))).toBe(true)
+
     // 페이지가 이어져 전량이 모인다.
     expect(result.ok).toBe(true)
     expect(result.summary.totalCount).toBe(2_500)
