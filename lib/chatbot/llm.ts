@@ -22,7 +22,7 @@ import {
   type GeminiOperation,
 } from "./gemini-transport"
 import type { AnswerCardPickOutcome } from "./answer-index/assist"
-import { splitQuestion } from "./answer-index/normalize"
+import { explicitQuestionCount } from "./answer-index/normalize"
 import type { ChatbotSource } from "./service"
 import {
   getGroundingText,
@@ -394,10 +394,21 @@ const THIRD_PARTY_ADOPTION_REQUIREMENT =
 const WEAK_GROUNDING_REQUIREMENT =
   "근거 없음 주의: 이 질문에 맞는 내부 검증 정보가 없다. 질문이 묻는 기능·설정·목록이 있는지 확인되지 않았으면 있다고도 없다고도 말하지 말고, 첫 문장에서 '공개 안내에서 확인되지 않았어요'라고 밝혀. 기능 목록·메뉴 이름·옵션·단축키·지원 형식·수치·사례·도입 추세 같은 세부를 새로 지어내지 마. 시스템 지시에 있는 Classin 기본 지식(제품 정체성, 도입 흐름, 수업 운영 흐름)을 묻는 질문일 때만 그 범위에서 한두 문장으로 답해. 끝에는 확인 질문 하나 또는 상담 연결을 안내해."
 
-// R2 B3(운영 담당 지시 "질문 2개를 한 번에 하면 하나로 쏠린다"): 질문이 여러 물음으로 나뉘면(답 색인 나누기 v2) 순서대로 모두 답하게 한다.
-// 나뉘지 않는 질문의 프롬프트는 그대로다(이 줄은 나뉜 질문에만 붙는다). 머리 줄 【주제】는 결정 4, 상담 안내 한 줄은 결정 2.
-export function multiQuestionRequirement(question: string): string | null {
-  const count = splitQuestion(question).segments.length
+/**
+ * CHATBOT_LEGACY_MULTI_PROMPT=on 일 때만 legacy 생성 지시문에 복합 질문 한 줄을 붙인다. 기본은 꺼짐이다: 스위치를 켜지 않은 운영
+ * 지시문은 R2 이전(58e340270)과 글자까지 같다(tests/chatbot/answer-index/legacy-final-prompt.test.ts 가 평가셋 전 문항으로 고정한다).
+ * legacy 쪽 적용은 service.ts 묶음(B5)에서 답 캐시 판 올림·520자 상한 조정과 함께 켠다.
+ */
+export function legacyMultiPromptEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return env.CHATBOT_LEGACY_MULTI_PROMPT?.trim().toLowerCase() === "on"
+}
+
+// R2 B3(운영 담당 지시 "질문 2개를 한 번에 하면 하나로 쏠린다"): 스위치를 켰고, 묻는 문장(물음표·묻는 어미 문장, 번호·점 목록 항목)이
+// 둘 이상일 때만 순서대로 모두 답하게 한다. 답 색인의 잇는 말 나누기(쉼표·'이랑'·'-고')는 쓰지 않는다(한 질문을 잘게 쪼갤 수 있다).
+// 머리 줄 【주제】는 결정 4, 상담 안내 한 줄은 결정 2.
+export function multiQuestionRequirement(question: string, env: Record<string, string | undefined> = process.env): string | null {
+  if (!legacyMultiPromptEnabled(env)) return null
+  const count = explicitQuestionCount(question)
   if (count < 2) return null
   return `질문 여러 개 주의: 이 질문에는 물음이 ${count}개 있다. 하나만 답하지 말고 질문 순서대로 모두 답해. 물음마다 【주제】 머리 줄 한 줄을 쓰고 그다음 첫 문장에 결론을 쓴다. 근거에 없는 물음은 빼지 말고 그 물음 자리에 '공개 안내에 없어요'라고 밝힌다. 길이는 물음마다 4줄 이내(전체 10줄 이내)로 하고, 상담 안내는 필요할 때만 맨 끝에 한 줄.`
 }

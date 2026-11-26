@@ -458,8 +458,18 @@ describe("compiled route with a compound question (fake Gemini)", () => {
   })
 })
 
-describe("legacy generation: one compound-question line", () => {
-  it("adds the line only when the question splits into fragments", () => {
+describe("legacy generation: one compound-question line (CHATBOT_LEGACY_MULTI_PROMPT=on only)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it("is off by default (legacy prompt unchanged)", () => {
+    vi.stubEnv("CHATBOT_LEGACY_MULTI_PROMPT", undefined)
+    expect(multiQuestionRequirement(MIXED)).toBeNull()
+  })
+
+  it("adds the line only when the switch is on and the question has two question sentences", () => {
+    vi.stubEnv("CHATBOT_LEGACY_MULTI_PROMPT", "on")
     expect(multiQuestionRequirement("녹화 영상 다시보기 어디서 봐요")).toBeNull()
     const line = multiQuestionRequirement(MIXED)
     expect(line).toContain("물음이 2개")
