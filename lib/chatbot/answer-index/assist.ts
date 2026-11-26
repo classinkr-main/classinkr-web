@@ -47,8 +47,8 @@
  *   짧으면 남은 조각은 그대로(missing), 길면 앞에서부터만 쓴다.
  * - 단일 질문은 지금 지시문·입력·{"pick": n}이 기본(v1, 바이트 고정 시험 assist-single-bytes.test.ts). CHATBOT_ASSIST_PICK_PROMPT=v2 면
  *   두 줄('가능 여부·수치·한도를 묻는데 카드에 그 값이 없으면 고르지 않는다', '증상이 불분명하면 되묻기')과 주의 줄을 더한 새 판.
- * - 정책 주제 거절은 '고른 카드의 개념이 질문의 정책 개념과 겹치고 허용 표시(policyTopicAllowed)가 없을 때만'(policyTopicBlocks).
- *   정책 개념 = 정책 카드(종류 policy)가 가진 비일반 개념. 정규식만 걸리고 겹치지 않으면 받아들이고 주의 표시(policy_topic)를 남긴다.
+ * - 정책 주제 거절은 '질문에 정책 개념이 있고 고른 카드에 허용 표시(policyTopicAllowed)가 없을 때'(policyTopicBlocks).
+ *   정책 개념 = 정책 카드(종류 policy)가 가진 비일반 개념. 정규식만 걸리고 질문에 정책 개념이 없으면 받아들이고 주의 표시(policy_topic)를 남긴다.
  * - 없는 개념 거절은 그 자리가 묻는 대상(B2 absentTargets target)일 때만. 수식어·비교·제외·상황 자리는 받아들이고 주의 표시만 남긴다.
  * - 결정형이 정책 카드로 답했으면 다른 카드로 바꾸지 않되 '고르지 않음(0)'만은 받아들인다(못 찾음 갈래로).
  * - 후보 수(CHATBOT_ASSIST_CANDIDATES, 기본 10, 1~20)와 대역 하한·상한(CHATBOT_ASSIST_BAND_LO·HI, 없으면 calibration.json)은 설정값이다.
@@ -663,9 +663,10 @@ export function askedPolicyConcepts(index: CompiledAnswerIndex, query: Pick<Inde
 }
 
 /**
- * 정책 주제 거절(R2 B3, 계획 §3 정책 주제 (3)): 질문이 정책 주제(isPolicyTopic)이고, 고른 카드가 정책 카드·공백 카드·허용 표시
- * (policyTopicAllowed) 카드가 아니며, 고른 카드의 개념(상위 포함)이 질문의 정책 개념과 겹칠 때만 막는다. 정규식만 걸리고 겹치지 않으면
- * ('원가'⊂'회원가입' 같은 부분 글자 오탐, 정책 값을 묻지 않는 사용법 질문) 받아들이고 주의 표시를 남긴다.
+ * 정책 주제 거절(R2 B3, 계획 §3 정책 주제 (3), R2 검토 회귀-6): 질문이 정책 주제(isPolicyTopic)이고 고른 카드가 정책 카드·공백 카드·허용 표시
+ * (policyTopicAllowed) 카드가 아니면, 질문(조각)에 정책 개념이 하나라도 있을 때 막는다(겹침 여부와 상관없이 — 정책 개념이 있는 질문에 겹치지 않는
+ * 카드를 받으면 엉뚱한 카드가 정책 질문의 답처럼 읽힌다). 완화는 질문에 정책 개념이 없는 정규식 오탐('원가'⊂'회원가입', 정책 값을 묻지 않는
+ * 사용법 질문)에만 둔다: 그때는 받아들이고 주의 표시를 남긴다.
  */
 export function policyTopicBlocks(
   index: CompiledAnswerIndex,
@@ -675,7 +676,7 @@ export function policyTopicBlocks(
 ): boolean {
   if (isPolicyGovernedCard(compiled.card) || compiled.kind === "gap" || compiled.card.policyTopicAllowed === true) return false
   if (!isPolicyTopic?.()) return false
-  return askedPolicyConcepts(index, query).some((id) => compiled.conceptClosure.has(id))
+  return askedPolicyConcepts(index, query).length > 0
 }
 
 /** 받아들인 판정에 붙일 주의 표시: 결정형의 것 + 정책 주제(정규식이 걸렸는데 받아들였을 때). */

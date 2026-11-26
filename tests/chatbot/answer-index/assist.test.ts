@@ -702,7 +702,17 @@ describe("compiled route with the assist layer (fake model)", () => {
     expect(result.answerIndex).toMatchObject({ decision: "abstain", card: null })
   })
 
-  it("moves a policy-topic question to a document card when no asked policy concept overlaps, with a caution", async () => {
+  it("keeps a pure price question off a document card that shares no concept with it (R2 검토 회귀-6)", async () => {
+    stubModelEnv("always")
+    // 질문에 정책 개념(C_price)이 있으면 고른 카드가 그 개념과 겹치지 않아도(학생 수 카드) 막는다: 엉뚱한 카드가 요금 답처럼 읽히지 않게.
+    __setRouterAnswerIndexForTests(withPolicyCard(compileFixture(), ["C_price"]))
+    behavior = pickTopic("한 교실 학생 수")
+    const result = await evaluateChatbotQuery("요금이 어떻게 돼요?")
+    expect(assistOf(result)).toMatchObject({ used: true, accepted: false, rejectReason: "policy_topic", pickCard: CARDS.count })
+    expect(result.answerIndex?.card).not.toBe(CARDS.count)
+  })
+
+  it("moves a policy-topic question to a document card when the question has no policy concept (regex false hit), with a caution", async () => {
     stubModelEnv("always")
     behavior = pickTopic("한 교실 학생 수")
     const result = await evaluateChatbotQuery("요금이 어떻게 돼요?")
