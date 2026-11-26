@@ -2,6 +2,7 @@ import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { getLeads } from "@/lib/repositories/leads"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 
 const TRACKED_EVENTS = [
   "view_resource_card",
@@ -131,13 +132,23 @@ export async function getLeadMagnetMetrics(days: number): Promise<LeadMagnetMetr
 
   try {
     const supabase = createSupabaseAdminClient()
-    const { data, error } = await supabase
-      .from("client_events")
-      .select("event_name, page, params, created_at")
-      .in("event_name", [...TRACKED_EVENTS])
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
-      .limit(EVENT_QUERY_LIMIT)
+    // PostgREST max-rows(1000) 절단을 피하려고 range 로 읽는다. lead_magnet 없는 click_cta 가 상한을 먹지 않게 서버에서 거른다.
+    const paged = await fetchSupabasePages<ClientEventRow>({
+      maxRows: EVENT_QUERY_LIMIT,
+      fetchPage: (from, to) =>
+        supabase
+          .from("client_events")
+          .select("event_name, page, params, created_at", from === 0 ? { count: "exact" } : undefined)
+          .in("event_name", [...TRACKED_EVENTS])
+          .gte("created_at", since)
+          .not("params->>lead_magnet", "is", null)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to),
+    })
+    const data = paged.data
+    const error = paged.error
+    let warning: string | undefined
 
     if (error) {
       console.warn("[lead-magnet-metrics] client_events query failed:", error.message)
@@ -147,7 +158,7 @@ export async function getLeadMagnetMetrics(days: number): Promise<LeadMagnetMetr
     const bySlug = new Map<string, LeadMagnetMetricRow>()
     const recentEvents: LeadMagnetMetrics["recentEvents"] = []
 
-    for (const event of (data ?? []) as ClientEventRow[]) {
+    for (const event of data) {
       const slug = getStringParam(event.params, "lead_magnet")
       if (!slug) continue
 
@@ -181,10 +192,9 @@ export async function getLeadMagnetMetrics(days: number): Promise<LeadMagnetMetr
         }
       }
     } catch (error) {
-      console.warn(
-        "[lead-magnet-metrics] leads query failed:",
-        error instanceof Error ? error.message : error
-      )
+      const leadsMessage = error instanceof Error ? error.message : String(error)
+      console.warn("[lead-magnet-metrics] leads query failed:", leadsMessage)
+      warning = `리드 조회 실패: ${leadsMessage}`
     }
 
     const byLeadMagnet = Array.from(bySlug.values())
@@ -229,7 +239,8 @@ export async function getLeadMagnetMetrics(days: number): Promise<LeadMagnetMetr
       days: safeDays,
       since,
       generatedAt: new Date().toISOString(),
-      truncated: (data?.length ?? 0) >= EVENT_QUERY_LIMIT,
+      truncated: paged.truncated,
+      warning,
       totals,
       byLeadMagnet,
       recentEvents,
