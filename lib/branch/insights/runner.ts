@@ -38,7 +38,7 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
       }
     }
     const [dsh, kpi, deals, events, campaigns] = await Promise.all([
-      readDsh(), readKpi(), listBranchRevDeals(), listPublicEvents(), summarizeCampaigns(now),
+      readDsh(), readKpi(), listBranchRevDeals(), listPublicEvents().catch(() => []), summarizeCampaigns(now),
     ])
     // Compass 주간 구획 — 끝난 주 기준이라 한 주 동안 입력이 크게 흔들리지 않는다(다이제스트 캐시 유지).
     // 읽기 실패는 인사이트 전체를 막지 않고 state=missing으로 넘겨 AI가 한계를 말하게 한다.

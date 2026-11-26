@@ -30,7 +30,12 @@ export async function GET(
     // 그대로 사용
   }
 
-  const event = await getCachedPublicEventBySlug(slug)
+  let event: Awaited<ReturnType<typeof getCachedPublicEventBySlug>>
+  try {
+    event = await getCachedPublicEventBySlug(slug)
+  } catch {
+    return new Response("Service unavailable", { status: 503 })
+  }
   if (!event) {
     return new Response("Not found", { status: 404 })
   }

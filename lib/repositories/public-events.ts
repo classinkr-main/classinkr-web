@@ -231,10 +231,7 @@ export async function listPublicEvents(): Promise<PublicEvent[]> {
       .order("starts_at", { ascending: false })
       .abortSignal(timeout.signal)
     if (error && isAbortError(error)) {
-      console.warn(
-        `[public-events] 공개 행사 목록 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
-      )
-      return []
+      throw new Error(`[public-events] 공개 행사 목록 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`)
     }
     if (isMissingPublicationStatusColumn(error)) {
       const legacy = await supabase
@@ -243,10 +240,7 @@ export async function listPublicEvents(): Promise<PublicEvent[]> {
         .order("starts_at", { ascending: false })
         .abortSignal(timeout.signal)
       if (legacy.error && isAbortError(legacy.error)) {
-        console.warn(
-          `[public-events] legacy 행사 목록 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
-        )
-        return []
+        throw new Error(`[public-events] legacy 행사 목록 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`)
       }
       if (legacy.error) throw legacy.error
       return (legacy.data as PublicEventRow[]).map(rowToEvent)
@@ -306,10 +300,7 @@ export async function listPublicEventSlugs(): Promise<string[]> {
       .order("starts_at", { ascending: false })
       .abortSignal(timeout.signal)
     if (error && isAbortError(error)) {
-      console.warn(
-        `[public-events] 공개 행사 slug 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
-      )
-      return []
+      throw new Error(`[public-events] 공개 행사 slug 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`)
     }
     if (isMissingPublicationStatusColumn(error)) {
       const legacy = await supabase
@@ -319,10 +310,7 @@ export async function listPublicEventSlugs(): Promise<string[]> {
         .order("starts_at", { ascending: false })
         .abortSignal(timeout.signal)
       if (legacy.error && isAbortError(legacy.error)) {
-        console.warn(
-          `[public-events] legacy 행사 slug 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
-        )
-        return []
+        throw new Error(`[public-events] legacy 행사 slug 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`)
       }
       if (legacy.error) throw legacy.error
       return (legacy.data as PublicEventSlugRow[])
@@ -344,7 +332,7 @@ export const listCachedPublicEvents = unstable_cache(
       return await listPublicEvents()
     } catch (error) {
       logPublicEventReadFailure("Failed to list public events", error)
-      return []
+      throw error
     }
   },
   ["public-events"],
@@ -360,7 +348,7 @@ export const listCachedPublicEventSlugs = unstable_cache(
       return await listPublicEventSlugs()
     } catch (error) {
       logPublicEventReadFailure("Failed to list public event slugs", error)
-      return []
+      throw error
     }
   },
   ["public-event-slugs"],
@@ -483,10 +471,7 @@ export async function getPublicEventBySlug(slug: string): Promise<PublicEvent | 
       .abortSignal(timeout.signal)
       .single()
     if (error && isAbortError(error)) {
-      console.warn(
-        `[public-events] 공개 행사 상세 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
-      )
-      return null
+      throw new Error(`[public-events] 공개 행사 상세 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`)
     }
     if (isMissingPublicationStatusColumn(error)) {
       const legacy = await supabase
@@ -496,10 +481,7 @@ export async function getPublicEventBySlug(slug: string): Promise<PublicEvent | 
         .abortSignal(timeout.signal)
         .single()
       if (legacy.error && isAbortError(legacy.error)) {
-        console.warn(
-          `[public-events] legacy 행사 상세 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
-        )
-        return null
+        throw new Error(`[public-events] legacy 행사 상세 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`)
       }
       if (legacy.error) {
         if (legacy.error.code === "PGRST116") return null
@@ -523,7 +505,7 @@ export const getCachedPublicEventBySlug = unstable_cache(
       return await getPublicEventBySlug(slug)
     } catch (error) {
       logPublicEventReadFailure(`Failed to read public event by slug: ${slug}`, error)
-      return null
+      throw error
     }
   },
   ["public-event-by-slug"],

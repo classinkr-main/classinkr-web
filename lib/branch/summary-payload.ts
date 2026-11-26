@@ -287,7 +287,7 @@ export interface BranchSummaryPayloadQuery {
 export async function buildBranchSummaryPayload(query: BranchSummaryPayloadQuery) {
   const { team, period, periodDate, includeBreakdown, overviewView, now: currentDate, skipSheetFreshness = false, manager } = query
   const [dshResult, kpi, revResult, campaigns, runs, events, sheetFreshness, syncHealthRuns] = await Promise.all([
-    readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate), period, periodDate), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team: manager ? "ALL" : team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
+    readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate), period, periodDate), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team: manager ? "ALL" : team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents().catch(() => []),
     skipSheetFreshness ? Promise.resolve<SheetFreshnessResult>({ modifiedTime: null, failed: false }) : readSheetFreshness(),
     getRecentSyncRuns(60),
   ])
