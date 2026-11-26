@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 
 export type VisitorStatsRangeDays = 7 | 14 | 30 | 90
 
@@ -210,15 +211,26 @@ export async function getAdminVisitorStats(rangeDays: VisitorStatsRangeDays) {
   if (!agg.error && agg.data) {
     return normalizeVisitorStatsPayload(agg.data, rangeDays)
   }
+  // RPC 가 없을 때(PGRST202/42883)만 행 단위 폴백을 쓴다. 타임아웃 등 다른 오류는 숨기지 않고 던진다.
+  if (agg.error && agg.error.code !== "PGRST202" && agg.error.code !== "42883") {
+    console.error("[admin-visitor-stats] admin_daily_visitor_counts RPC failed", agg.error)
+    throw agg.error
+  }
 
-  const { data, error } = await supabase
-    .from("client_events")
-    .select("page, anonymous_id, created_at")
-    .eq("event_name", "page_view")
-    .gte("created_at", sinceIso)
-    .order("created_at", { ascending: false })
-    .limit(100000)
+  const paged = await fetchSupabasePages<VisitorEventRow>({
+    fetchPage: (from, to) =>
+      supabase
+        .from("client_events")
+        .select("page, anonymous_id, created_at", from === 0 ? { count: "exact" } : undefined)
+        .eq("event_name", "page_view")
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    maxRows: 100000,
+  })
 
-  if (error) throw error
-  return buildVisitorStatsFromRows((data ?? []) as VisitorEventRow[], rangeDays)
+  if (paged.error) throw paged.error
+  if (paged.truncated) throw new Error("visitor stats fallback truncated at 100000 rows")
+  return buildVisitorStatsFromRows(paged.data, rangeDays)
 }
