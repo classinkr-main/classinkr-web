@@ -717,7 +717,7 @@ export default function BranchDashboardClient({
 
           {activeTab === "ai" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
-              <BranchAiInsights key={`${team}:${pipelineManager}`} manager={pipelineManager} team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
+              <BranchAiInsights key={team} manager={pipelineManager} team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
             </div>
           )}
         </div>

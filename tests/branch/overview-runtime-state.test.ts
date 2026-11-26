@@ -66,4 +66,14 @@ describe("KR Team 개요 런타임 상태", () => {
     // 탭 복귀(visibilitychange)는 마지막 틱 후 60초가 지났을 때만 재검증한다.
     expect(source).toContain("Date.now() - lastTickAt >= 60_000")
   })
+
+  it("AI 인사이트는 캐시 경로로 조회하고 담당자 토글로 리마운트하지 않는다", () => {
+    const dashboard = sourceOf(branchClientPath)
+    const insights = sourceOf(join(process.cwd(), "components/admin/branch/sections/BranchAiInsights.tsx"))
+
+    expect(dashboard).toContain("<BranchAiInsights key={team}")
+    expect(dashboard).not.toContain("key={`${team}:${pipelineManager}`}")
+    expect(insights).toContain("adminFetchJsonCached<InsightResp>(`/api/admin/branch/insights?team=${team}`")
+    expect(insights).toContain('clearAdminRequestCache("/api/admin/branch/insights")')
+  })
 })
