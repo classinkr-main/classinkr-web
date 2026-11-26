@@ -185,13 +185,29 @@ function tally(values: string[]) {
 
 type ProbeRow = Parameters<typeof summarizeFragments>[0][number] & Parameters<typeof summarizeDecoys>[0][number]
 
+/**
+ * 복합 답 길이(R2 검토 회귀-5): 흔적 compound 가 있는 줄 가운데 서비스가 후속 줄까지 붙인 최종 답이 상한(cap)을 넘은 줄.
+ * 흔적 글자 수(compound.chars)가 아니라 최종 answer 길이로 잰다.
+ */
+function compoundLength(rows: unknown[]) {
+  let compound = 0
+  const overCap: string[] = []
+  for (const row of rows as Array<{ id?: unknown; answer?: unknown; answerIndex?: { compound?: { cap?: number } } | null }>) {
+    const cap = row.answerIndex?.compound?.cap
+    if (typeof cap !== "number") continue
+    compound += 1
+    if (typeof row.answer === "string" && row.answer.length > cap) overCap.push(String(row.id))
+  }
+  return { compound, overCap: overCap.length, overCapIds: overCap }
+}
+
 /** 탐침 칸이 있는 줄만 모아 조각·과분할·미끼 요약을 만든다. 탐침 줄이 없으면 null. */
 function summarizeProbeRows(rows: unknown[]) {
   const probeRows = (rows as ProbeRow[]).filter((row) => row.fragments || row.decoy)
   if (probeRows.length === 0) return null
   const fragments = probeRows.some((row) => row.fragments) ? summarizeFragments(probeRows) : null
   const decoys = probeRows.some((row) => row.decoy) ? summarizeDecoys(probeRows) : null
-  return { fragments, decoys }
+  return { fragments, decoys, compoundLength: compoundLength(rows) }
 }
 
 function printProbeSummary(summary: NonNullable<ReturnType<typeof summarizeProbeRows>>) {
@@ -206,6 +222,9 @@ function printProbeSummary(summary: NonNullable<ReturnType<typeof summarizeProbe
       `  쏠림 방향: 앞 조각만 ${m.lean.firstOnly}, 뒤 조각만 ${m.lean.laterOnly}, 답한 쪽이 혼자 물을 때 확신도 더 높음 ${m.lean.strongerSolo}/${m.lean.soloKnown}` +
         ` / 소리 없는 누락 ${m.silentMissing}/${m.partialRows} / 거짓 알림 ${m.falseNotice}/${m.noticeRows}(엄격 ${m.falseNoticeStrict}) / 나누지 못함 ${m.underSplit}`
     )
+  }
+  if (summary.compoundLength.compound > 0) {
+    console.error(`복합 답 ${summary.compoundLength.compound}줄 중 최종 답이 길이 상한을 넘은 줄 ${summary.compoundLength.overCap}`)
   }
   if (fragments && fragments.single.rows > 0) {
     const single = fragments.single

@@ -105,6 +105,11 @@ describe("buildFragmentRecord", () => {
     expect(hasUnansweredNotice("함께 물어보신 다른 내용은 공개 안내에서 찾지 못했어요.")).toBe(true)
     expect(hasUnansweredNotice("【체험】 이 질문만 따로 보내 주시면 이어서 안내해 드릴게요.")).toBe(true)
     expect(hasUnansweredNotice("【두 번째 질문】\n이 내용은 따로 한 번 더 물어봐 주세요.")).toBe(true)
+    // R2 검토 뒤 알림 줄: '바로 찾지 못했어요'·증상 줄은 알림이지만 '없다'고 단정하지 않는다.
+    expect(hasUnansweredNotice("【출석부】\n이 부분은 공개 안내에서 바로 찾지 못했어요.")).toBe(true)
+    expect(hasAbsenceNotice("【출석부】\n이 부분은 공개 안내에서 바로 찾지 못했어요.")).toBe(false)
+    expect(hasUnansweredNotice("【설치】\n이 증상에 딱 맞는 해결 안내는 아직 찾지 못했어요.")).toBe(true)
+    expect(hasAbsenceNotice("【보안 인증】\n공개 안내에는 없는 내용이에요.")).toBe(true)
     expect(hasUnansweredNotice("녹화는 [수업 설정]에서 켜요.")).toBe(false)
   })
 

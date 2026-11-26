@@ -85,12 +85,17 @@ export function parseDecoyExpect(raw: unknown, where: string): DecoyExpect | und
 export const UNANSWERED_NOTICE_PATTERNS: readonly RegExp[] = [
   /함께 물어보신 다른 내용은/,
   /이 질문만 따로 보내 주시면/,
-  /공개 안내에는 없는 내용이라/,
+  /공개 안내에는 없는 내용이/,
   /따로 한 번 더 물어봐 주세요/,
+  /공개 안내에서 바로 찾지 못했어요/,
+  /딱 맞는 해결 안내는 아직 찾지 못했어요/,
 ]
 
-/** 알림 줄 가운데 '공개 안내에 없다'고 말하는 것(거짓 알림 판정은 이쪽만 본다: '다시 물어봐 달라'는 카드가 있어도 거짓이 아니다). */
-export const ABSENCE_NOTICE_PATTERNS: readonly RegExp[] = [/함께 물어보신 다른 내용은/, /공개 안내에는 없는 내용이라/]
+/**
+ * 알림 줄 가운데 '공개 안내에 없다'고 말하는 것(거짓 알림 판정은 이쪽만 본다: '다시 물어봐 달라'는 카드가 있어도 거짓이 아니다).
+ * '바로 찾지 못했어요'·증상 줄은 없다고 단정하지 않으므로 넣지 않는다.
+ */
+export const ABSENCE_NOTICE_PATTERNS: readonly RegExp[] = [/함께 물어보신 다른 내용은/, /공개 안내에는 없는 내용이/]
 
 export function hasAbsenceNotice(answer: string | null | undefined): boolean {
   if (!answer) return false
