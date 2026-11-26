@@ -701,8 +701,9 @@ function findClauseSplit(sentence: string): SplitPoint | null {
         if (/(?:근데|그런데)/.test(sentence.slice(point.at, point.at + point.length)) && !isAskingOrReport(left)) continue
       } else {
         if (!isQuestionSentence(rightBody) || !isQuestionSentence(left)) continue
-        // 'A인가요 B인가요'·'받나요 정액인가요?'는 고르는 질문 하나다.
+        // 'A인가요 B인가요'·'받나요 정액인가요?'는 고르는 질문 하나다. 'X만 있어도 되나요 Y 필요해요?'(충분한지·더 필요한지)도 한 질문이다.
         if (isAlternativeTail(rightBody)) continue
+        if (/(?:만|만으로|만으로도)\s[^?？]*(?:되나요|돼요|되요|가능해요|가능한가요)$/.test(stripEnd(left)) && /(?:필요|있어야|사야|꼭)/.test(rightBody)) continue
       }
     }
     return point
