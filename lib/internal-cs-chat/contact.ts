@@ -650,7 +650,11 @@ interface KrCardOptions {
   tableWarning?: string | null
 }
 
-/** 역할만 싣는 카드에서 — 사람 이름이 든 글(연락 방법·준비물 칸에 이름을 적은 경우)은 싣지 않는다. */
+/**
+ * 역할만 싣는 카드에서 — 사람 이름이 든 글(역할·연락 방법·준비물 칸에 이름을 적은 경우)은 싣지 않는다.
+ * 아는 이름(그 행의 1차·대리, 어드민 계정 이름)만 거른다. 표에도 계정에도 없는 사람 이름은 글만으로 가려낼 수 없다 —
+ * 그래서 담당자 표 화면은 역할·연락 방법 칸에 이름 대신 역할·방 이름만 적게 안내한다(TeamContactsPanel).
+ */
 function mentionsAny(text: string, names: string[]) {
   return names.some((name) => text.includes(name))
 }
@@ -668,7 +672,12 @@ function krCard(
   const directors = branchDirectors(staff)
   const gaps: string[] = []
   const evidence: ContactEvidence[] = []
-  const roleLabel = row?.role?.trim() || topic.role
+  const knownNames = [row?.primaryName, row?.backupName, ...staff.map((member) => member.displayName)]
+    .map((name) => name?.trim() ?? "")
+    .filter((name) => name.length >= 2)
+  // 역할 칸은 자유 글(80자)이다 — 단체방에서는 이름이 든 역할 글 대신 문서의 역할(KR_TOPICS)을 쓴다.
+  const rowRole = row?.role?.trim() || null
+  const roleLabel = rowRole && !(roleOnly && mentionsAny(rowRole, knownNames)) ? rowRole : topic.role
   let who: string
   if (row?.primaryName) {
     who = roleOnly ? `${roleLabel ?? `${topic.area} 담당`} — ${NAME_IN_PRIVATE}` : `${roleLabel ?? topic.area} — ${row.primaryName}`
@@ -685,9 +694,6 @@ function krCard(
   if (staffFailed) gaps.push("어드민 계정 목록을 읽지 못했습니다.")
   if (topic.roleSource) evidence.push({ kind: "document", label: `역할 근거: ${topic.roleSource}`, count: null, href: null })
 
-  const knownNames = [row?.primaryName, row?.backupName, ...staff.map((member) => member.displayName)]
-    .map((name) => name?.trim() ?? "")
-    .filter((name) => name.length >= 2)
   let backup: string
   if (roleOnly) backup = row?.backupName ? `대리 담당 — ${NAME_IN_PRIVATE}` : "지사장(기본 경로)"
   else if (row?.backupName) backup = row.backupName

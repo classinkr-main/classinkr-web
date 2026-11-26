@@ -7,6 +7,11 @@ import { TeamContactAreaTakenError, TeamContactsNotReadyError, type TeamContactA
 //
 // 담당자 표에는 사람 이름이 들어 있다 — 읽기는 관리자(SUPER_ADMIN·ADMIN), 쓰기(만들기·고치기·비활성화·확인일·CSV 넣기)는
 // 최고 관리자(SUPER_ADMIN)만. 화면의 버튼 숨김은 보안 경계가 아니다 — 이 상수가 경계다.
+//
+// 이 읽기 경계는 "표 전체"(모든 영역·비활성 행·비고·확인자)에 대한 것이다. 갈매봇 1:1 담당자 안내(GALMAE_CHAT_ROLES —
+// SUPER_ADMIN·ADMIN·BRANCH·EDITOR)는 질문 하나에 맞는 영역 한 행의 1차·대리 이름·연락 방법 종류·준비물·확인일만 낸다
+// (누구에게 물을지 알리는 것이 그 답의 목적이다 — 일부러 넓다). 비고·확인자·다른 영역은 내지 않는다. 단체방은 이름 없이 역할만.
+// 정리: docs/active/internal-team-contacts-2026-11-26.md §3.
 
 export const TEAM_CONTACTS_READ_ROLES: readonly AdminApiRole[] = STAFF_ADMIN_API_ROLES
 export const TEAM_CONTACTS_WRITE_ROLES: readonly AdminApiRole[] = ["SUPER_ADMIN"]

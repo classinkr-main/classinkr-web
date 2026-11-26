@@ -111,6 +111,20 @@ export function splitPrep(value: unknown): string[] {
     .filter(Boolean)
 }
 
+/**
+ * 고치기 뒤의 확인일 — 1차·대리 담당이 바뀌었는데 확인일이 지금 행의 것 그대로면 그 확인은 앞 사람의 것이라 비운다.
+ * 새 확인일을 함께 주면 그 날짜를 쓴다. 사람이 그대로면(역할·연락 방법·준비물만 바뀜) 손대지 않는다.
+ * 화면 고치기(updateTeamContact)와 CSV 가져오기 계획(planKrContactImport)이 같이 쓴다.
+ */
+export function staleConfirmationCleared(
+  base: Pick<TeamContactRecord, "name" | "deputy" | "confirmedAt">,
+  input: TeamContactInput
+): TeamContactInput {
+  const personChanged = (input.name ?? null) !== (base.name ?? null) || (input.deputy ?? null) !== (base.deputy ?? null)
+  if (!personChanged || !input.confirmedAt || input.confirmedAt !== base.confirmedAt) return input
+  return { ...input, confirmedAt: null }
+}
+
 type Validated = { ok: true; value: TeamContactInput } | { ok: false; error: string }
 
 const TEXT_FIELDS = [

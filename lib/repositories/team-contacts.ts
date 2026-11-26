@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
   isTeamContactOrg,
   kstDateString,
+  staleConfirmationCleared,
   type TeamContactInput,
   type TeamContactRecord,
 } from "@/lib/team-contacts/model"
@@ -16,7 +17,8 @@ import {
 //    미적용이 아닌 읽기 오류는 빈 결과로 삼키지 않고 던진다.
 //  - 안내용 읽기(readActiveTeamContactsCached)는 활성 행만 60초 캐시한다(인스턴스 메모리). 실패는 캐시하지 않고
 //    빈 표 + failed:true 를 돌려준다 — 갈매봇 답은 지금처럼(빈 표) 돌고 카드에 실패가 적힌다.
-//    쓰기 뒤에는 이 인스턴스의 캐시를 비운다(다른 인스턴스는 길어야 60초 뒤에 새 값을 본다).
+//    쓰기 뒤에는 이 인스턴스의 캐시와 떠 있는 읽기를 비운다 — 쓰기 전에 떠난 읽기는 끝나도 캐시에 넣지 않는다
+//    (다른 인스턴스는 길어야 60초 뒤에 새 값을 본다).
 
 const TABLE = "internal_team_contacts"
 const COLUMNS =
@@ -176,16 +178,21 @@ export async function createTeamContact(input: TeamContactInput, actor: TeamCont
   return record
 }
 
-/** 보낸 값으로 고친다(검사된 전체 입력). 확인일이 바뀌면 확인자를 행위자로, 비우면 확인자도 비운다. */
+/**
+ * 보낸 값으로 고친다(검사된 전체 입력). 확인일이 바뀌면 확인자를 행위자로, 비우면 확인자도 비운다.
+ * 1차·대리 담당이 바뀌었는데 확인일을 새로 주지 않았으면(화면은 지금 확인일을 그대로 보낸다) 지난 확인은 앞 사람의 것이라
+ * 확인일·확인자를 비운다(staleConfirmationCleared) — 새 사람은 "확인일 찍기"나 새 날짜로 다시 확인한다.
+ */
 export async function updateTeamContact(
   base: TeamContactRecord,
   input: TeamContactInput,
   actor: TeamContactActor
 ): Promise<TeamContactRecord | null> {
-  const confirmedBy = input.confirmedAt ? (input.confirmedAt === base.confirmedAt ? base.confirmedBy : actor.name) : null
+  const next = staleConfirmationCleared(base, input)
+  const confirmedBy = next.confirmedAt ? (next.confirmedAt === base.confirmedAt ? base.confirmedBy : actor.name) : null
   const { data, error } = await createSupabaseAdminClient()
     .from(TABLE)
-    .update({ ...toPayload(input), confirmed_by: confirmedBy })
+    .update({ ...toPayload(next), confirmed_by: confirmedBy })
     .eq("id", base.id)
     .select(COLUMNS)
     .maybeSingle()
@@ -273,6 +280,8 @@ export interface TeamContactsRead {
 
 let activeCache: { at: number; rows: TeamContactRecord[] } | null = null
 let activeInflight: Promise<TeamContactRecord[]> | null = null
+/** 쓰기마다 하나씩 올린다 — 쓰기 전에 떠난 읽기는 끝나도 캐시에 넣지 않는다(지난 행이 60초 남는 경합). */
+let cacheGeneration = 0
 
 async function fetchActiveTeamContacts(): Promise<TeamContactRecord[]> {
   const list = await listTeamContacts()
@@ -280,9 +289,14 @@ async function fetchActiveTeamContacts(): Promise<TeamContactRecord[]> {
   return list.rows
 }
 
-/** 이 인스턴스의 안내용 캐시를 비운다(쓰기 뒤). */
+/**
+ * 이 인스턴스의 안내용 캐시를 비운다(쓰기 뒤). 떠 있는 읽기도 떼어 낸다 — 그 읽기는 쓰기 전 값일 수 있어,
+ * 끝나도 캐시에 넣지 않고(세대가 다르다) 뒤에 오는 읽기는 거기에 올라타지 않고 새로 읽는다.
+ */
 export function invalidateTeamContactsCache() {
   activeCache = null
+  activeInflight = null
+  cacheGeneration += 1
 }
 
 /**
@@ -292,11 +306,13 @@ export async function readActiveTeamContactsCached(now: () => number = Date.now)
   if (activeCache && now() - activeCache.at < TEAM_CONTACTS_CACHE_TTL_MS) {
     return { rows: activeCache.rows, failed: false, warning: null }
   }
+  // 떠 있는 읽기는 늘 지금 세대의 것이다(무효화가 떼어 낸다).
+  const generation = cacheGeneration
   const pending = activeInflight ?? fetchActiveTeamContacts()
   activeInflight = pending
   try {
     const rows = await pending
-    activeCache = { at: now(), rows }
+    if (generation === cacheGeneration) activeCache = { at: now(), rows }
     return { rows, failed: false, warning: null }
   } catch (error) {
     const notReady = error instanceof TeamContactsNotReadyError

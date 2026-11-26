@@ -337,7 +337,7 @@ export function TeamContactsPanel() {
                 ))}
               </select>
             </Field>
-            <Field label="역할" hint="예: BD 팀 매니저">
+            <Field label="역할" hint="예: BD 팀 매니저 — 사람 이름은 1차·대리 칸에만">
               <Input value={form.role} maxLength={TEAM_CONTACT_LIMITS.role} onChange={(event) => setForm({ ...form, role: event.target.value })} />
             </Field>
             <Field label="1차 담당">
@@ -346,7 +346,7 @@ export function TeamContactsPanel() {
             <Field label="대리 담당">
               <Input value={form.deputy} maxLength={TEAM_CONTACT_LIMITS.deputy} onChange={(event) => setForm({ ...form, deputy: event.target.value })} />
             </Field>
-            <Field label="연락 방법" hint="종류만 — 번호·주소 없이">
+            <Field label="연락 방법" hint="종류만 — 번호·주소·사람 이름 없이">
               <Input value={form.channel} maxLength={TEAM_CONTACT_LIMITS.channel} onChange={(event) => setForm({ ...form, channel: event.target.value })} />
             </Field>
             <Field label="어드민 화면 링크" hint="/admin 으로 시작">
@@ -355,7 +355,7 @@ export function TeamContactsPanel() {
             <Field label="준비물" hint="· 로 나눔">
               <Input value={form.prep} onChange={(event) => setForm({ ...form, prep: event.target.value })} />
             </Field>
-            <Field label="확인일">
+            <Field label="확인일" hint="1차·대리를 바꾸면 새 날짜를 넣지 않는 한 비워집니다">
               <Input type="date" value={form.confirmedAt} onChange={(event) => setForm({ ...form, confirmedAt: event.target.value })} />
             </Field>
             <Field label="비고">

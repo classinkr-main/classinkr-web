@@ -93,7 +93,7 @@ describe("planKrContactImport — CSV 미리보기 계획", () => {
     const parsed = parseKrContactsCsv(
       [
         HEADER,
-        "견적,,BD 팀 매니저,담당자 A,담당자 D,위컴 1:1,,,,", // 대리만 바뀜, 빈 칸은 지금 값 유지
+        "견적,,BD 팀 매니저,담당자 A,,위컴 1:1,,,기존 비고 아님,", // 비고만 바뀜, 빈 칸은 지금 값 유지
         "계약,,,담당자 E,,KR 운영방,계약서 · 견적 번호,/admin/contracts,,2026-11-24",
         "세금계산서,,,담당자 F,,,,,,",
       ].join("\n")
@@ -104,8 +104,8 @@ describe("planKrContactImport — CSV 미리보기 계획", () => {
     })
     expect(plan.counts).toEqual({ create: 1, update: 1, same: 1, skipped: 0 })
     const byArea = Object.fromEntries(plan.items.map((item) => [item.area, item]))
-    expect(byArea.quote).toMatchObject({ action: "update", existingId: "row-quote", changes: ["대리 담당"] })
-    expect(byArea.quote.input).toMatchObject({ note: "기존 비고", prep: ["고객사"], adminLink: "/admin/quotes", confirmedAt: "2026-11-01" })
+    expect(byArea.quote).toMatchObject({ action: "update", existingId: "row-quote", changes: ["비고"] })
+    expect(byArea.quote.input).toMatchObject({ deputy: "담당자 B", note: "기존 비고 아님", prep: ["고객사"], adminLink: "/admin/quotes", confirmedAt: "2026-11-01" })
     expect(byArea.contract).toMatchObject({ action: "create", existingId: null, confirmedFromCsv: true })
     expect(byArea.contract.input).toMatchObject({ org: "KR", name: "담당자 E", prep: ["계약서", "견적 번호"], sortOrder: 10 })
     expect(byArea.tax_invoice.action).toBe("same")
@@ -114,6 +114,36 @@ describe("planKrContactImport — CSV 미리보기 계획", () => {
     expect(writes.map((write) => write.input.area)).toEqual(["quote", "contract"])
     expect(writes.find((write) => write.input.area === "contract")?.confirmedBy).toBe("관리자 을 (CSV)")
     expect(writes.find((write) => write.input.area === "quote")?.confirmedBy).toBe("관리자 갑")
+  })
+
+  it("1차·대리 담당이 바뀌었는데 CSV 에 새 확인일이 없으면 지난 확인일·확인자를 비운다", () => {
+    const confirmed = { confirmedAt: "2026-11-01", confirmedBy: "관리자 갑" }
+    const existing = [
+      record({ ...confirmed }),
+      record({ ...confirmed, id: "row-contract", area: "contract", name: "담당자 E", deputy: null }),
+      record({ ...confirmed, id: "row-tax", area: "tax_invoice", name: "담당자 F", deputy: null }),
+      record({ ...confirmed, id: "row-hq", area: "hq_escalation", name: "담당자 I", deputy: null }),
+    ]
+    const parsed = parseKrContactsCsv(
+      [
+        HEADER,
+        "견적,,,담당자 A,담당자 D,,,,,", // 대리만 바뀜, 확인일 없음 → 비움
+        "계약,,,담당자 G,,,,,,2026-11-01", // 1차 바뀜, 확인일이 지난 값 그대로 → 비움
+        "세금계산서,,,담당자 H,,,,,,2026-11-25", // 1차 바뀜, 새 확인일 → 그 날짜와 가져온 사람
+        "본사 에스컬레이션,,본사 연락 창구,담당자 I,,,,,,", // 사람 그대로, 역할만 → 지난 확인 그대로
+      ].join("\n")
+    )
+    const plan = planKrContactImport(parsed, existing, { areas: AREAS, krAreas: KR_AREAS })
+    const byArea = Object.fromEntries(plan.items.map((item) => [item.area, item]))
+    expect(byArea.quote.input.confirmedAt).toBeNull()
+    expect(byArea.quote.changes).toEqual(["대리 담당", "확인일"])
+    expect(byArea.contract.input.confirmedAt).toBeNull()
+    expect(byArea.contract.changes).toEqual(["1차 담당", "확인일"])
+    expect(byArea.tax_invoice.input.confirmedAt).toBe("2026-11-25")
+    expect(byArea.hq_escalation.input.confirmedAt).toBe("2026-11-01")
+
+    const confirmedBy = Object.fromEntries(importWritesOf(plan, "관리자 을").map((write) => [write.input.area, write.confirmedBy]))
+    expect(confirmedBy).toEqual({ quote: null, contract: null, tax_invoice: "관리자 을 (CSV)", hq_escalation: "관리자 갑" })
   })
 
   it("연락처 값이 든 줄은 건너뛰고 이유를 보인다(줄 번호 순)", () => {

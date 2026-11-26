@@ -80,6 +80,14 @@ describe("resolveContact — DB 한국 담당표(loadKrContacts)", () => {
     expect(card.who).toContain("담당자 이름은 담당표에 없음")
   })
 
+  it("1:1 카드는 그 영역의 1차·대리 이름만 싣고 비고는 싣지 않는다(표 전체는 GET 권한 경계 뒤)", async () => {
+    const row: KrContactRow = { ...QUOTE_ROW, note: "비고 메모 갑" }
+    const card = await resolveContact("견적 문의", deps({ krContacts: [row] }))
+    expect(card.who).toContain("담당자 A")
+    expect(card.backup).toBe("담당자 B")
+    expect(JSON.stringify(card)).not.toContain("비고 메모 갑")
+  })
+
   it("고정 값(krContacts)이 있으면 그것을 쓰고 서버 읽기는 부르지 않는다", async () => {
     const loadKrContacts = vi.fn(async () => ({ rows: [], failed: true, warning: null }))
     const card = await resolveContact("견적 문의", deps({ krContacts: [QUOTE_ROW], loadKrContacts }))
@@ -116,6 +124,38 @@ describe("resolveContact — roleOnly(위컴 단체방)", () => {
     expect(card.channel.label).not.toContain("담당자 A")
     expect(card.prepare).toEqual(["고객사"])
     expect(JSON.stringify(card)).not.toMatch(NAMES)
+  })
+
+  it("역할 칸에 이름을 적었으면 그 역할 글은 싣지 않고 문서의 역할(없으면 영역 이름)을 쓴다", async () => {
+    // 1차 담당 이름이 든 역할 — 문서 역할(KR_TOPICS)로 바꾼다.
+    const named: KrContactRow = { ...QUOTE_ROW, role: "담당자 A 매니저" }
+    const quote = await resolveContact("견적 문의", deps({ roleOnly: true, krContacts: [named] }))
+    expect(quote.namesHidden).toBe(true)
+    expect(quote.who).toBe("BD 팀 (리드→상담→견적→계약 클로징) — 이름은 갈매봇 1:1 로 물어봐 주세요")
+    expect(JSON.stringify(quote)).not.toMatch(NAMES)
+
+    // 어드민 계정 이름이 든 역할 · 문서 역할이 없는 영역(세금계산서) — 영역 이름으로.
+    const taxRow: KrContactRow = { ...QUOTE_ROW, topic: "tax_invoice", role: "지사장 가 직속", primaryName: "담당자 C", backupName: null }
+    const tax = await resolveContact("세금계산서 발행 부탁", deps({ roleOnly: true, krContacts: [taxRow] }))
+    expect(tax.who).toBe("세금계산서 담당 — 이름은 갈매봇 1:1 로 물어봐 주세요")
+    expect(JSON.stringify(tax)).not.toMatch(/담당자 C|지사장 가/)
+
+    // 이름 없이 역할만 적은 행(계정 권한 경로) · 담당이 없는 행(빈칸 경로)에서도 같다.
+    const roleOnlyRow: KrContactRow = { ...QUOTE_ROW, topic: "hw_shipping", role: "권한자 나 팀", primaryName: null, backupName: null }
+    const shipping = await resolveContact("하드웨어 출고 언제 되나요", deps({ roleOnly: true, krContacts: [roleOnlyRow] }))
+    expect(shipping.who).toBe("hardware.finalize 권한 보유자(출고 확정) — 이름은 갈매봇 1:1 로 물어봐 주세요")
+    const emptyStaff = await resolveContact(
+      "하드웨어 출고 언제 되나요",
+      deps({ roleOnly: true, krContacts: [roleOnlyRow], listStaff: async () => [{ ...STAFF[1], capabilities: [] }] })
+    )
+    expect(emptyStaff.who).toBe("hardware.finalize 권한 보유자(출고 확정) (담당자 이름은 담당표에 없음)")
+    expect(JSON.stringify([shipping, emptyStaff])).not.toMatch(NAMES)
+  })
+
+  it("1:1(이름 실음)에서는 역할 칸을 그대로 쓴다", async () => {
+    const named: KrContactRow = { ...QUOTE_ROW, role: "담당자 A 매니저" }
+    const card = await resolveContact("견적 문의", deps({ krContacts: [named] }))
+    expect(card.who).toBe("담당자 A 매니저 — 담당자 A")
   })
 
   it("모름 카드도 지사장 이름 없이", async () => {

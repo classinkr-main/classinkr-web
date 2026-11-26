@@ -12,7 +12,8 @@ interface Recorded {
 }
 
 let recorded: Recorded[] = []
-let respond: (query: Recorded) => { data?: unknown; error?: unknown } = () => ({ data: [] })
+type Respond = { data?: unknown; error?: unknown }
+let respond: (query: Recorded) => Respond | Promise<Respond> = () => ({ data: [] })
 
 function builder(query: Recorded) {
   const settle = () =>
@@ -162,11 +163,39 @@ describe("team-contacts 저장소 — 목록·쓰기", () => {
     const repo = await loadRepo()
     const base = (await repo.listTeamContacts()).rows[0]
     recorded = []
-    await repo.updateTeamContact(base, { ...INPUT, confirmedAt: "2026-11-20" }, { name: "관리자 을" })
-    await repo.updateTeamContact(base, { ...INPUT, confirmedAt: "2026-11-26" }, { name: "관리자 을" })
-    await repo.updateTeamContact(base, { ...INPUT, confirmedAt: null }, { name: "관리자 을" })
+    // 사람(1차·대리)은 그대로 — 확인일만 본다.
+    const samePeople = { ...INPUT, deputy: "담당자 B" }
+    await repo.updateTeamContact(base, { ...samePeople, confirmedAt: "2026-11-20" }, { name: "관리자 을" })
+    await repo.updateTeamContact(base, { ...samePeople, confirmedAt: "2026-11-26" }, { name: "관리자 을" })
+    await repo.updateTeamContact(base, { ...samePeople, confirmedAt: null }, { name: "관리자 을" })
     expect(recorded.map((query) => (query.payload as { confirmed_by: unknown }).confirmed_by)).toEqual(["관리자", "관리자 을", null])
     expect(recorded.every((query) => query.filters.some(([, column, value]) => column === "id" && value === base.id))).toBe(true)
+  })
+
+  it("고치기 — 1차·대리 담당이 바뀌었는데 확인일을 새로 주지 않으면 지난 확인일·확인자를 비운다", async () => {
+    respond = (query) => (query.op === "select" ? { data: [dbRow()] } : { data: dbRow() })
+    const repo = await loadRepo()
+    const base = (await repo.listTeamContacts()).rows[0]
+    recorded = []
+    const sameDate = { ...INPUT, deputy: "담당자 B", confirmedAt: base.confirmedAt }
+    // 1차 담당만 바뀜(화면은 지금 확인일을 그대로 보낸다) → 비운다.
+    await repo.updateTeamContact(base, { ...sameDate, name: "담당자 C" }, { name: "관리자 을" })
+    // 대리 담당만 바뀜 → 비운다.
+    await repo.updateTeamContact(base, { ...sameDate, deputy: "담당자 D" }, { name: "관리자 을" })
+    // 사람이 바뀌고 확인일도 새로 줌 → 새 확인일 + 행위자.
+    await repo.updateTeamContact(base, { ...sameDate, name: "담당자 C", confirmedAt: "2026-11-26" }, { name: "관리자 을" })
+    // 사람은 그대로(역할·연락 방법만 바뀜) → 지난 확인 그대로.
+    await repo.updateTeamContact(base, { ...sameDate, role: "BD 팀장", channel: "KR 운영방" }, { name: "관리자 을" })
+    const confirmations = recorded.map((query) => {
+      const payload = query.payload as { confirmed_at: unknown; confirmed_by: unknown }
+      return [payload.confirmed_at, payload.confirmed_by]
+    })
+    expect(confirmations).toEqual([
+      [null, null],
+      [null, null],
+      ["2026-11-26", "관리자 을"],
+      ["2026-11-20", "관리자"],
+    ])
   })
 
   it("확인일 찍기 — 한국 날짜와 확인자", async () => {
@@ -245,6 +274,54 @@ describe("readActiveTeamContactsCached — 안내용 짧은 캐시", () => {
     const read = await repo.readActiveTeamContactsCached(() => 0)
     expect(read.failed).toBe(true)
     expect(read.warning).toBe(repo.TEAM_CONTACTS_NOT_READY_GAP)
+  })
+
+  it("쓰기 전에 떠난 읽기가 쓰기 뒤에 끝나도 지난 행을 캐시에 넣지 않고, 쓰기 뒤 읽기는 그 읽기에 올라타지 않는다", async () => {
+    respond = () => ({ data: [dbRow()] })
+    const repo = await loadRepo()
+    const base = (await repo.listTeamContacts()).rows[0]
+    let releaseStale: (value: Respond) => void = () => {}
+    let selects = 0
+    respond = (query) => {
+      if (query.op !== "select") return { data: dbRow({ name: "담당자 C" }) }
+      selects += 1
+      if (selects === 1) return new Promise<Respond>((resolve) => (releaseStale = resolve))
+      return { data: [dbRow({ name: "담당자 C" })] }
+    }
+
+    const staleRead = repo.readActiveTeamContactsCached(() => 0)
+    await vi.waitFor(() => expect(selects).toBe(1))
+    await repo.updateTeamContact(base, { ...INPUT, name: "담당자 C" }, { name: "관리자" })
+    // 쓰기 뒤의 읽기 — 쓰기 전 읽기(지난 행)에 올라타지 않고 새로 읽어야 한다.
+    const afterWrite = repo.readActiveTeamContactsCached(() => 1)
+    releaseStale({ data: [dbRow({ name: "담당자 A" })] })
+
+    expect((await staleRead).rows.map((row) => row.name)).toEqual(["담당자 A"])
+    expect((await afterWrite).rows.map((row) => row.name)).toEqual(["담당자 C"])
+    // 늦게 끝난 지난 읽기가 캐시를 덮지 않았다 — 60초 안의 다음 읽기도 새 값이고 다시 읽지 않는다.
+    const next = await repo.readActiveTeamContactsCached(() => 2)
+    expect(next.rows.map((row) => row.name)).toEqual(["담당자 C"])
+    expect(selects).toBe(2)
+  })
+
+  it("쓰기 전에 떠난 읽기가 쓰기 뒤에 끝나면 그 행을 캐시하지 않는다(다음 읽기가 새로 읽는다)", async () => {
+    let releaseStale: (value: Respond) => void = () => {}
+    let selects = 0
+    respond = (query) => {
+      if (query.op !== "select") return { data: dbRow() }
+      selects += 1
+      if (selects === 1) return new Promise<Respond>((resolve) => (releaseStale = resolve))
+      return { data: [dbRow({ name: "담당자 C" })] }
+    }
+    const repo = await loadRepo()
+    const staleRead = repo.readActiveTeamContactsCached(() => 0)
+    await vi.waitFor(() => expect(selects).toBe(1))
+    await repo.confirmTeamContact("id-1", { name: "관리자" })
+    releaseStale({ data: [dbRow({ name: "담당자 A" })] })
+    await staleRead
+    const next = await repo.readActiveTeamContactsCached(() => 1)
+    expect(next.rows.map((row) => row.name)).toEqual(["담당자 C"])
+    expect(selects).toBe(2)
   })
 
   it("쓰기 뒤에는 이 인스턴스의 캐시를 비운다", async () => {

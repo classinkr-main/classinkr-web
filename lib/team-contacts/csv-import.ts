@@ -5,10 +5,12 @@
 //  - 한국 지사(KR) 행만 다룬다. 영역마다 활성 행 하나 — 있으면 고치고, 없으면 만든다. CSV 에 없는 영역은 건드리지 않는다.
 //  - CSV 의 빈 칸은 지금 값을 지우지 않는다(초안 CSV 가 일부 칸만 채운 경우). 지우려면 화면에서 고친다.
 //  - 넣기 전에 화면 입력과 같은 검사(연락처 값·길이·링크 형식)를 한다. 걸리면 그 줄은 건너뛴다(이유를 보인다).
+//  - 1차·대리 담당이 바뀌었는데 CSV 에 새 확인일이 없으면 지난 확인일·확인자를 비운다(앞 사람의 확인이다 — 화면 고치기와 같다).
 
 import type { KrContactsCsvNote, KrContactsCsvParse, KrContactsCsvSkip } from "@/lib/internal-cs-chat/contact"
 
 import {
+  staleConfirmationCleared,
   validateTeamContactInput,
   type TeamContactAreaOption,
   type TeamContactInput,
@@ -90,8 +92,10 @@ export function planKrContactImport(
       skipped.push({ line, area: area?.label ?? row.topic, reason: validated.error })
       return
     }
+    // 1차·대리 담당이 바뀌었는데 CSV 에 새 확인일이 없으면 지난 확인일·확인자를 비운다(화면 고치기와 같은 규칙).
+    const input = current ? staleConfirmationCleared(current, validated.value) : validated.value
     const changes = current
-      ? FIELD_LABELS.filter(([key]) => !sameValue(current[key as keyof TeamContactRecord], validated.value[key])).map(([, label]) => label)
+      ? FIELD_LABELS.filter(([key]) => !sameValue(current[key as keyof TeamContactRecord], input[key])).map(([, label]) => label)
       : []
     items.push({
       line,
@@ -99,7 +103,7 @@ export function planKrContactImport(
       areaLabel: area?.label ?? row.topic,
       action: current ? (changes.length ? "update" : "same") : "create",
       existingId: current?.id ?? null,
-      input: validated.value,
+      input,
       changes,
       usedInAnswers: area?.used ?? true,
       confirmedFromCsv: Boolean(row.verifiedAt) && row.verifiedAt !== current?.confirmedAt,
@@ -122,13 +126,13 @@ export function planKrContactImport(
   }
 }
 
-/** 넣을 줄(그대로인 줄은 뺀다). CSV 확인일은 "가져온 사람 (CSV)"로 표시한다. */
+/** 넣을 줄(그대로인 줄은 뺀다). CSV 확인일은 "가져온 사람 (CSV)"로 표시한다. 확인일을 비운 줄은 확인자도 비운다. */
 export function importWritesOf(plan: TeamContactImportPlan, actorName: string) {
   return plan.items
     .filter((item) => item.action !== "same")
     .map((item) => ({
       existingId: item.existingId,
       input: item.input,
-      confirmedBy: item.confirmedFromCsv ? `${actorName} (CSV)`.slice(0, 80) : item.existingConfirmedBy,
+      confirmedBy: !item.input.confirmedAt ? null : item.confirmedFromCsv ? `${actorName} (CSV)`.slice(0, 80) : item.existingConfirmedBy,
     }))
 }
