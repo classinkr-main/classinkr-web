@@ -318,6 +318,22 @@ function formatMetaError(prefix: string, status: number, error: MetaGraphErrorBo
     .join(": ")
 }
 
+/** Graph 호출 하나의 상한. 멈춘 호스트는 모든 토큰을 똑같이 멈추게 하므로 타임아웃에서는 다음 토큰으로 넘어가지 않는다. */
+const META_GRAPH_TIMEOUT_MS = 15_000
+/** fetchMetaDailyInsights 페이징 총 예산 — 크론 maxDuration(60초) 안에서 끝나도록 넘기면 truncated 로 표시한다. */
+const META_DAILY_PAGING_BUDGET_MS = 45_000
+
+async function metaFetch(url: URL, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(META_GRAPH_TIMEOUT_MS) })
+  } catch (e) {
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+      throw new Error(`Meta API request timed out (${META_GRAPH_TIMEOUT_MS / 1000}s)`)
+    }
+    throw e
+  }
+}
+
 function shouldTryNextToken(status: number, error: MetaGraphErrorBody["error"]) {
   return status === 401 || error?.code === 190
 }
@@ -333,7 +349,7 @@ async function metaGet<T>(
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index]
     const { url, accessToken } = buildUrl(path, candidate.value, params)
-    const response = await fetch(url, {
+    const response = await metaFetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: "no-store",
     })
@@ -367,7 +383,7 @@ async function metaPost<T>(path: string, params: Record<string, string | number 
       if (value != null && value !== "") body.set(key, String(value))
     }
 
-    const response = await fetch(url, {
+    const response = await metaFetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -904,8 +920,13 @@ export async function fetchMetaDailyInsights({
   const rows: MetaDailyInsightRow[] = []
   let after: string | undefined
   let truncated = false
+  const pagingStartedAt = Date.now()
 
   for (let page = 0; page < DAILY_INSIGHTS_PAGE_CAP; page += 1) {
+    if (page > 0 && Date.now() - pagingStartedAt > META_DAILY_PAGING_BUDGET_MS) {
+      truncated = true
+      break
+    }
     const response = await metaGet<MetaPagingResponse<MetaDailyInsightApiRow> & MetaCursorPaging>(
       `${accountId}/insights`,
       {
