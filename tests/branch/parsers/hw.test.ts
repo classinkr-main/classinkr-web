@@ -57,7 +57,7 @@ describe("hw parsers", () => {
     const header = [...Array(13).fill(c("")), c(" 오더 번호 ")]
     const grid: FormattedCell[][] = [
       header,
-      [c("C3"), c("2026. 10. 23"), c("Minji"), c('86" IFP'), c(3), c(""), c(5850), c(""), c("성남여자고등학교"), c(""), c("배송 예정"), c("Sales"), c(""), c(" ORD-2610-014 ")],
+      [c("C3"), c("2026. 10. 23"), c("Minji"), c('86" IFP'), c(3), c(""), c(5850), c(""), c("[기관 D]"), c(""), c("배송 예정"), c("Sales"), c(""), c(" ORD-2610-014 ")],
       [c("C3"), c("2026. 10. 23"), c("Minji"), c("STD1"), c(3), c(""), c(540), c(""), c(""), c(""), c("배송 예정"), c("Sales"), c(""), c("")],
     ]
 
@@ -67,7 +67,7 @@ describe("hw parsers", () => {
     // 빈 칸은 키 자체를 싣지 않는다 — 열이 없던 시절의 raw와 같게 남는다.
     expect(out[1].raw).not.toHaveProperty("order_no")
     // 기존 열 위치는 그대로 읽힌다.
-    expect(out[1]).toMatchObject({ product: "STD1", destination: "성남여자고등학교", progress: "배송 예정" })
+    expect(out[1]).toMatchObject({ product: "STD1", destination: "[기관 D]", progress: "배송 예정" })
   })
 
   it("outbound normalizes a hand-typed 오더번호 so the ledger matches the app order exactly", () => {

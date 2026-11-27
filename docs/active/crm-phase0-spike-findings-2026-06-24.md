@@ -36,7 +36,7 @@ leads.assigned_to (non-null, distinct)   = 0   ← 컬럼 전부 NULL (실제 �
 admin_profiles.display_name (distinct=2) = ["classin-admin", "MOON"]
 NEO User 디렉터리 (external_crm_records, object_api_key='User', source_system='xiaoshouyi'):
     total records      = 2000
-    external_id (ownerId) = 16자리 숫자, 예 3637150237793118
+    external_id (ownerId) = 16자리 숫자, 예 [NEO 소유자 ID]
     display_name shape    = "中文名-EEOxxxxx", 예 "谷岩-EEO00002", "李朝-EEO01104"
 crm_xiaoshouyi_owner_names (큐레이팅 숫자→korean_name 오버라이드) = 10 rows
 
@@ -143,7 +143,7 @@ HW 매출(`branch_hw_outbound.revenue`, KRW 원장)은 NEO opportunity USD와 **
 | ratio (accounts per lead) | **281.33** |
 | `crm_customer_events` 존재 | **NO** — PGRST205 "Could not find the table 'public.crm_customer_events' in the schema cache" |
 
-샘플 account display name (전부 `object_api_key='account'`, `leads` 행 없는 실제 고객 기관): [기관 W], [기관 X], [기관 Y], [기관 Z], [기관 AA].
+샘플 account display name (전부 `object_api_key='account'`, `leads` 행 없는 실제 고객 기관): [기관 W], [기관 X], [기관 Y], [기관 Z], 이미숙국어.
 
 `lead_contact_logs` (마이그 `20260409_schema_fixes.sql`):
 - `lead_id UUID NOT NULL REFERENCES public.leads(id) ON DELETE CASCADE`

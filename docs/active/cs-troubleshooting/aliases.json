@@ -5,7 +5,7 @@
  {"kind": "org_alias", "canonical": "[기관 B]", "variants": ["[기관 B]"], "case_ids": ["D-01", "S-07"], "note": "같은 고객사로 기록됨."},
  {"kind": "org_alias", "canonical": "[기관 F]", "variants": ["[기관 F]"], "case_ids": ["S-23"], "note": "대화 제목 표기는 약칭이 다르다."},
  {"kind": "org_alias", "canonical": "정율사관", "variants": ["정율사관 온라인", "정율사관학원", "JYSK", "정율사관 온라인 B3 교실", "정율사관 온라인 B4 교실", "정율사관 W3 교실"], "case_ids": ["D-02a", "D-02b", "D-12", "D-22", "S-40"], "note": "교실(B3·B4·W3)은 같은 고객사의 강의실 구분. 한 고객의 두 건을 하나로 묶지 않는다(D-02a·D-02b는 원인이 다름)."},
- {"kind": "org_alias", "canonical": "KJ영재센터", "variants": ["KJ영재센터", "KJ영재센터 사직", "KJ영재센터 창원", "KJ영재센터 센텀"], "case_ids": ["D-20", "D-21", "S-09", "S-31", "S-34", "S-39"], "note": "사직·창원·센텀은 같은 기관의 캠퍼스 구분. 교실 녹화 OFF·카메라 녹화만 ON 구성."},
+ {"kind": "org_alias", "canonical": "[기관 U]", "variants": ["[기관 U]", "[기관 U] 사직", "[기관 U] 창원", "[기관 U] 센텀"], "case_ids": ["D-20", "D-21", "S-09", "S-31", "S-34", "S-39"], "note": "사직·창원·센텀은 같은 기관의 캠퍼스 구분. 교실 녹화 OFF·카메라 녹화만 ON 구성."},
  {"kind": "unit", "canonical": "KB/s(미확정)", "variants": ["30~50KB/s", "30~50kbps"], "case_ids": ["S-25", "S-05"], "note": "S-25는 8/18 대화가 KB/s, 8/25 대화와 HQ 문안이 kbps. S-05(KB/s)와 같은 대역인지는 단위 확인 전까지 보류."},
  {"kind": "unit", "canonical": "76건(base_id) / 78행(id)", "variants": ["76건", "78행"], "case_ids": ["D-02a", "D-02b", "D-15a", "D-15b"], "note": "D-02와 D-15가 a/b 두 행으로 나뉘어 행 수가 2 많다. 건수 집계는 base_id 기준."},
  {"kind": "date_conflict", "canonical": "2026-10-02", "variants": ["2026-09-30(접수)", "2026-10-02(원격 점검)"], "case_ids": ["S-40"], "note": "인덱스 표는 10-02, 보충기록은 접수 9/30 22:30~22:40·원격 점검 10/02. as_of(2026-09-29) 이후 기록이 포함된 유일한 건."},

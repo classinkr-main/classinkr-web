@@ -1,6 +1,6 @@
 // 하드웨어 위치 정규화 — 서버 원장(lib/repositories/hardware-inventory.ts)과 화면(출고 기간 집계 등)이 같은 규칙을
 // 쓴다. 순수 함수만 둔다(클라이언트 컴포넌트도 import 한다). 화면이 따로 만든 정규식이 고객사 이름
-// ("대치수리학원")을 수리로 빼던 것을 이 한 곳으로 모은다(2026-11-05 점검).
+// ("○○수리학원")을 수리로 빼던 것을 이 한 곳으로 모은다(2026-11-05 점검).
 
 export const WAREHOUSE_LOCATION = "창고"
 export const REPAIR_LOCATION = "수리"
@@ -12,7 +12,7 @@ export const OFFICE_LOCATION = "사무실"
 // 적힌다. 영문 "ClassIn"은 아래 수리 규칙보다 먼저 판정해야 한다.
 const OFFICE_LOCATION_PATTERN = /사무실|office|클래스인|class\s*in/i
 // 수리 위치는 수리를 뜻하는 표기에만 맞춘다. 예전 /수리|a\/?s/ 는 단어 안의 "as"(ClassIn·Master)와
-// 고객사 이름("대치수리학원"·"수리논술")까지 수리 위치로 보냈다.
+// 고객사 이름("○○수리학원"·"수리논술")까지 수리 위치로 보냈다.
 const REPAIR_LOCATION_PATTERN =
   /repair|a\/s|(?:^|[^a-z])as(?:\s*센터)?(?:$|[^a-z])|수리(?!\s*(?:학원|논술|영역|수학|과학|탐구|교육|아카데미))/i
 

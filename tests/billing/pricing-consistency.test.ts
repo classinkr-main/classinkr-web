@@ -14,6 +14,7 @@ import {
   getStandardQuoteDefaultSelections,
   getStandardQuoteQuickPresets,
   resolveQuoteSupplier,
+  STANDARD_QUOTE_SUPPLIER,
 } from "@/lib/standard-quote-template"
 
 describe("하드웨어·수트형·소프트웨어 가격 정합성 검증", () => {
@@ -260,13 +261,13 @@ describe("하드웨어·수트형·소프트웨어 가격 정합성 검증", () 
       }
     })
 
-    it("하드웨어 견적은 공급처가 퀴드러닝(사업자 170-07-03305, 대표 조혜리)으로 확정된다", () => {
+    it("하드웨어 견적은 공급처가 퀴드러닝(사업자 170-07-03305, 대표 [대표])으로 확정된다", () => {
       const hwTemplates = ["board_86", "board_75", "camera_t1", "recording_studio"]
       for (const tId of hwTemplates) {
         const hwSupplier = resolveQuoteSupplier(tId)
         expect(hwSupplier.supplierBusinessName).toBe("퀴드러닝")
         expect(hwSupplier.supplierBusinessRegistrationNumber).toBe("170-07-03305")
-        expect(hwSupplier.supplierRepresentativeName).toBe("조혜리")
+        expect(hwSupplier.supplierRepresentativeName).toBe(STANDARD_QUOTE_SUPPLIER.representativeName)
       }
     })
   })

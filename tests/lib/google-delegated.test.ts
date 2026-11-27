@@ -47,7 +47,7 @@ afterEach(() => {
 describe("calendarAs", () => {
   it("범위가 calendar.readonly 하나뿐이다 — 쓰기 범위가 섞이면 위임이 전 직원 캘린더 쓰기를 연다", async () => {
     const { calendarAs } = await import("@/lib/google-delegated")
-    await calendarAs("heesung.shin@classin.com")
+    await calendarAs("member1@classin.com")
 
     expect(gapi.GoogleAuth).toHaveBeenCalledTimes(1)
     const opts = gapi.GoogleAuth.mock.calls[0][0]
@@ -56,9 +56,9 @@ describe("calendarAs", () => {
 
   it("subject 를 그 팀원으로 세워 대행한다", async () => {
     const { calendarAs } = await import("@/lib/google-delegated")
-    await calendarAs("somang.jin@classin.com")
+    await calendarAs("member2@classin.com")
     expect(gapi.GoogleAuth.mock.calls[0][0].clientOptions).toEqual({
-      subject: "somang.jin@classin.com",
+      subject: "member2@classin.com",
     })
   })
 

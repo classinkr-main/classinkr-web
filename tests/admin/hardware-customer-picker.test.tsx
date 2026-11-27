@@ -10,7 +10,7 @@ import CustomerPicker, {
 // 출고 기록에서 고객사는 매번 손으로 치는 유일한 칸이었다(입력 가속 P1-1).
 // 목록은 제안일 뿐이고 새 고객사는 그대로 저장돼야 한다 — 그 규칙을 여기에 고정한다.
 describe("buildCustomerPickerRows", () => {
-  const recent = ["남명학원", "대치수리학원", "갈무리국어", "A1 아카데미"]
+  const recent = ["남명학원", "대치수리학원", "갈무리국어", "Alpha 아카데미"]
 
   it("빈 입력이면 최근 출고 순 그대로 제안하고 새 고객사 줄은 없다", () => {
     const rows = buildCustomerPickerRows(recent, "")
@@ -19,7 +19,7 @@ describe("buildCustomerPickerRows", () => {
   })
 
   it("공백·대소문자·구두점을 무시하고 찾는다", () => {
-    expect(buildCustomerPickerRows(recent, "a1아카데미").map((row) => row.label)).toEqual(["A1 아카데미"])
+    expect(buildCustomerPickerRows(recent, "alpha아카데미").map((row) => row.label)).toEqual(["Alpha 아카데미"])
     // 앞뒤 공백은 무시하고 찾는다. 부분 입력이라 "새 고객사" 줄은 그대로 뒤에 붙는다.
     expect(buildCustomerPickerRows(recent, " 남명 ").filter((row) => !row.isNew).map((row) => row.label)).toEqual([
       "남명학원",
@@ -41,8 +41,8 @@ describe("buildCustomerPickerRows", () => {
   })
 
   it("목록에 없는 이름도 그대로 기록할 수 있다", () => {
-    const rows = buildCustomerPickerRows(recent, "새로연학원")
-    expect(rows).toEqual([{ key: "__new__새로연학원", label: "새로연학원", isNew: true }])
+    const rows = buildCustomerPickerRows(recent, "[기관 A]")
+    expect(rows).toEqual([{ key: "__new__[기관 A]", label: "[기관 A]", isNew: true }])
   })
 
   it("제안은 8곳까지만 — 그 뒤에도 새 고객사 줄은 남는다", () => {

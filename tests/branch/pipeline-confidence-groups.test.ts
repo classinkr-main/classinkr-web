@@ -26,10 +26,10 @@ describe("파이프라인 확도 묶음", () => {
   })
 
   it("같은 열의 같은 고객은 한 카드로 합치고 합계는 원래 행 합과 같다", () => {
-    const rows = [high("새솔수학", 30), high(" 새솔수학 ", 20), high("도담학원", 40), confirmed("한빛", 90), none("나래")]
+    const rows = [high("[기관 F]", 30), high(" [기관 F] ", 20), high("도담학원", 40), confirmed("한빛", 90), none("나래")]
     const groups = groupPipelineByConfidence(rows)
     expect(groups["high-confidence"].map((row) => [row.customer, row.revenue, row.count])).toEqual([
-      ["새솔수학", 50, 2],
+      ["[기관 F]", 50, 2],
       ["도담학원", 40, 1],
     ])
     const totals = pipelineGroupTotals(groups)

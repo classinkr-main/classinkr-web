@@ -442,7 +442,7 @@
    "id": "D-09",
    "base_id": "D-09",
    "date": "2026-08-31",
-   "customer": "윤유경플러스학원",
+   "customer": "[기관 V]",
    "product_area": "카메라",
    "index_chapter": "3. 카메라",
    "symptom": "학원 내부 위치 이동 후 카메라 미인식(교실 5곳, 3유형)",
@@ -935,7 +935,7 @@
    "id": "D-20",
    "base_id": "D-20",
    "date": "2026-09-20",
-   "customer": "KJ영재센터 사직",
+   "customer": "[기관 U] 사직",
    "product_area": "접속·네트워크",
    "index_chapter": "1. 접속·네트워크 끊김",
    "symptom": "최대화한 교사 화면이 저절로 스테이지 기본 배치로 복귀",
@@ -978,7 +978,7 @@
    "id": "D-21",
    "base_id": "D-21",
    "date": "2026-09-22",
-   "customer": "KJ영재센터 창원",
+   "customer": "[기관 U] 창원",
    "product_area": "녹화",
    "index_chapter": "2. 녹화",
    "symptom": "카메라 녹화 시작 표시는 있는데 파일 없음 (4001)",
@@ -1139,7 +1139,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/f4f9ae58-6ddb-4d22-8546-84685dd49c04"
+    "[대화 링크]"
    ]
   },
   {
@@ -1181,7 +1181,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/fa9edb31-4b5b-47db-bda8-87f3034cfa7f"
+    "[대화 링크]"
    ]
   },
   {
@@ -1222,7 +1222,7 @@
     "evidence:hq_pending"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/d6b8de99-f18e-42df-b49e-ea490c10be00"
+    "[대화 링크]"
    ]
   },
   {
@@ -1262,7 +1262,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/82f19d73-2253-47d0-8242-a35517a746a9"
+    "[대화 링크]"
    ]
   },
   {
@@ -1304,7 +1304,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/5105bf81-e270-49b9-9b2c-3e532b9c4596"
+    "[대화 링크]"
    ]
   },
   {
@@ -1347,7 +1347,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/9e54af61-c703-47ab-8355-5912a0de0279"
+    "[대화 링크]"
    ]
   },
   {
@@ -1390,7 +1390,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/657f4eda-7ff6-4c26-8c7a-4f6e7642f118"
+    "[대화 링크]"
    ]
   },
   {
@@ -1429,14 +1429,14 @@
     "evidence:suspected"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/5fe266a7-4ec4-4636-81f6-e8fb527ee0af"
+    "[대화 링크]"
    ]
   },
   {
    "id": "S-09",
    "base_id": "S-09",
    "date": "2026-07-26",
-   "customer": "KJ영재센터",
+   "customer": "[기관 U]",
    "product_area": "녹화",
    "index_chapter": "2. 녹화",
    "symptom": "수업 녹화에 \"녹음이 안 됨\"",
@@ -1472,14 +1472,14 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/502bb4db-5146-4d1b-918d-da19cb424b54"
+    "[대화 링크]"
    ]
   },
   {
    "id": "S-10",
    "base_id": "S-10",
    "date": "2026-07-28",
-   "customer": "킹콩수학학원",
+   "customer": "[기관 W]",
    "product_area": "녹화",
    "index_chapter": "2. 녹화",
    "symptom": "내부 공사 후 수업 녹화 반복 실패 (54, 2001)",
@@ -1517,8 +1517,8 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/0571f226-d633-4109-966b-ec2ff4fe2d13",
-    "https://claude.ai/chat/e2809897-ca5d-4ffc-b312-4663df5c120d"
+    "[대화 링크]",
+    "[대화 링크]"
    ]
   },
   {
@@ -1562,7 +1562,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/5d74d79a-fe66-4154-9fe1-e4684fdb8bc1"
+    "[대화 링크]"
    ]
   },
   {
@@ -1604,7 +1604,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/20647c40-4604-4c7e-898a-986c5f76b1f6"
+    "[대화 링크]"
    ]
   },
   {
@@ -1647,7 +1647,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/4c76774c-93ee-46c6-b39b-b2b27a633b17"
+    "[대화 링크]"
    ]
   },
   {
@@ -1689,7 +1689,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/9b5c38d9-5f94-4cab-b4ee-19c648c326fb"
+    "[대화 링크]"
    ]
   },
   {
@@ -1726,7 +1726,7 @@
     "evidence:suspected"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/64e659b3-8f9d-4391-b17b-f4a23922e18f"
+    "[대화 링크]"
    ]
   },
   {
@@ -1771,7 +1771,7 @@
     "evidence:hq_pending"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/40be26be-9d2a-413b-8bf4-fff1bde40f7f"
+    "[대화 링크]"
    ]
   },
   {
@@ -1815,7 +1815,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/bb91152b-2247-4231-8743-f0edef33415e"
+    "[대화 링크]"
    ]
   },
   {
@@ -1855,7 +1855,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/c7137908-af01-4b37-9d45-695b3554b6df"
+    "[대화 링크]"
    ]
   },
   {
@@ -1903,7 +1903,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/0a13f8dd-32f7-4355-8d48-3d4cff7b0dd5"
+    "[대화 링크]"
    ]
   },
   {
@@ -1944,7 +1944,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/037b0152-cf1f-4f5e-ba54-dc709b3ec0a3"
+    "[대화 링크]"
    ]
   },
   {
@@ -1984,7 +1984,7 @@
     "intent:incident"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/37ada86f-5e0e-41e2-ae3d-217f46f927df"
+    "[대화 링크]"
    ]
   },
   {
@@ -2024,7 +2024,7 @@
     "evidence:suspected"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/9de33637-523f-438b-b107-21e1e7dd7e99"
+    "[대화 링크]"
    ]
   },
   {
@@ -2067,7 +2067,7 @@
     "evidence:suspected"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/3327f18d-0456-4a6a-bd39-1f531c47734c"
+    "[대화 링크]"
    ]
   },
   {
@@ -2109,7 +2109,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/8a71a0bd-e2f4-4ba1-b5db-012a16b45e6c"
+    "[대화 링크]"
    ]
   },
   {
@@ -2155,8 +2155,8 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/1342b005-4249-49ed-bf0e-d02e701905e8",
-    "https://claude.ai/chat/dff51147-931b-4647-bf8f-1366f07814e7"
+    "[대화 링크]",
+    "[대화 링크]"
    ]
   },
   {
@@ -2199,7 +2199,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/b1c0b59c-41df-49c6-842c-84990fe967b3"
+    "[대화 링크]"
    ]
   },
   {
@@ -2243,7 +2243,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/58f07548-5e78-4ee3-b7b2-fa5417eb227f"
+    "[대화 링크]"
    ]
   },
   {
@@ -2279,7 +2279,7 @@
     "intent:incident"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/fdd65c2e-9b1d-47ce-b9b9-152f3a66ec67"
+    "[대화 링크]"
    ]
   },
   {
@@ -2321,7 +2321,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/fab32925-649b-411b-88ed-19eeacc63266"
+    "[대화 링크]"
    ]
   },
   {
@@ -2360,14 +2360,14 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/8a9792f5-50d3-44fe-9f31-f3e16b3a39d1"
+    "[대화 링크]"
    ]
   },
   {
    "id": "S-31",
    "base_id": "S-31",
    "date": "2026-09-01",
-   "customer": "KJ영재센터 사직",
+   "customer": "[기관 U] 사직",
    "product_area": "접속·네트워크",
    "index_chapter": "1. 접속·네트워크 끊김",
    "symptom": "수업 중 끊김, \"Network is malfunctioning\" 팝업",
@@ -2402,7 +2402,7 @@
     "intent:incident"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/cf4295fe-233b-48d2-b62e-9f63525777ec"
+    "[대화 링크]"
    ]
   },
   {
@@ -2448,7 +2448,7 @@
     "evidence:hq_pending"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/c86c093a-ce5d-4ecf-844c-08632790bf63"
+    "[대화 링크]"
    ]
   },
   {
@@ -2486,14 +2486,14 @@
     "intent:incident"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/d84c72ef-1d9f-421f-810c-f1b2d0a6e8b4"
+    "[대화 링크]"
    ]
   },
   {
    "id": "S-34",
    "base_id": "S-34",
    "date": "2026-09-15",
-   "customer": "KJ영재센터",
+   "customer": "[기관 U]",
    "product_area": "카메라",
    "index_chapter": "3. 카메라",
    "symptom": "카메라용 이더넷이 계속 \"네트워크 케이블 언플러그됨\"(USB-A를 꽂으면 링크, 빼면 언플러그)",
@@ -2528,7 +2528,7 @@
     "evidence:field_verified"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/a7ec70f1-50e1-49f7-a7f0-aa2bdc334a83"
+    "[대화 링크]"
    ]
   },
   {
@@ -2573,7 +2573,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/7d7dc5c2-84d3-48ac-82ee-eae8ee865e71"
+    "[대화 링크]"
    ]
   },
   {
@@ -2619,7 +2619,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/3b0a5901-6615-4e1d-8100-6a030ffef68d"
+    "[대화 링크]"
    ]
   },
   {
@@ -2656,7 +2656,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/b89c5195-89ab-4010-ae16-0f1ada795b10"
+    "[대화 링크]"
    ]
   },
   {
@@ -2694,14 +2694,14 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/99deca7a-ecc3-4d83-b1a9-35261e8491e2"
+    "[대화 링크]"
    ]
   },
   {
    "id": "S-39",
    "base_id": "S-39",
    "date": "2026-09-29",
-   "customer": "KJ영재센터 센텀",
+   "customer": "[기관 U] 센텀",
    "product_area": "녹화",
    "index_chapter": "2. 녹화",
    "symptom": "녹화본 음성 잡음·끊김·싱크 밀림 (한 교실만)",
@@ -2741,7 +2741,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/7fcee455-bee6-4dea-b62c-765ff032b302"
+    "[대화 링크]"
    ]
   },
   {
@@ -2785,7 +2785,7 @@
     "evidence:customer_unreplied"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/ac990e9a-e521-4051-8dbd-ad21f3501963"
+    "[대화 링크]"
    ]
   },
   {
@@ -3133,7 +3133,7 @@
     "intent:incident"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/e9cf8afc-39fd-4a65-a578-6bd058b57cac"
+    "[대화 링크]"
    ]
   },
   {
@@ -3181,7 +3181,7 @@
     "intent:incident"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/de6e0e0a-bd8a-47ef-ae46-7d012e64e53b"
+    "[대화 링크]"
    ]
   },
   {
@@ -3224,8 +3224,8 @@
     "intent:incident"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/aeb488cf-3372-4a31-adde-ad9facfb756a",
-    "https://claude.ai/chat/d1a2ffd9-3835-4a4f-a43f-ca698c1fef38"
+    "[대화 링크]",
+    "[대화 링크]"
    ]
   },
   {
@@ -3304,7 +3304,7 @@
     "evidence:field_verified"
    ],
    "source_chat_urls": [
-    "https://claude.ai/chat/36c7a49f-6c9e-4e76-bdb7-008f3957435f"
+    "[대화 링크]"
    ]
   }
  ]

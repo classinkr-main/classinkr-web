@@ -148,16 +148,16 @@ describe("POST — 총판 확인", () => {
   it("확인 시각과 이름을 돌려준다", async () => {
     mocks.confirmDistributorQuote.mockResolvedValue({
       status: "confirmed",
-      settlement: { confirmedAt: "2026-11-24T02:00:00.000Z", confirmedByName: "배철웅" },
+      settlement: { confirmedAt: "2026-11-24T02:00:00.000Z", confirmedByName: "[담당자 1]" },
     })
-    const response = await post(TOKEN, { name: " 배철웅 " })
+    const response = await post(TOKEN, { name: " [담당자 1] " })
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({
       confirmedAt: "2026-11-24T02:00:00.000Z",
-      confirmedByName: "배철웅",
+      confirmedByName: "[담당자 1]",
       alreadyConfirmed: false,
     })
-    expect(mocks.confirmDistributorQuote).toHaveBeenCalledWith(expect.objectContaining({ token: TOKEN, confirmedByName: "배철웅" }))
+    expect(mocks.confirmDistributorQuote).toHaveBeenCalledWith(expect.objectContaining({ token: TOKEN, confirmedByName: "[담당자 1]" }))
   })
 
   it("형식이 틀린 토큰은 조회 없이 404", async () => {
