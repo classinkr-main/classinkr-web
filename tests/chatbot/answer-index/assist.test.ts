@@ -533,7 +533,8 @@ describe("compiled route with the assist layer (fake model)", () => {
       original: { kind: "answer", card: CARDS.replay },
     })
     expect(assistOf(result)?.ms).toEqual(expect.any(Number))
-    expect(result.answer).toContain("녹화 파일은 [다운로드] 버튼으로 내 컴퓨터에 저장할 수 있습니다.")
+    // compiled 답은 요체로 낸다(R3 a1, CHATBOT_COMPILED_TONE 기본 yo): 카드 글 '저장할 수 있습니다.' → '저장할 수 있어요.'
+    expect(result.answer).toContain("녹화 파일은 [다운로드] 버튼으로 내 컴퓨터에 저장할 수 있어요.")
     expect(decidedByFromAnswerIndex(result.answerIndex)).toBe(`index:${CARDS.download}`)
     // 질문당 모델 호출 1회, 지시문 그대로, 가린 질문과 후보 줄.
     expect(calls).toHaveLength(1)

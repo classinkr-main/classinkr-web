@@ -7,6 +7,11 @@ import { loadAnswerIndexData } from "@/lib/chatbot/answer-index/load"
 import {
   absentTailLine,
   assemblePieces,
+  compoundHeadMode,
+  compoundLengthCap,
+  PIECE_MORE_STEPS_LINE,
+  segmentTextLabel,
+  skipTriedSteps,
   buildAnswerIndexCore,
   type Piece,
   gapLeadLine,
@@ -29,6 +34,8 @@ import { CS_FIGMA_GUIDES, INTERNAL_ONLY_CS_FIGMA_DOC_SLUGS } from "@/lib/cs-figm
 import { BASIC_QUICK_ANSWERS } from "@/lib/chatbot/quick-answers-basics"
 import { FIELD_QUICK_ANSWERS } from "@/lib/chatbot/quick-answers-field"
 import { buildSymptomTopicAnswer, SYMPTOM_TOPICS } from "@/lib/chatbot/symptom-triage"
+import { moreStepsLine } from "@/lib/chatbot/answer-index/shape"
+import { lintAnswer } from "@/scripts/answer-index/lib/style-audit-core"
 
 import { CARDS, copyFixture, fixtureUnits } from "./index-fixture"
 import { writeDataFile } from "./helpers"
@@ -88,6 +95,9 @@ const guide = CS_FIGMA_GUIDES.find((candidate) => !INTERNAL_ONLY_CS_FIGMA_DOC_SL
 const field = FIELD_QUICK_ANSWERS.find((entry) => entry.handoff === "support")!
 const basics = BASIC_QUICK_ANSWERS.find((entry) => entry.docPath)!
 const POLICY_TEXT = "무료 체험 기간은 담당자가 확인해 안내해 드려요."
+/** 말투를 바꾸면 안 되는 글(R3): 정책 글과 toneLocked 카드. */
+const POLICY_NIDA_TEXT = "무료 체험은 계약 전에 한 번만 신청할 수 있습니다."
+const LOCKED_TEXT = "이 약관은 공지 후 7일 뒤부터 적용됩니다."
 
 const MEMBERS_UNIT = "doc:/docs/fake/members#0"
 const MEMBERS_HASHES = ["4a1ed9c6b1cb54f0", "09f182bba9276931"]
@@ -105,6 +115,8 @@ const EXTRA = {
   guide: `howto:guide-${guide.slug}`,
   gapRelated: "gap:recording/cloud-limit",
   verbatimPolicy: "fixed:policy-governed",
+  policyNida: "policy:trial-once",
+  locked: "fixed:locked-terms",
 }
 
 function extraCards() {
@@ -170,6 +182,8 @@ function extraCards() {
       },
     },
     { ...base, id: EXTRA.verbatimPolicy, kind: "fixed", area: "pricing", topic: "정책 고정 답", policyGoverned: true, answer: { text: POLICY_TEXT, textHash: answerTextHash(POLICY_TEXT) } },
+    { ...base, id: EXTRA.policyNida, kind: "policy", area: "pricing", topic: "무료 체험 횟수", answer: { text: POLICY_NIDA_TEXT, textHash: answerTextHash(POLICY_NIDA_TEXT), policyRef: "HQ-04" } },
+    { ...base, id: EXTRA.locked, kind: "fixed", area: "pricing", topic: "약관 적용 시점", toneLocked: true, answer: { text: LOCKED_TEXT, textHash: answerTextHash(LOCKED_TEXT) } },
   ]
 }
 
@@ -177,7 +191,16 @@ let index: CompiledAnswerIndex
 let excluded: { id: string; reason: string }[]
 let cleanup: () => void
 
+/** R3 스위치를 모두 끈 값(R2 와 바이트가 같아야 한다). 아래 R2 시험은 이 값으로 돈다. R3 꼴은 respond-r3.test.ts 가 본다. */
+const R2_SWITCHES = {
+  CHATBOT_COMPILED_TONE: "off",
+  CHATBOT_COMPILED_ARROW: "gt",
+  CHATBOT_COMPOUND_HEAD: "bracket",
+  CHATBOT_COMPILED_FORM: "r2",
+} as const
+
 beforeAll(() => {
+  for (const [key, value] of Object.entries(R2_SWITCHES)) vi.stubEnv(key, value)
   const copy = copyFixture()
   cleanup = copy.cleanup
   writeDataFile(copy.dir, "cards/zz-extra.json", extraCards())
@@ -204,7 +227,7 @@ function decision(kind: AnswerIndexDecision["kind"], card: string | null, extra:
 function respond(d: AnswerIndexDecision, question = "질문", options: { env?: Record<string, string>; index?: CompiledAnswerIndex } = {}) {
   const { host, calls, finals } = makeHost()
   // 카드 글 그대로의 시험이라 기본은 다듬기(shape)를 끈다. 다듬기·복합 답은 따로 켜서 본다.
-  const ctx: RespondContext = { index: options.index ?? index, host, router: "compiled", version: "test+c1", env: { CHATBOT_COMPILED_SHAPE: "off", ...options.env } }
+  const ctx: RespondContext = { index: options.index ?? index, host, router: "compiled", version: "test+c1", env: { CHATBOT_COMPILED_SHAPE: "off", ...R2_SWITCHES, ...options.env } }
   const core = buildAnswerIndexCore(d, { redacted: question }, Date.now(), ctx)
   return { core, calls, finals }
 }
@@ -650,6 +673,221 @@ describe("respond: two-part questions (R2 B4)", () => {
     expect(cut).not.toMatch(/…$/)
     expect(cut.length).toBeLessThanOrEqual(22)
     expect(cut).not.toMatch(/(?:을|를|가|에|의)$/)
+  })
+})
+
+describe("respond: R3 form (a1 — 1. 주제 머리·조각 안 점 단계·요체·→·공백 한 문장)", () => {
+  const R3 = { CHATBOT_COMPILED_SHAPE: "on", CHATBOT_COMPILED_TONE: "yo", CHATBOT_COMPILED_ARROW: "arrow", CHATBOT_COMPOUND_HEAD: "number", CHATBOT_COMPILED_FORM: "r3" }
+  const card = { id: "x", kind: "doc" } as never
+  const piece = (label: string, blocks: string[][], pieceCard: never = card): Piece => ({ kind: "answer", label, blocks, closing: null, card: pieceCard, parts: {} as never })
+  /** R3 완료 기준에서 0 이어야 하는 lint 실패(L7·L8·L9·L13·L17). */
+  const r3Fails = (text: string, segments: number, bound = 0) =>
+    lintAnswer(text, { segments, bound, arrow: "arrow" })
+      .filter((finding) => finding.level === "fail" && ["L7", "L8", "L9", "L13", "L17"].includes(finding.rule))
+      .map((finding) => `${finding.rule}:${finding.code}`)
+  const twoAnswered = decision("answer", CARDS.chat, {
+    askType: "yesno",
+    segments: [
+      { text: "채팅 막을 수 있나요", kind: "answer", card: CARDS.chat, conf: 0.9 },
+      { text: "녹화 파일 내려받기 되나요", kind: "answer", card: CARDS.download, conf: 0.8 },
+    ],
+  })
+
+  it("reads the switches with the user's defaults on (number head)", () => {
+    expect(compoundHeadMode({})).toBe("number")
+    expect(compoundHeadMode({ CHATBOT_COMPOUND_HEAD: "numbered" })).toBe("number")
+    expect(compoundHeadMode({ CHATBOT_COMPOUND_HEAD: "bracket" })).toBe("bracket")
+    expect(compoundLengthCap(4, "number")).toBe(1000)
+    expect(compoundLengthCap(4, "bracket")).toBe(900)
+    expect(compoundLengthCap(2, "number")).toBe(700)
+  })
+
+  it("heads each part with '{n}. 주제' and the conclusion right below in one block, in question order, with 요체 and → (L7·L8·L9·L13·L17 0)", () => {
+    const { core } = respond(twoAnswered, "질문", { env: R3 })
+    const answer = core.response.answer
+    expect(answer).not.toContain("【")
+    const blocks = answer.split("\n\n")
+    expect(blocks[0]).toBe("1. 수업 중 학생 채팅 막기\n네, 할 수 있어요. 수업 중에 [채팅 금지] 버튼을 누르면 학생 채팅을 막을 수 있어요.\n경로: 교실 → [도구] → [채팅 금지]")
+    expect(blocks[1].startsWith("2. 녹화 파일 내려받기\n")).toBe(true)
+    // 머리 줄만 있는 덩이가 없다(위젯이 단독 "2."를 "1."로 다시 그린다).
+    for (const block of blocks) if (/^\d+\. /.test(block)) expect(block.split("\n").length).toBeGreaterThan(1)
+    expect(r3Fails(answer, 2)).toEqual([])
+    expect(core.response.sources.map((source) => source.urlPath)).toEqual(["/docs/fake/chat", "/docs/fake/recording"])
+  })
+
+  it("writes steps inside a part as '-' bullets in the head block (3 at most, then the follow-up line), promoting the first step when there is no conclusion line", () => {
+    const steps = ["1. 코스를 열어요.", "2. [설정]을 눌러요.", "3. [저장]을 눌러요.", "4. 학생에게 알림이 가요."]
+    const { text } = assemblePieces([piece("가", [["결론 줄이에요."], steps]), piece("나", [["1. 먼저 열어요.", "2. 저장해요."]])], [], null, 900, "number")
+    expect(text).toBe(
+      [
+        "1. 가\n결론 줄이에요.\n- 코스를 열어요.\n- [설정]을 눌러요.\n- [저장]을 눌러요.",
+        PIECE_MORE_STEPS_LINE,
+        "2. 나\n먼저 열어요.\n- 저장해요.",
+      ].join("\n\n")
+    )
+    expect(r3Fails(text, 2)).toEqual([])
+    // 사람이 쓴 정책 글은 단계를 자르지 않는다(목록 표시만 점으로).
+    const policyCard = { id: "policy:x", kind: "policy" } as never
+    const kept = assemblePieces([piece("정책", [["정책 결론이에요."], steps], policyCard), piece("나", [["짧은 답이에요."]])], [], null, 900, "number")
+    expect(kept.text).toContain("- 학생에게 알림이 가요.")
+    expect(kept.text).not.toContain(PIECE_MORE_STEPS_LINE)
+  })
+
+  it("never leaves a head line alone: a part with nothing left to show becomes a retry notice", () => {
+    const { text } = assemblePieces([piece("가", []), piece("나", [["답이에요."]])], [], null, 900, "number")
+    expect(text.startsWith(`1. 가\n${SEGMENT_RETRY_LINE}`)).toBe(true)
+  })
+
+  it("labels a card-less part by its concept, then by its quoted text (24 chars, no long digits, @ or links), then by order", () => {
+    expect(segmentTextLabel("출석부를 엑셀로 받을 수 있나요?")).toBe('"출석부를 엑셀로 받을 수 있나요"')
+    expect(segmentTextLabel("출석부를 엑셀 파일로 한꺼번에 내려받는 방법이 따로 있나요?")).toBeNull()
+    expect(segmentTextLabel("010-1234로 문자가 오나요")).toBeNull()
+    expect(segmentTextLabel("a@b.kr 로 받나요")).toBeNull()
+    const question = "출석부를 엑셀로 받을 수 있나요? 채팅 막기는요?"
+    const { core } = respond(
+      decision("answer", CARDS.chat, {
+        segments: [
+          { text: "출석부를 엑셀로 받을 수 있나요?", kind: "abstain", card: null, conf: 0.2, topCard: CARDS.count, topConf: 0.2, alone: "answer" },
+          { text: "채팅 막기는요?", kind: "answer", card: CARDS.chat, conf: 0.9 },
+        ],
+      }),
+      question,
+      { env: R3 }
+    )
+    // 같은 답의 다른 머리가 명사구면 따옴표 조각 글 대신 갈래 명사구로 맞춘다(R3 반박 검토). 모두 알림이면 조각 글 그대로다(아래 시험).
+    expect(core.response.answer.startsWith(`1. 출석\n${SEGMENT_RETRY_LINE}\n\n2. 수업 중 학생 채팅 막기\n`)).toBe(true)
+    expect(core.response.suggestedQuestions[0]).toBe("출석부를 엑셀로 받을 수 있나요?")
+    expect(r3Fails(core.response.answer, 2)).toEqual([])
+  })
+
+  it("numbers every part even when no part could be decided (번호 수 = 조각 수), with the right notice per part and one consult line", () => {
+    const none = decision("abstain", null, {
+      abstainReason: "nodoc",
+      segments: [
+        { text: "출석부를 엑셀로 받을 수 있나요?", kind: "abstain", card: null, conf: 0.2, topCard: CARDS.count, topConf: 0.2, alone: "answer" },
+        { text: "보안 인증 있나요", kind: "abstain", card: null, conf: 0.05, topCard: CARDS.count, topConf: 0.03, alone: "abstain" },
+      ],
+    })
+    const { core } = respond(none, "출석부를 엑셀로 받을 수 있나요? 보안 인증 있나요", { env: R3 })
+    expect(core.response.answer).toBe(
+      [`1. "출석부를 엑셀로 받을 수 있나요"\n${SEGMENT_RETRY_LINE}`, `2. "보안 인증 있나요"\n${SEGMENT_NOTFOUND_LINE}`, COMPOUND_CLOSING_LINE].join("\n\n")
+    )
+    expect(core.response).toMatchObject({ answerMode: "fallback", unresolved: true, needsHandoff: true })
+    expect(core.response.suggestedQuestions[0]).toBe("출석부를 엑셀로 받을 수 있나요?")
+    expect(core.answerIndex.decision).toBe("abstain")
+    expect(core.answerIndex.parts?.map((part) => part.noticeKind)).toEqual(["retry", "notfound"])
+    expect(r3Fails(core.response.answer, 2)).toEqual([])
+  })
+
+  it("answers an overflow part with a numbered 'ask it separately' notice (not 'not found'), offers it as a chip and allows 1,000 chars for four parts", () => {
+    const question = "채팅 막을 수 있나요? 녹화 파일 내려받기 되나요? 한 교실 학생 몇 명이에요? 다시보기 기간은 언제까지인가요?"
+    const { core } = respond(
+      decision("answer", CARDS.chat, {
+        segments: [
+          { text: "채팅 막을 수 있나요?", kind: "answer", card: CARDS.chat, conf: 0.9 },
+          { text: "녹화 파일 내려받기 되나요?", kind: "answer", card: CARDS.download, conf: 0.8 },
+          { text: "한 교실 학생 몇 명이에요?", kind: "answer", card: CARDS.count, conf: 0.8 },
+          { text: "다시보기 기간은 언제까지인가요?", kind: "abstain", card: null, conf: 0, by: "none", source: "overflow" },
+        ],
+      }),
+      question,
+      { env: R3 }
+    )
+    const answer = core.response.answer
+    // 머리 이름은 손님 글을 따옴표째 쓰지 않고 묻는 갈래 명사구로 쓴다(R3 반박 검토).
+    expect(answer).toContain(`4. 다시 보기 기간\n${SEGMENT_RETRY_LINE}`)
+    expect(answer).not.toContain(SEGMENT_NOTFOUND_LINE)
+    expect(core.response.suggestedQuestions).toContain("다시보기 기간은 언제까지인가요?")
+    expect(core.answerIndex.compound).toMatchObject({ cap: 1000 })
+    expect(r3Fails(answer, 4)).toEqual([])
+  })
+
+  it("puts a gap part's verified related sentences under its numbered notice in 요체 too", () => {
+    const { core } = respond(
+      decision("answer", CARDS.chat, {
+        segments: [
+          { text: "채팅 막기", kind: "answer", card: CARDS.chat, conf: 0.9 },
+          { text: "클라우드 용량", kind: "gap", card: EXTRA.gapRelated, conf: 0.7 },
+        ],
+      }),
+      "질문",
+      { env: R3 }
+    )
+    expect(core.response.answer).toContain(`2. 클라우드 저장 한도\n${SEGMENT_ABSENT_LINE}\n\n${GAP_RELATED_INTRO}\n녹화 파일은 [다운로드] 버튼으로`)
+    expect(core.response.answer).not.toMatch(/니다\.?(?:\n|$)/)
+    expect(r3Fails(core.response.answer, 2)).toEqual([])
+  })
+
+  it("keeps policy text as written (말투 잠금) and still puts the notice of the other part in its numbered place", () => {
+    const { core } = respond(
+      decision("answer", EXTRA.policyNida, {
+        segments: [
+          { text: "x", kind: "abstain", card: null, conf: 0.1, topCard: CARDS.count, topConf: 0.2, alone: "answer" },
+          { text: "y", kind: "answer", card: EXTRA.policyNida, conf: 0.9 },
+        ],
+      }),
+      "질문",
+      { env: R3 }
+    )
+    expect(core.response.answer).toContain(`1. "x"\n${SEGMENT_RETRY_LINE}`)
+    expect(core.response.answer).toContain(`2. 무료 체험 횟수\n${POLICY_NIDA_TEXT}`)
+  })
+
+  it("turns document sentences into 요체 but leaves policy and toneLocked cards alone", () => {
+    expect(respond(decision("answer", CARDS.chat), "채팅 막기", { env: R3 }).core.response.answer).toContain("학생 채팅을 막을 수 있어요.")
+    expect(respond(decision("answer", EXTRA.policyNida), "체험", { env: R3 }).core.response.answer).toBe(POLICY_NIDA_TEXT)
+    expect(respond(decision("answer", EXTRA.locked), "약관", { env: R3 }).core.response.answer).toBe(LOCKED_TEXT)
+    // 스위치를 끄면 문서 문장도 그대로(니다체).
+    expect(respond(decision("answer", CARDS.chat), "채팅 막기", { env: { ...R3, CHATBOT_COMPILED_TONE: "off" } }).core.response.answer).toContain("학생 채팅을 막을 수 있습니다.")
+  })
+
+  it("writes the gap lead in one sentence without the 'no guessing' line (S11), and two lines under CHATBOT_COMPILED_FORM=r2", () => {
+    const r3 = respond(decision("gap", CARDS.gapCert), "인증", { env: R3 }).core.response.answer
+    expect(r3.startsWith(`${gapLeadLine("보안 인증", "r3")}\n\n`)).toBe(true)
+    expect(gapLeadLine("보안 인증", "r3")).toBe("보안 인증에 대한 내용은 공개 안내에서 확인되지 않았어요.")
+    expect(r3).not.toContain("추측")
+    const r2 = respond(decision("gap", CARDS.gapCert), "인증", { env: { ...R3, CHATBOT_COMPILED_FORM: "r2" } }).core.response.answer
+    expect(r2.startsWith(gapLeadLine("보안 인증", "r2"))).toBe(true)
+  })
+
+  /** 기존 답을 돌려주는 host(가이드 답을 바꿔 끼운다). */
+  function guideRespond(answer: string, env: Record<string, string>, tried?: string[]) {
+    const { host } = makeHost()
+    host.guide = () => ({
+      response: {
+        answer,
+        answerMode: "direct_answer",
+        confidence: 0.8,
+        needsHandoff: false,
+        sources: [{ title: "코스 만들기", urlPath: "/docs/fake/course", category: "guide", excerpt: "", score: 300 }],
+        suggestedQuestions: [],
+        unresolved: false,
+      },
+      category: "general",
+      intent: "docs_lookup",
+      handoffIntent: "support",
+    })
+    const ctx: RespondContext = { index, host, router: "compiled", version: "test+c1", env: { ...R2_SWITCHES, ...env }, ...(tried ? { tried } : {}) }
+    return buildAnswerIndexCore(decision("answer", EXTRA.guide), { redacted: "질문" }, Date.now(), ctx).response.answer
+  }
+
+  it("cuts a numbered list of six or more steps to five and points to the document title (S2), only under the r3 form", () => {
+    const seven = ["코스는 [코스 관리]에서 만들어요.", Array.from({ length: 7 }, (_v, at) => `${at + 1}. ${at + 1}번째 단계를 해요.`).join("\n")].join("\n\n")
+    const cut = guideRespond(seven, R3)
+    expect(cut).toContain("5. 5번째 단계를 해요.")
+    expect(cut).not.toContain("6번째 단계")
+    expect(cut.endsWith(moreStepsLine("코스 만들기"))).toBe(true)
+    expect(r3Fails(cut, 1)).toEqual([])
+    expect(guideRespond(seven, { ...R3, CHATBOT_COMPILED_FORM: "r2" })).toContain("7. 7번째 단계를 해요.")
+  })
+
+  it("drops a step the customer already tried only with CHATBOT_COMPILED_SKIP_TRIED=on, and says so on the second line (S14)", () => {
+    const steps = ["앱 알림은 [설정] → [알림]에서 확인해요.", "1. 앱을 지우고 다시 설치해요.\n2. 기기 설정에서 알림 허용을 켜요.\n3. [수업 알림] 항목을 켜요."].join("\n\n")
+    expect(guideRespond(steps, R3, ["reinstall"])).toContain("1. 앱을 지우고 다시 설치해요.")
+    const skipped = guideRespond(steps, { ...R3, CHATBOT_COMPILED_SKIP_TRIED: "on" }, ["reinstall"])
+    expect(skipped).toBe("앱 알림은 [설정] → [알림]에서 확인해요.\n이미 해 보신 재설치는 빼고 안내할게요.\n\n1. 기기 설정에서 알림 허용을 켜요.\n2. [수업 알림] 항목을 켜요.")
+    // 빼고 남는 단계가 1개 이하면 빼지 않는다.
+    expect(skipTriedSteps("결론이에요.\n\n1. 앱을 지우고 다시 설치해요.\n2. 알림을 켜요.", ["reinstall"])).toBe("결론이에요.\n\n1. 앱을 지우고 다시 설치해요.\n2. 알림을 켜요.")
   })
 })
 

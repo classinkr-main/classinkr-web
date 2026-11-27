@@ -232,6 +232,11 @@ export const SEGMENT_MAX_CHARS = 60
 const MAX_SEGMENTS = 2
 // 비교·관계를 묻는 말이면 '이랑·하고·및·,'가 두 질문을 잇는 말이 아니다("줌이랑 뭐가 달라요").
 const RELATION_RE = /비교|차이|다른\s*점|뭐가\s*(?:달라|다르|나아|낫|좋)|같이|함께|동시에|연동|연결|\bvs\b|보다\s*(?:나|좋|싸|비싸|낫)|중에|중\s*(?:어느|뭐)|둘\s*다|사이/
+/**
+ * v2 나누기(findClauseSplit)의 비교·관계 낱말. v1 표(RELATION_RE, 옛 흐름이 읽는다)와 같되 '사이'는 낱말로 설 때만 본다(R3 a2): "카메라 사이즈와 화질,
+ * 가격"·"사이트"의 '사이'는 관계 말이 아니다. 낱말 경계는 띄어쓰기·문장부호·조사(에·에서·의·가·는·를)로 본다.
+ */
+const RELATION_V2_RE = new RegExp(`${RELATION_RE.source.replace(/\|사이$/, "")}|사이(?:에서|에|의|가|는|를)?(?=$|[\\s?？.,，!])`)
 // 잇는 말(왼쪽부터 처음으로 두 조각이 다 내용이 있는 자리에서 나눈다).
 const CONNECTOR_RE = /\s*(?:그리고|및|,|，)\s*|(?<=[가-힣a-z0-9])(?:이랑|랑|하고)\s+|(?<=[가-힣])\s*(?:되고|돼고|있고|없고|가능하고)\s+(?=\S+도(?:\s|$))/gi
 const TAIL_FOR_SHARE_RE = new RegExp(`(?:\\s|^)(\\S*(?:${QUESTION_TAILS.map((tail) => tail.replace(/\s+/g, "\\s*")).join("|")}|되나요|돼요|있나요|가능해요|인가요|나요|까요)[?？!.~]*)$`)
@@ -299,7 +304,7 @@ export interface QuestionSplit {
 const QUESTION_WORD_RE = /어떻게|어케|어떡|어떠|어디|언제|몇|얼마|뭐(?!든)|무엇|무슨|왜|누가|누구|어느|어떤/
 /** 묻는 어미·요청(문장부호를 뗀 끝). '돼요·되요·있어요'는 물음표가 있어야 묻는 꼴이다(서술 '안 돼요.'와 구분). */
 const ASK_END_RE =
-  /(?:나요|까요|가요|던가요|는지요?|인지요?|은지요?|ㄴ지요?|을지요?|ㄹ지요?|[가-힣]나|[가-힣]까|[가-힣]냐|[가-힣]죠|지요|니까|습니까|있음|없음|됨|되남|할래요|알려\s*주세요|알려\s*줘요?|알려\s*주시겠어요|가르쳐\s*주세요|궁금해요|궁금합니다|궁금함|궁금해|부탁해요|부탁드려요|부탁드립니다|는\s*법|방법|문의(?:드립니다|합니다|드려요|요)?|요청(?:합니다|드립니다|한다)?|묻는다|묻습니다|알고\s*싶(?:음|어요|습니다))$/
+  /(?:나요|까요|가요|던가요|는지요?|인지요?|은지요?|ㄴ지요?|을지요?|ㄹ지요?|[가-힣]나|[가-힣]까|[가-힣]냐|[가-힣]죠|지요|니까|습니까|있음|없음|됨|되남|할래요|알려\s*주세요|알려\s*줘요?|알려\s*주시겠어요|가르쳐\s*주세요|궁금해요|궁금합니다|궁금함|궁금해|부탁해요|부탁드려요|부탁드립니다|는\s*법|방법|여부|문의(?:드립니다|합니다|드려요|요)?|요청(?:합니다|드립니다|한다)?|묻는다|묻습니다|알고\s*싶(?:음|어요|습니다))$/
 /** 상황 절 끝(뒤에 오는 말의 맥락): 이 끝으로 끝나는 조각 뒤에서는 나누지 않는다. */
 const SITUATION_END_RE = /(?:는데|은데|인데|ㄴ데|던데|한데|는데요|고|면|면서|서|니까|려고|려는데|으려면|려면|지만|라서|해서|어서|아서|도록|게)$/
 /** 앞 조각을 조건으로 받는 머리말(나누면 뜻이 끊긴다). */
@@ -373,6 +378,47 @@ function isRequestSentence(text: string) {
 function isAskingOrReport(text: string) {
   if (isQuestionSentence(text) || isProblemReport(text)) return true
   return /^(?:그리고요?|그리고\s*또|또|아울러)\s/.test(text.trim()) && isRequestSentence(text)
+}
+
+/** 새 물음을 꺼내는 문장 머리(규격 4.1 접속어): 그리고·또·추가로·하나 더·아울러. '근데·그런데'는 상황 뒤 진짜 질문을 꺼내는 말이라 넣지 않는다. */
+const NEW_QUESTION_HEAD_RE = /^(?:그리고요?|그리고\s*또|또|추가로|하나\s*더|아울러)(?:\s|[,，])/
+/** '안·못 + 동사' 로 끝나는 문제 서술("마이크가 잘 안 잡혀요", "소리가 안 나와요"). PROBLEM_END_RE 보다 넓다(다음 문장이 접속어로 새 물음을 꺼낼 때만 쓴다). */
+const LOOSE_PROBLEM_END_RE = /(?:^|\s)(?:안|못)\s*[가-힣]{1,4}(?:어요|아요|여요|해요|돼요|되요|져요|와요|나요|네요|요)$/
+
+/**
+ * 다음 문장이 접속어로 새 물음을 꺼내면(규격 4.1 "그리고·또·추가로"), 앞 문장의 요청("…쓰고 싶어요")·문제 서술("…잘 안 먹어요")은 맥락이 아니라 따로 답할
+ * 물음이다(R3 a2): "숙제를 반별로 나눠 내고 싶어요. 그리고 마감 지난 숙제도 받을 수 있나요?" → 두 조각. 접속어 없이 이어지면
+ * 요청 문장은 다음 질문을 풀어 말한 것으로 본다(R2 규칙 그대로, "숙제를 반별로 나눠 내고 싶어요. 어떻게 하나요?").
+ */
+function asksBeforeConnector(sentence: string, next: string | undefined) {
+  if (!next || !NEW_QUESTION_HEAD_RE.test(next.trim())) return false
+  const body = next.trim().replace(NEW_QUESTION_HEAD_RE, "").trim()
+  if (!isAskingOrReport(next) && !isQuestionSentence(body) && !isRequestSentence(body)) return false
+  if (!segmentHasContent(sentence)) return false
+  const bare = stripEnd(sentence)
+  return isRequestSentence(sentence) || LOOSE_PROBLEM_END_RE.test(bare)
+}
+
+/** '…도'가 붙은 명사(더하는 대상: "기록도", "삭제도"). 동사의 '-어도·-해도'(양보)와 '정도·속도' 같은 명사는 뺀다. */
+const ALSO_WORD_RE = /(?:^|\s)([가-힣A-Za-z0-9]{1,10})도(?=\s)/g
+const CONCESSIVE_STEM_RE = /(?:해|어|아|여|워|와|돼|되|봐|줘|써|러|져|쳐|려|켜|꺼|라|이라|더라)$/
+
+function hasAlsoNoun(text: string) {
+  for (const match of text.matchAll(ALSO_WORD_RE)) {
+    const word = `${match[1]}도`
+    if (PARTICLE_LIKE_NOUNS.has(word) || CONCESSIVE_STEM_RE.test(match[1])) continue
+    return true
+  }
+  return false
+}
+
+/**
+ * '…도 해 주세요·…도 하고 싶어요'처럼 더하는 대상을 단 요청 문장(R3 a2, 규격 4.1 요청어): 앞 문장이 묻는 문장이거나 요청이면 따로 답할 물음이다.
+ * "프로필 사진을 바꾸고 싶어요. 지난 수업 기록도 지워 주세요." → 두 조각(앞 요청도 조각).
+ */
+function isAlsoRequest(sentence: string, previous: string | undefined) {
+  if (!previous || !isRequestSentence(sentence) || !hasAlsoNoun(stripEnd(sentence))) return false
+  return segmentHasContent(sentence) && (isAskingOrReport(previous) || isRequestSentence(previous))
 }
 
 /** 주어·주제 표지(은·는·이·가·도)가 붙은 낱말이 있는지(-고 절 뒤 조각이 제 주제를 갖는지). 의문사('누가'·'뭐가')는 주제가 아니다. */
@@ -533,7 +579,8 @@ function endsWithParticle(word: string) {
 const VERBAL_WORD_RE = /(?:하는|되는|있는|없는|하던|되던|만든|받은|보낸|올린|찍힌|쓰는|쓴|같은|다른|새로운|할|될|한데|는데|지만|니다|세요|어요|아요|해요|돼요|했|됐|겠)$|^(?:하|되)(?:고|면|서)$/
 
 /** 묻는 대상이 되는 머리 명사("설치하는 방법", "확인하는 법", "요금제 가격"): 앞에 관형형이 와도 명사 항목이다. */
-const HEAD_NOUN_RE = /(?:방법|법|기능|여부|기준|가격|요금|비용|위치|순서|절차|용량|결과|기간|시간)$/
+// 동작 명사(개선·설정·변경·삭제)로 끝나는 항목도 묻는 대상이다("현장 녹화 화질 개선, 녹화 중지 방법, …", R3 반박 검토).
+const HEAD_NOUN_RE = /(?:방법|법|기능|여부|기준|가격|요금|비용|위치|순서|절차|용량|결과|기간|시간|개선|설정|변경|삭제)$/
 
 /**
  * 명사 항목(쉼표 목록·'이랑'으로 잇는 왼쪽): 낱말 3개 이하(머리 명사로 끝나면 5개 이하)·공백 뺀 14자(머리 명사면 20자) 이하이고, 낱말이 조사·관형형·
@@ -554,9 +601,11 @@ function isNounItem(text: string, allowTopicMark = false) {
 
 /** 왼쪽 명사 항목에 나눠 붙여도 뜻이 서는 묻는 꼬리(낱말 하나로 서는 가능·있음·요청·정의·값 꼬리). '줄 수 있나요'처럼 동사가 앞에 와야 하는 꼬리는 아니다. */
 const SHAREABLE_TAIL_RE =
-  /^(?:되나요|돼요|되요|되나|됨|돼|있나요|있어요|있나|있음|없나요|없어요|가능해요|가능한가요|가능하나요|가능할까요|가능한지|가능|지원(?:돼요|되나요|하나요|되는지)|알려\s*주세요|알려주세요|알려\s*줘요?|궁금해요|궁금합니다|있는지\s*알려\s*주세요|있는지|되는지|뭔가요|뭐예요|뭐에요|뭐야|얼마(?:예요|에요|야|인가요|죠|일까요)|어떻게\s*(?:해요|하나요|돼요|되나요|봐요))[?？!.~]*$/
+  /^(?:되나요|돼요|되요|되나|됨|돼|있나요|있어요|있나|있음|없나요|없어요|가능해요|가능한가요|가능하나요|가능할까요|가능한지|가능|지원(?:돼요|되나요|하나요|되는지)|알려\s*주세요|알려주세요|알려\s*줘요?|궁금해요|궁금합니다|문의(?:드려요|드립니다|합니다|해요|요)?|있는지\s*알려\s*주세요|있는지|되는지|뭔가요|뭐예요|뭐에요|뭐야|얼마(?:예요|에요|야|인가요|죠|일까요)|어떻게\s*(?:해요|하나요|돼요|되나요|봐요))[?？!.~]*$/
+// 띄어 쓴 요청('알려 주세요')·반말 요청('알려줘')·'궁금합니다'도 꼬리로 집는다(R3 a2: "녹화 위치, 출석 기록 알려줘"가 나뉘지 않던 것).
+// 집은 꼬리는 SHAREABLE_TAIL_RE 를 다시 지나야 나눠 붙인다.
 const SHARE_TAIL_PICK_RE = new RegExp(
-  `(?:\\s|^)((?:[^\\s]*?)(?:${QUESTION_TAILS.map((tail) => tail.replace(/\s+/g, "\\s*")).join("|")}|되나요|돼요|있나요|가능해요|인가요|나요|까요|얼마(?:예요|에요|야|인가요|죠)|뭔가요|뭐예요)[?？!.~]*)$`
+  `(?:\\s|^)((?:[^\\s]*?)(?:${QUESTION_TAILS.map((tail) => tail.replace(/\s+/g, "\\s*")).join("|")}|알려\\s*(?:주세요|줘요|줘)|궁금합니다|문의(?:드려요|드립니다|합니다|해요|요)?|되나요|돼요|있나요|가능해요|인가요|나요|까요|얼마(?:예요|에요|야|인가요|죠)|뭔가요|뭐예요)[?？!.~]*)$`
 )
 
 /** 묻는 꼬리 나눠 붙이기(명사를 잇는 말로 나눌 때): 왼쪽이 명사 항목이고 오른쪽 꼬리가 낱말로 서는 꼬리일 때만. 아니면 null(나누지 않는다). */
@@ -586,6 +635,8 @@ interface SplitPoint {
   askingGo?: boolean
   /** 그리고·근데 같은 잇는 낱말. */
   explicit?: boolean
+  /** 묻는 머리 명사(방법·여부…) 뒤 '과·와'(왼쪽 명사 항목은 상황 절 뒤 명사구로 본다). */
+  headJoin?: boolean
 }
 
 /**
@@ -603,7 +654,7 @@ export function segmentStandsAlone(piece: string) {
 /** (c) 한 문장 안의 잇는 말. 처음으로 나눌 수 있는 자리 하나를 찾는다. */
 function findClauseSplit(sentence: string): SplitPoint | null {
   const normalized = normalizeText(sentence)
-  const relation = RELATION_RE.test(normalized) || COMPARE_RE.test(normalized)
+  const relation = RELATION_V2_RE.test(normalized) || COMPARE_RE.test(normalized)
   const candidates: SplitPoint[] = []
   // 그리고·근데·그런데·아울러(앞이 쉼표여도 된다).
   for (const match of sentence.matchAll(/[,，]?\s+(?:그리고요?|근데|그런데|아울러|그리고\s*또)\s+/g)) {
@@ -634,6 +685,11 @@ function findClauseSplit(sentence: string): SplitPoint | null {
   // 명사를 잇는 이랑·랑(띄어쓰기 뒤), '…도 되고·있고 …도'. 동사 '-하고'(신청하고·설치하고)와 명사 '-하고'를 글자로 가를 수 없어 '하고'로는 나누지 않는다.
   for (const match of sentence.matchAll(/(?<=[가-힣a-z0-9A-Z])(?:이랑|랑)\s+/g)) {
     candidates.push({ at: match.index ?? 0, length: match[0].length, nounJoin: true })
+  }
+  // 묻는 머리 명사 뒤 '과·와'("비밀번호 변경 방법과 계정 탈퇴 방법 문의", "복제 가능 여부와 연락처로 초대하는 방법"): 두 물음을 잇는 말이다
+  // (R3 반박 검토: 이 꼴이 나뉘지 않아 둘째 물음이 알림 없이 빠졌다). 값·때를 묻는 명사(가격·시간…)는 한 물음의 두 속성일 때가 많아 넣지 않는다.
+  for (const match of sentence.matchAll(/(?<=(?:방법|법|여부|절차|순서|기준|위치))(?:과|와)\s+/g)) {
+    candidates.push({ at: match.index ?? 0, length: match[0].length, nounJoin: true, headJoin: true })
   }
   // '…하는 법하고 …'처럼 '하다'가 붙지 않는 머리 명사 뒤 '하고'만 명사를 잇는 말로 본다.
   for (const match of sentence.matchAll(/(?<=(?:방법|법|기능|여부|기준|가격|요금|위치|결과))하고\s+/g)) {
@@ -684,7 +740,9 @@ function findClauseSplit(sentence: string): SplitPoint | null {
       } else {
         // 이랑·랑·및·'도 되고': 왼쪽은 명사 항목(대상 '학생이랑'·'담당자랑'은 아니다), 오른쪽은 묻는 꼴이고 꼬리를 나눠 붙일 수 있어야 한다.
         if (!isQuestionSentence(right)) continue
-        const leftItem = (stripEnd(left).split(/[,，]/).pop() ?? left).trim()
+        const commaItem = (stripEnd(left).split(/[,，]/).pop() ?? left).trim()
+        // 머리 명사 '과·와'는 상황 절("…만들 때 ")에 이어진 명사구도 명사 항목으로 본다.
+        const leftItem = point.headJoin ? (commaItem.split(/(?:때|는데|은데|인데|려면|으려면)\s+/).pop() ?? commaItem).trim() : commaItem
         if (!isNounItem(leftItem, point.doJoin)) continue
         if (PARTNER_NOUN_RE.test(leftItem.replace(/(?:도|은|는)$/, ""))) continue
         if (shareTail(left, right) === null) continue
@@ -757,11 +815,26 @@ export function explicitQuestionCount(text: string): number {
   return Math.min(asking.length, SEGMENT_V2_MAX)
 }
 
+/** 조각 수 상한으로 받을 수 있는 값(R3 a2 CHATBOT_SEGMENT_MAX=3|4). */
+export const SEGMENT_V2_MAX_ALLOWED = 4
+
+export interface SplitQuestionOptions {
+  /** 답할 조각 수 상한(2~SEGMENT_V2_MAX_ALLOWED, 기본 SEGMENT_V2_MAX). 넘는 조각은 overflow. */
+  max?: number
+}
+
+/** 조각 수 상한을 받을 수 있는 범위로 맞춘다(정수 2~SEGMENT_V2_MAX_ALLOWED, 아니면 SEGMENT_V2_MAX). */
+export function segmentLimit(max: number | undefined) {
+  return max !== undefined && Number.isInteger(max) && max >= 2 && max <= SEGMENT_V2_MAX_ALLOWED ? max : SEGMENT_V2_MAX
+}
+
 /**
  * 질문 나누기 v2(R2 B2). 위 규칙으로 나눈 조각(질문 순서)과 넘친 조각. 나누지 않으면 { segments: [원문], overflow: [] }.
  * 조각 글은 원문을 자른 것이다(잇는 말 '그리고·근데'는 떼고, 명사를 잇는 말로 나눈 왼쪽 조각에는 오른쪽의 묻는 꼬리를 붙인다).
+ * options.max 로 답할 조각 수 상한을 바꾼다(기본 SEGMENT_V2_MAX = 3, 답 색인 decide.ts 가 CHATBOT_SEGMENT_MAX 로 넘긴다).
  */
-export function splitQuestion(text: string): QuestionSplit {
+export function splitQuestion(text: string, options: SplitQuestionOptions = {}): QuestionSplit {
+  const max = segmentLimit(options.max)
   const trimmed = text.trim()
   const single = { segments: [trimmed], overflow: [] }
   if (!trimmed) return single
@@ -773,15 +846,21 @@ export function splitQuestion(text: string): QuestionSplit {
     pieces = numbered
   } else {
     const sentences = splitSentences(trimmed)
-    const asking = sentences.filter(isAskingOrReport)
+    // 묻는 문장: 묻는 꼴·증상 신고·'그리고·또'로 꺼낸 요청, 다음 문장이 접속어로 새 물음을 꺼내는 앞 요청·문제 서술, '…도' 요청과 그 앞 요청(R3 a2).
+    const alsoAt = sentences.map((sentence, at) => isAlsoRequest(sentence, sentences[at - 1]))
+    const askingAt = sentences.map(
+      (sentence, at) =>
+        isAskingOrReport(sentence) || asksBeforeConnector(sentence, sentences[at + 1]) || alsoAt[at] || (Boolean(alsoAt[at + 1]) && isRequestSentence(sentence) && segmentHasContent(sentence))
+    )
+    const asking = sentences.filter((_sentence, at) => askingAt[at])
     // 묻는 문장이 둘 이상(신고만 있으면 문장이 모두 신고일 때만 — "카메라가 안 켜져요. 소리도 안 들려요.").
     const allReports = asking.length === sentences.length && sentences.every(isProblemReport)
     if (asking.length >= 2 && (asking.some((sentence) => isQuestionSentence(sentence) || isRequestSentence(sentence)) || allReports)) {
       // 묻는 문장마다. 묻는 꼴이 없는 문장은 다음 묻는 문장의 맥락으로, 끝에 남으면 앞 문장에 붙인다.
       let context: string[] = []
-      for (const sentence of sentences) {
-        if (isAskingOrReport(sentence)) {
-          const clauses = long ? [sentence] : splitClauses(sentence, SEGMENT_V2_MAX + 1)
+      for (const [at, sentence] of sentences.entries()) {
+        if (askingAt[at]) {
+          const clauses = long ? [sentence] : splitClauses(sentence, max + 1)
           if (context.length > 0) clauses[0] = `${context.join(" ")} ${clauses[0]}`
           pieces.push(...clauses)
           context = []
@@ -793,7 +872,7 @@ export function splitQuestion(text: string): QuestionSplit {
     } else if (!long && asking.length === 1) {
       // 묻는 문장이 하나면 그 문장 안에서만 잇는 말로 나눈다. 다른 문장(상황 설명)은 앞이면 첫 조각, 뒤면 끝 조각에 붙인다.
       const at = sentences.indexOf(asking[0])
-      const clauses = splitClauses(asking[0], SEGMENT_V2_MAX + 1)
+      const clauses = splitClauses(asking[0], max + 1)
       if (clauses.length >= 2) {
         const before = sentences.slice(0, at).join(" ")
         const after = sentences.slice(at + 1).join(" ")
@@ -816,5 +895,32 @@ export function splitQuestion(text: string): QuestionSplit {
   }
   if (cleaned.length >= 2 && !segmentHasContent(cleaned[0])) cleaned.splice(0, 2, `${cleaned[0]} ${cleaned[1]}`)
   if (cleaned.length < 2) return single
-  return { segments: cleaned.slice(0, SEGMENT_V2_MAX), overflow: cleaned.slice(SEGMENT_V2_MAX) }
+  return { segments: cleaned.slice(0, max), overflow: cleaned.slice(max) }
+}
+
+// ─── 이미 해 본 동작(R3 a2, 규격 S14) ───────────────────────────────────
+
+/**
+ * 동작 이름(답에서 뺄 단계의 이름)과 그 동작을 가리키는 말. 이름은 렌더(respond.ts, CHATBOT_COMPILED_SKIP_TRIED)가 "이미 해 보신 {이름}은 빼고"에 쓴다.
+ * 순서가 곧 내놓는 순서다.
+ */
+const TRIED_ACTIONS: readonly { name: string; re: RegExp }[] = [
+  { name: "재설치", re: /재설치|다시\s*(?:설치|깔)|(?:지웠다|지우고|삭제하고|삭제했다가|삭제\s*후)\s*(?:다시\s*)?(?:설치|깔)/ },
+  { name: "업데이트", re: /업데이트|업뎃|최신\s*(?:버전|판)으로/ },
+  { name: "다시 로그인", re: /재\s*로그인|로그아웃\s*(?:하고|후|했다가|했다)?\s*(?:다시\s*)?로그인|다시\s*로그인/ },
+  { name: "껐다 켜기", re: /껐다\s*(?:가\s*)?(?:다시\s*)?켜|껐다\s*켰|끄고\s*(?:다시\s*)?켜|껐다가/ },
+  { name: "재시작", re: /재시작|재부팅|다시\s*(?:시작|부팅)|리부팅|재실행/ },
+]
+/** 이미 했다는 표지(규격 S14: 이미·벌써·몇 번·했는데·했지만·다시 깔았 …). 동작 말만 있고 이 표지가 없으면("재설치하면 되나요?") 해 본 것이 아니다. */
+const TRIED_MARK_RE =
+  /이미|벌써|몇\s*(?:번|차례)|여러\s*(?:번|차례)|수차례|(?:했|봤|깔았|켰|껐|지웠|돌렸)(?:는데|지만|고|어요|습니다|더니|다가|어도|음|다|으나)|해\s*(?:봤|보았|봐도)|해도|깔아도|켜도|(?:후|뒤|다음)에도/
+
+/**
+ * 질문에서 '이미 해 본 동작'을 뽑는다(규격 S14). 표지(TRIED_MARK_RE)와 동작 말이 함께 있을 때만 그 동작 이름을 돌려준다(없으면 빈 배열).
+ * 뽑기만 하고 판정은 바꾸지 않는다. 답에서 단계를 빼는 일은 렌더(respond.ts)가 스위치(CHATBOT_COMPILED_SKIP_TRIED)로 한다.
+ */
+export function extractTriedActions(text: string): string[] {
+  const normalized = text.normalize("NFC")
+  if (!TRIED_MARK_RE.test(normalized)) return []
+  return TRIED_ACTIONS.filter((action) => action.re.test(normalized)).map((action) => action.name)
 }

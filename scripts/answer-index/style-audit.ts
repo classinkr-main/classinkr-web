@@ -3,7 +3,7 @@
  * 글을 고치지 않고 판정만 한다. 모델·네트워크·데이터베이스를 부르지 않는다.
  *
  * 실행:
- *   npx tsx scripts/answer-index/style-audit.ts [--cards] [--shape] [--no-conclusion] [--answers <결과.jsonl|목록.json>]... [--data-dir <자료 폴더>] [--out <요약.json>] [--examples N] [--shape-report <파일.json>]
+ *   npx tsx scripts/answer-index/style-audit.ts [--cards] [--shape] [--no-conclusion] [--answers <결과.jsonl|목록.json>]... [--data-dir <자료 폴더>] [--out <요약.json>] [--examples N] [--shape-report <파일.json>] [--arrow arrow|gt]
  *
  * - --shape: 카드 답을 respond.ts 와 같은 순서(리드 붙이기 → shape.ts 다듬기)로 그려 점검한다(없으면 다듬지 않은 글). 다듬을 때는 글자 보존도 같이 검사한다:
  *   공백·줄바꿈·표기 기호·목록 표시를 뺀 글자열이 전후로 같아야 한다(뺀 빈 리드·겹친 끝맺음은 목록으로 따로 대조). 어긋난 카드는 --shape-report 로 쓴다.
@@ -17,12 +17,26 @@
  *   파일마다 따로 요약한다(이름은 파일 이름).
  * - --examples N: 첫 줄 규칙을 못 지킨 글을 종류마다 N 개까지 화면에 보여 준다(기본 0). 요약 JSON 에는 글을 싣지 않는다.
  * - 판정 정의: scripts/answer-index/lib/style-audit-core.ts.
+ * - R3 lint(L1~L17, 답 꼴 규격 5절): 카드·답마다 lintAnswer 를 돌려 규칙별 실패·경고 글 수를 요약 JSON 의 lint 칸에 쓰고 화면에 한 줄씩 찍는다.
+ *   답 파일은 질문(L16)·조각 수와 묶임(L13, answerIndex.segments)을 같이 넘긴다. --arrow arrow|gt 로 L7 화살표 판정 방향을 고른다
+ *   (없으면 CHATBOT_COMPILED_ARROW, 기본 arrow). --answers 는 { cards: [{ id, text, kind? }] } 꼴(시험 fixture)도 받는다.
  */
 import Module from "node:module"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, dirname, resolve } from "node:path"
 import { argValues, hasFlag } from "./lib/common"
-import { analyzeStyle, summarizeStyle, type StyleRecord } from "./lib/style-audit-core"
+import {
+  analyzeStyle,
+  arrowModeFromEnv,
+  LINT_RULES,
+  lintAnswer,
+  segmentShapeOfTrace,
+  summarizeLint,
+  summarizeStyle,
+  type ArrowMode,
+  type LintFinding,
+  type StyleRecord,
+} from "./lib/style-audit-core"
 import { contentSignature, findWidgetBreaks, isClosingTemplate, shapeAnswer, shapeOptionsFor } from "../../lib/chatbot/answer-index/shape"
 
 // server-only 가 걸린 모듈을 CLI 에서 불러오기 위한 가림(scripts/chatbot-live-eval.ts 와 같은 방식).
@@ -36,7 +50,7 @@ moduleProto.require = function (this: unknown, id: string) {
 
 function usage(message?: string): never {
   if (message) console.error(message)
-  console.error("사용법: npx tsx scripts/answer-index/style-audit.ts [--cards] [--answers <파일>]... [--data-dir <폴더>] [--out <요약.json>] [--examples N]")
+  console.error("사용법: npx tsx scripts/answer-index/style-audit.ts [--cards] [--answers <파일>]... [--data-dir <폴더>] [--out <요약.json>] [--examples N] [--arrow arrow|gt]")
   process.exit(2)
 }
 
@@ -44,6 +58,8 @@ interface Audited {
   kind: string
   id: string
   record: StyleRecord
+  /** R3 lint 판정(걸린 것만). */
+  lint: LintFinding[]
   /** 점검한 글(--list 가 보여 준다). */
   text?: string
 }
@@ -64,7 +80,7 @@ interface ShapeReport {
   removedNonTemplate: { id: string; text: string }[]
 }
 
-async function auditCards(dir: string | undefined, shape: boolean, report: ShapeReport, conclusion: boolean, headline: boolean): Promise<Audited[]> {
+async function auditCards(dir: string | undefined, shape: boolean, report: ShapeReport, conclusion: boolean, headline: boolean, arrow: ArrowMode): Promise<Audited[]> {
   const { renderCardTexts } = await import("./lib/card-texts")
   const rendered = await renderCardTexts({ dir, conclusion, headline, onError: (id, error) => console.error(`그리기 실패 ${id}: ${error.message}`) })
   console.error(`카드 ${rendered.total}(뺀 카드 ${rendered.excluded}) · 읽기 문제 ${rendered.problems}`)
@@ -90,24 +106,49 @@ async function auditCards(dir: string | undefined, shape: boolean, report: Shape
       if (findWidgetBreaks(final).length > 0) report.widgetBroken.push({ id: card.id, kind: card.kind })
       if (!result.reverted && expected !== contentSignature(final)) report.mismatched.push({ id: card.id, kind: card.kind })
     }
-    out.push({ kind: card.kind, id: card.id, text: final, record: analyzeStyle({ text: final, asks: card.asks }) })
+    out.push({ kind: card.kind, id: card.id, text: final, record: analyzeStyle({ text: final, asks: card.asks }), lint: lintAnswer(final, { kind: card.kind, asks: card.asks, arrow }) })
   }
   return out
 }
 
-function auditAnswers(path: string): Audited[] {
+function auditAnswers(path: string, arrow: ArrowMode): Audited[] {
   const raw = readFileSync(resolve(process.cwd(), path), "utf8")
-  const rows: Array<Record<string, unknown>> = path.endsWith(".jsonl")
-    ? raw.split("\n").filter(Boolean).map((line) => JSON.parse(line) as Record<string, unknown>)
-    : (JSON.parse(raw) as Array<Record<string, unknown>>)
+  const parsed: unknown = path.endsWith(".jsonl") ? raw.split("\n").filter(Boolean).map((line) => JSON.parse(line) as unknown) : JSON.parse(raw)
+  const list = Array.isArray(parsed) ? parsed : (parsed as { cards?: unknown } | null)?.cards
+  const rows = (Array.isArray(list) ? list : []) as Array<Record<string, unknown>>
   const out: Audited[] = []
   rows.forEach((row, index) => {
     const text = typeof row.answer === "string" ? row.answer : typeof row.text === "string" ? row.text : null
     if (!text) return
     const decidedBy = typeof row.decidedBy === "string" ? row.decidedBy.split(":")[0] : typeof row.kind === "string" ? row.kind : "answer"
-    out.push({ kind: decidedBy, id: typeof row.id === "string" ? row.id : String(index), record: analyzeStyle({ text }) })
+    const { segments, bound } = segmentShapeOfTrace(row.answerIndex)
+    const lint = lintAnswer(text, {
+      kind: decidedBy === "index-gap" ? "gap" : decidedBy,
+      question: typeof row.question === "string" ? row.question : null,
+      segments,
+      bound,
+      arrow,
+    })
+    out.push({ kind: decidedBy, id: typeof row.id === "string" ? row.id : String(index), record: analyzeStyle({ text }), lint })
   })
   return out
+}
+
+function lintSummary(items: Audited[]) {
+  const byKind: Record<string, Audited[]> = { ALL: items }
+  for (const item of items) (byKind[item.kind] ??= []).push(item)
+  return Object.fromEntries(Object.entries(byKind).map(([kind, list]) => [kind, summarizeLint(list.map((item) => item.lint))]))
+}
+
+function printLint(summary: ReturnType<typeof lintSummary>) {
+  for (const [kind, s] of Object.entries(summary)) {
+    const parts = LINT_RULES.map(({ id }) => {
+      const rule = s.rules[id]
+      if (rule.fail === 0 && rule.warn === 0) return null
+      return `${id} ${rule.fail > 0 ? `실패 ${rule.fail}` : ""}${rule.fail > 0 && rule.warn > 0 ? "/" : ""}${rule.warn > 0 ? `경고 ${rule.warn}` : ""}`
+    }).filter(Boolean)
+    console.log(`  lint ${kind.padEnd(8)} n=${s.n} · ${parts.length > 0 ? parts.join(" · ") : "걸린 것 없음"}`)
+  }
 }
 
 function groupSummary(items: Audited[]) {
@@ -141,10 +182,17 @@ async function main() {
   const shapeReport: ShapeReport = { cards: 0, changed: 0, reverted: [], mismatched: [], widgetBroken: [], widgetBrokenBefore: 0, removedLeads: {}, removedClosings: [], removedNonTemplate: [] }
   const dirArg = argValues(argv, "--data-dir")[0]
   const result: Record<string, unknown> = {}
+  const arrowArg = argValues(argv, "--arrow")[0]
+  if (arrowArg !== undefined && arrowArg !== "arrow" && arrowArg !== "gt") usage(`--arrow 는 arrow·gt: ${arrowArg}`)
+  const arrow: ArrowMode = (arrowArg as ArrowMode | undefined) ?? arrowModeFromEnv(process.env)
+  const lintResult: Record<string, unknown> = {}
   const report = (title: string, items: Audited[]) => {
     const summary = groupSummary(items)
     result[title] = summary
     printSummary(title, summary)
+    const lint = lintSummary(items)
+    lintResult[title] = lint
+    printLint(lint)
     const listFlag = argValues(argv, "--list")[0]
     if (listFlag) {
       const [flag, kind] = listFlag.split(":")
@@ -169,7 +217,7 @@ async function main() {
       }
     }
   }
-  if (wantCards) report("cards", await auditCards(dirArg ? resolve(process.cwd(), dirArg) : undefined, shape, shapeReport, !hasFlag(argv, "--no-conclusion"), hasFlag(argv, "--headline")))
+  if (wantCards) report("cards", await auditCards(dirArg ? resolve(process.cwd(), dirArg) : undefined, shape, shapeReport, !hasFlag(argv, "--no-conclusion"), hasFlag(argv, "--headline"), arrow))
   if (wantCards && shape) {
     console.log(
       `shape: 카드 ${shapeReport.cards} · 바뀐 카드 ${shapeReport.changed} · 안전 규칙으로 되돌림 ${shapeReport.reverted.length} · 글자 보존 어긋남 ${shapeReport.mismatched.length} · 위젯이 깨뜨려 그릴 덩이 ${shapeReport.widgetBroken.length}(다듬기 전 ${shapeReport.widgetBrokenBefore}장) · 뺀 빈 리드 ${Object.values(shapeReport.removedLeads).reduce((a, b) => a + b, 0)} · 뺀 끝맺음 ${shapeReport.removedClosings.length}(틀 아닌 줄 ${shapeReport.removedNonTemplate.length})`
@@ -180,11 +228,11 @@ async function main() {
       writeFileSync(resolve(process.cwd(), reportPath), `${JSON.stringify(shapeReport, null, 2)}\n`)
     }
   }
-  for (const file of answerFiles) report(`answers:${basename(file)}`, auditAnswers(file))
+  for (const file of answerFiles) report(`answers:${basename(file)}`, auditAnswers(file, arrow))
   const out = argValues(argv, "--out")[0]
   if (out) {
     mkdirSync(dirname(resolve(process.cwd(), out)), { recursive: true })
-    writeFileSync(resolve(process.cwd(), out), `${JSON.stringify(result, null, 2)}\n`)
+    writeFileSync(resolve(process.cwd(), out), `${JSON.stringify({ ...result, lint: { arrow, ...lintResult } }, null, 2)}\n`)
     console.error(`요약: ${resolve(process.cwd(), out)}`)
   }
 }

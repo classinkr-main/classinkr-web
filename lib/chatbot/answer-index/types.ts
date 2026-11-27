@@ -337,6 +337,16 @@ interface AnswerCardBase {
    * 없으면 개념 겹침 규칙(assist.ts policyTopicBlocks)으로 정한다.
    */
   policyTopicAllowed?: boolean
+  /**
+   * 말투 변환 제외 표시(R3 계약 칸, 규격 S7). 정책 문구 소유자가 정한 글처럼 렌더가 요체로 바꾸면 안 되는 카드에 단다.
+   * R3 단계 0에서는 이름만 둔다(읽는 곳은 a1 요체 변환·V-14).
+   */
+  toneLocked?: boolean
+  /**
+   * 카드 역할(R3 계약 칸, 규격 S9). hub 는 총괄 소개 카드로, 구체 카드가 후보에 있으면 양보한다(c1 score.ts). tier 는 그대로 둔다.
+   * R3 단계 0에서는 이름만 둔다.
+   */
+  role?: "hub"
 }
 
 export interface DocCardAnswer {
@@ -465,6 +475,10 @@ export interface AnswerVariant {
   g: "A" | "B"
   /** 생성 모델 등급. */
   m: string
+  /**
+   * 한 변형 문장에 물음이 둘 들어 있어도 되는 표시(R3 계약 칸, V-15). 사람이 단다. 없으면 splitQuestion 으로 2조각 이상이면 V-15 실패다.
+   */
+  compoundOk?: boolean
 }
 
 /** 카드 id → 변형 목록. */
@@ -810,7 +824,18 @@ export interface AnswerIndexSegmentDecision {
   symptom?: boolean
   /** 머리 줄 이름(조각 주절의 비일반 개념의 문서 형태, 손님 글이 아니다). 정하지 못하면 없음. */
   label?: string
+  /**
+   * 덮임 점검 결과(R3 계약 칸, 규격 4.4). 조각을 고른 카드가 그 조각을 실제로 답하는지: pass · asks_mismatch · no_overlap · not_covers.
+   * decide.ts combineSegments 가 채운다(CHATBOT_SEGMENT_COVERAGE 를 끄면 없다). 조각 판정으로 고른 카드는 pass, 다른 조각·원문 카드로 채운
+   * 자리는 그 카드의 판정이다. pass 가 아닌데 답한 조각은 다시 고른 카드(coverageCard 가 걸린 카드)이거나, 정한 조각이 다 걸려 하나 남긴 자리다.
+   */
+  coverage?: AnswerIndexSegmentCoverage
+  /** 덮임 점검에 걸려 이 조각에서 뺀 카드(다시 골랐거나 알림으로 둔 조각). 답 글에는 쓰지 않는다. */
+  coverageCard?: string
 }
+
+/** 덮임 점검 판정(규격 4.4). */
+export type AnswerIndexSegmentCoverage = "pass" | "asks_mismatch" | "no_overlap" | "not_covers"
 
 /**
  * 주의 표시(R2 낱말 장치: 낱말 하나는 결정이 아니라 표시). 결정형이 알아본 신호를 모델 지시문·측정에 넘긴다.
@@ -848,6 +873,8 @@ export interface AnswerIndexTraceSegment {
   noticeKind?: AnswerIndexNoticeKind
   /** 못 정한 조각을 따로 물었을 때의 판정(측정용). */
   alone?: AnswerIndexDecisionKind
+  /** 덮임 점검 판정(AnswerIndexSegmentDecision.coverage 와 같다, R3 a2). */
+  coverage?: AnswerIndexSegmentCoverage
 }
 
 export type AnswerIndexNoticeKind = "retry" | "notfound" | "absent" | "symptom"
@@ -882,6 +909,11 @@ export interface AnswerIndexDecision {
   rescue?: "vote" | null
   /** 주의 표시(없는 개념 형태 등). 없거나 빈 배열이면 신호 없음. */
   cautions?: AnswerIndexCaution[]
+  /**
+   * 질문에 든 '이미 해 본 동작' 이름(규격 S14, R3 a2: DecideContext.tried, 없으면 normalize.ts extractTriedActions). 없으면 칸이 없다.
+   * 판정에는 쓰지 않는다. 렌더(respond.ts, CHATBOT_COMPILED_SKIP_TRIED)가 그 단계를 뺄 때 읽는다.
+   */
+  tried?: string[]
 }
 
 /** ChatbotCore.answerIndex 에 싣는 흔적. 응답에는 싣지 않는다. */

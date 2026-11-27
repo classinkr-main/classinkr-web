@@ -113,6 +113,32 @@ describe("buildFragmentRecord", () => {
     expect(hasUnansweredNotice("녹화는 [수업 설정]에서 켜요.")).toBe(false)
   })
 
+  it("조각이 둘 이상이고 색인이 정한 줄은 L13 복합 꼴을 판정해 compoundLint 에 적는다", () => {
+    const base = {
+      question: "녹화는 어떻게 하나요? 그리고 무료 체험도 있나요?",
+      indexDecided: true,
+      probe: null,
+      expect: expectTwo,
+      topicOf,
+    }
+    const traced = { segments: [{ text: "가", kind: "answer", card: "doc:rec" }, { text: "나", kind: "abstain", card: null }] }
+    const ok = buildFragmentRecord({ ...base, answer: "【녹화】\n[수업 설정]에서 켜요.\n\n【체험】\n이 내용은 따로 한 번 더 물어봐 주세요.", trace: traced })
+    expect(ok.compoundLint).toEqual([])
+    const alone = buildFragmentRecord({ ...base, answer: "【녹화】\n\n[수업 설정]에서 켜요.", trace: traced })
+    expect(alone.compoundLint).toEqual(expect.arrayContaining(["head_count", "head_alone"]))
+    // 두 조각이 같은 카드면 번호 하나 + 묶임 하나 — 머리 없는 단일 답도 통과다.
+    const same = buildFragmentRecord({ ...base, answer: "[수업 설정]에서 켜요.", trace: { segments: [{ text: "가", kind: "answer", card: "doc:rec" }, { text: "나", kind: "answer", card: "doc:rec" }] } })
+    expect(same.compoundLint).toEqual([])
+    const single = buildFragmentRecord({ ...base, answer: "[수업 설정]에서 켜요.", trace: { segments: [{ text: "가", kind: "answer", card: "doc:rec" }] } })
+    expect(single).not.toHaveProperty("compoundLint")
+    const summary = summarizeFragments([
+      { id: "a", expectFragments: expectTwo, fragments: ok },
+      { id: "b", expectFragments: expectTwo, fragments: alone },
+    ])
+    expect(summary.multi.compoundLint).toMatchObject({ judged: 2, pass: 1 })
+    expect(summary.multi.compoundLint.codes.head_alone).toBe(1)
+  })
+
   it("'공개 안내에 없다'는 알림만 거짓 알림 후보로 본다", () => {
     expect(hasAbsenceNotice("【외부 출결】\n공개 안내에는 없는 내용이라 상담으로 확인해 드릴게요.")).toBe(true)
     expect(hasAbsenceNotice("【두 번째 질문】\n이 내용은 따로 한 번 더 물어봐 주세요.")).toBe(false)

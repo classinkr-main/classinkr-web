@@ -1,10 +1,12 @@
 /**
- * 답 색인 자료 검사 V-1~V-13(사양 §6). CLI 는 scripts/answer-index/verify.ts.
+ * 답 색인 자료 검사 V-1~V-15(사양 §6, R3 답 꼴 규격 5절의 V-14·V-15). CLI 는 scripts/answer-index/verify.ts.
  *
  * - 오류(error)가 하나라도 있으면 실패다. 경고(warning)·알림(info)은 실패가 아니다.
  * - 자료가 아직 없는 영역(카드·nav 표시가 하나도 없는 영역)은 덮기 검사(V-9)·옛 id 대응 검사(V-10)를 알림으로만 낸다.
  *   --strict 면 모든 영역에 적용한다(전체 자료 단계의 완료 기준).
  * - 평가 질문 겹침(V-7·V-8)은 겹친 자료 쪽 글만 찍고 평가 질문 글은 찍지 않는다. 확정용 묶음(--with-holdout)은 개수만 찍는다.
+ * - V-14(카드 꼴·말투)·V-15(변형 한 줄에 물음 하나)는 R3 축약 카드 조각(cards/<영역>.team<4자리>.json, 합친 뒤에는
+ *   provenance.unit 이 team<4자리>)만 오류로 보고, 기존 카드는 카드마다 경고 한 줄로 묶는다(자료 묶음이 --only 로 자기 파일을 본다).
  */
 import { join } from "node:path"
 import { answerTextHash, normalizeForHash } from "@/lib/chatbot/answer-index/hash"
@@ -31,6 +33,9 @@ import { loadAnswerIndexData, type AnswerIndexData, type Located } from "./data"
 import { calibrationBasisVersion, isNonRuntimeDataPath } from "./manifest"
 import { normalizeForOverlap, OverlapIndex, type OverlapReason } from "./similarity"
 import { findSafetyViolations } from "./text-rules"
+import { splitQuestion } from "@/lib/chatbot/answer-index/normalize"
+import { analyzeStyle, checkCardShape, legacyMenuNamesIn, sentenceTone, splitSentences, stripQuoted } from "./style-audit-core"
+import { splitPartName } from "./data"
 
 export const VERIFY_RULES = [
   { rule: "V-1", title: "doc·howto 카드 문장 참조(단위·번호·해시)가 지금 units.json·지금 문서와 같다. units.json 이 지금 문서와 같다" },
@@ -45,7 +50,9 @@ export const VERIFY_RULES = [
   { rule: "V-10", title: "옛 정해 둔 답 id 가 legacy-alias.json 에 있음(카드 또는 null)" },
   { rule: "V-11", title: "active policy 카드의 policyRef 가 사람 결정 대기열에 있음, site 근거 카드는 결정 전 review" },
   { rule: "V-12", title: "자료 합계 25MB 이하, 카드 id 형식, 스키마" },
-  { rule: "V-13", title: "first·headline 칸(R2): first 는 답 문장 안(접속어면 앞 문장과 함께), headline 은 60자 이하·요체 마침표·근거 문장이 카드 안·숫자/[메뉴]/영문 토큰이 카드 문장에 있음·부정 극성 일치·근거의 단서(수도 있·경우가 많…) 유지·안전/정책 구절 없음(첫 두 문장 되풀이는 경고)" },
+  { rule: "V-13", title: "first·headline 칸(R2): first 는 답 문장 안(접속어면 앞 문장과 함께), headline 은 60자 이하·요체 마침표·근거 문장이 카드 안·숫자/[메뉴]/영문 토큰이 카드 문장에 있음·부정 극성 일치·근거의 단서(수도 있·경우가 많…) 유지·안전/정책 구절 없음(첫 두 문장 되풀이는 경고), 옛 메뉴 이름 없음(R3, 경고)" },
+  { rule: "V-14", title: "카드 꼴·말투(R3): 축약 카드 조각은 첫 줄 60·단계 줄 80·줄 120·단계 4개 이하·150~300자(순서 의존 4단계 350)·되묻기 선택지 2~3개 25자 이하, fixed 첫 줄 결론, 말투 섞임 0(toneLocked 제외), 옛 메뉴 이름 0, ※·주의: 접두 0(기존 fixed·policy 는 경고)" },
+  { rule: "V-15", title: "변형 한 줄에 물음 하나(R3): splitQuestion 으로 2조각 이상이면 실패(compoundOk 제외, 기존 카드는 경고), covers 갈래 3개 이상·변형 62개 초과 카드는 쪼갤 후보 경고" },
 ] as const
 
 export type VerifyRule = (typeof VERIFY_RULES)[number]["rule"] | "load"
@@ -102,6 +109,27 @@ export const RISKY_SHORT_FORMS: readonly string[] = ["명의", "독", "수상"]
 export const ABSENT_BARE_FORMS_DENY: readonly string[] = ["수상", "채용", "총판", "대기실", "베타"]
 /** V-13: headline 길이 상한(글자 수). */
 export const HEADLINE_MAX_CHARS = 60
+
+/**
+ * R3 축약 카드 조각 묶음 이름(설계 §3-3: cards/<영역>.team1126.json, 합친 뒤에는 provenance.unit). 이 묶음 카드와 그 변형은
+ * V-14·V-15 를 오류로 본다. 이름 형식만 본다(team + 4자리 날짜).
+ */
+export const R3_STRICT_BATCH_RE = /^team\d{4}(?![0-9])/
+/** V-15: 변형이 이보다 많고 covers 갈래가 3개 이상이면 쪼갤 후보(카드당 변형 상위 10%선, 쏠림 조사). */
+export const WIDE_CARD_VARIANTS = 62
+
+/** 카드가 R3 축약 카드 조각 묶음에 드는지(파일 조각 이름 또는 provenance.unit). */
+export function isStrictShapeCard(file: string, value: unknown): boolean {
+  const part = splitPartName(file).part
+  if (part && R3_STRICT_BATCH_RE.test(part)) return true
+  const unit = isObject(value) && isObject(value.provenance) ? value.provenance.unit : undefined
+  return typeof unit === "string" && R3_STRICT_BATCH_RE.test(unit)
+}
+
+/** covers 갈래 수(쉼표·세미콜론으로 나눈 항목). */
+export function coversBranchCount(covers: unknown): number {
+  return typeof covers === "string" ? covers.split(/\s*[,;]\s*/).filter((item) => item.trim()).length : 0
+}
 
 /** 카드 등급별 최소 변형 수(§4.3·§5.2·§5.8). */
 export const MIN_VARIANTS = {
@@ -832,9 +860,83 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
         const shared = Array.from(headGrams).filter((gram) => cardGrams.has(gram)).length
         if (headGrams.size > 0 && shared / headGrams.size < 0.5) add("V-13", level, card.file, `${value.id}: headline 낱말이 카드 문장과 ${Math.round((shared / headGrams.size) * 100)}%만 겹침(50% 이상이어야 함)`)
         for (const rule of findSafetyViolations(text)) add("V-13", level, card.file, `${value.id}: headline 에 ${rule.label}`)
+        // R3: 옛 메뉴 이름은 현행명으로 쓴다(규격 S3). 자료 고침(b 묶음) 전이라 경고다.
+        for (const name of legacyMenuNamesIn(text)) add("V-13", "warning", card.file, `${value.id}: headline 에 옛 메뉴 이름 "${name}"(현행명으로 쓴다)`)
         const normalized = normalizeForOverlap(text)
         for (const phrase of policyPhrases) if (normalized.includes(phrase.key)) add("V-13", level, card.file, `${value.id}: headline 에 정책 대기 ${phrase.item} 구절`)
       }
+    }
+  }
+
+  // ── V-14 카드 꼴·말투(R3) ──
+  {
+    let fixedChecked = 0
+    let fixedConclusion = 0
+    for (const card of cards) {
+      const value = card.value
+      if (value.status === "disabled" || (value.kind !== "fixed" && value.kind !== "policy")) continue
+      const answer = value.answer as unknown
+      const text = isObject(answer) && typeof answer.text === "string" ? answer.text : null
+      if (!text) continue
+      const strict = isStrictShapeCard(card.file, value)
+      const toneLocked = (value as { toneLocked?: unknown }).toneLocked === true
+      const issues: { message: string; level: VerifyLevel }[] = []
+      const issue = (message: string, hard = true) => issues.push({ message, level: strict && hard ? "error" : "warning" })
+      if (value.kind === "fixed" || strict) {
+        for (const finding of checkCardShape(text)) issue(`카드 꼴 ${finding.code}(${finding.detail})`, finding.level === "error")
+      }
+      const firstLine = analyzeStyle({ text, asks: value.asks ?? null }).firstLine
+      if (value.kind === "fixed") {
+        fixedChecked += 1
+        if (firstLine === "conclusion") fixedConclusion += 1
+      }
+      // policy 첫 줄은 정책 문구 소유자 확인 뒤에 고치므로 늘 경고다(규격 V-14).
+      if (firstLine !== "conclusion") issue(`첫 줄이 결론이 아님(${firstLine})`, value.kind === "fixed")
+      if (!toneLocked) {
+        const tones = new Set(splitSentences(stripQuoted(text)).filter((sentence) => sentence.trim().length > 3).map(sentenceTone))
+        if (tones.has("nida") && tones.has("yo")) issue("인용 밖 니다체·요체 섞임(정책 문구면 toneLocked)")
+      }
+      for (const name of legacyMenuNamesIn(text)) issue(`옛 메뉴 이름 "${name}"`)
+      if (/※|^\s*(?:주의|참고)\s*[:：]/m.test(text)) issue("※·주의:·참고: 접두")
+      if (issues.length === 0) continue
+      if (strict) for (const item of issues) add("V-14", item.level, card.file, `${value.id}: ${item.message}`)
+      else add("V-14", "warning", card.file, `${value.id}: ${issues.map((item) => item.message).join(" · ")}`)
+    }
+    if (fixedChecked > 0) {
+      const ratio = Math.round((fixedConclusion / fixedChecked) * 1000) / 10
+      add("V-14", "info", null, `fixed 글 카드 첫 줄 결론 ${fixedConclusion}/${fixedChecked}(${ratio}%) — howto 는 style-audit --cards 로 잰다`)
+    }
+  }
+
+  // ── V-15 변형 한 줄에 물음 하나(R3) ──
+  {
+    const variantCount = new Map<string, number>()
+    const loose = new Map<string, { file: string; n: number; example: string }>()
+    for (const item of data.variants) {
+      const { cardId, variant } = item.value
+      variantCount.set(cardId, (variantCount.get(cardId) ?? 0) + 1)
+      if (!isObject(variant) || typeof variant.q !== "string" || (variant as { compoundOk?: unknown }).compoundOk === true) continue
+      const split = splitQuestion(variant.q)
+      const pieces = split.segments.length + split.overflow.length
+      if (pieces < 2) continue
+      const part = splitPartName(item.file).part
+      const owner = cardById.get(cardId)
+      const strict = Boolean((part && R3_STRICT_BATCH_RE.test(part)) || (owner && isStrictShapeCard(owner.file, owner.value)))
+      if (strict) {
+        add("V-15", "error", item.file, `${cardId}: 변형 "${variant.q}"이(가) ${pieces}조각으로 나뉨 — 물음이 둘이면 쪼개거나 지우고, 이 카드가 두 물음을 다 답하면 compoundOk`)
+        continue
+      }
+      const entry = loose.get(cardId) ?? { file: item.file, n: 0, example: variant.q }
+      entry.n += 1
+      loose.set(cardId, entry)
+    }
+    for (const [cardId, entry] of loose) add("V-15", "warning", entry.file, `${cardId}: 변형 ${entry.n}줄이 2조각 이상으로 나뉨(예: "${entry.example}") — 쪼개거나 지우거나 compoundOk`)
+    for (const card of cards) {
+      const value = card.value
+      if (value.status === "disabled" || typeof value.id !== "string") continue
+      const branches = coversBranchCount(value.covers)
+      const count = variantCount.get(value.id) ?? 0
+      if (branches >= 3 && count > WIDE_CARD_VARIANTS) add("V-15", "warning", card.file, `${value.id}: covers 갈래 ${branches}개·변형 ${count}개(>${WIDE_CARD_VARIANTS}) — 갈래가 둘 이상 섞였으면 쪼갤 후보(S9)`)
     }
   }
 
@@ -1066,6 +1168,8 @@ function checkSchemas(data: AnswerIndexData, add: Add) {
     }
     if (value.handoff !== undefined && value.handoff !== null && value.handoff !== "support" && value.handoff !== "demo") err(card.file, `${id}: handoff 는 support·demo·null`)
     if (value.evidenceScope !== undefined && value.evidenceScope !== "docs" && value.evidenceScope !== "site") err(card.file, `${id}: evidenceScope 는 docs·site`)
+    if (value.toneLocked !== undefined && typeof value.toneLocked !== "boolean") err(card.file, `${id}: toneLocked 는 true·false`)
+    if (value.role !== undefined && value.role !== "hub") err(card.file, `${id}: role 은 hub 만 쓴다`)
     if (value.provenance !== undefined) {
       const provenance = value.provenance
       if (!isObject(provenance) || typeof provenance.unit !== "string" || typeof provenance.writer !== "string" || !isStringArray(provenance.legacyIds)) {
@@ -1121,6 +1225,8 @@ function checkSchemas(data: AnswerIndexData, add: Add) {
     const variant = item.value.variant as unknown
     if (!isObject(variant) || typeof variant.q !== "string" || typeof variant.p !== "string" || (variant.g !== "A" && variant.g !== "B") || typeof variant.m !== "string") {
       err(item.file, `변형 ${item.at}: { q, p, g: "A"|"B", m } 가 아님`)
+    } else if (variant.compoundOk !== undefined && typeof variant.compoundOk !== "boolean") {
+      err(item.file, `변형 ${item.at}: compoundOk 는 true·false`)
     }
   }
   for (const [rel, raw] of data.raw) {
