@@ -3617,24 +3617,6 @@
       "p": "어르신",
       "g": "B",
       "m": "claude-haiku-5-5"
-    },
-    {
-      "q": "인증하려면 사업자 필요한가요",
-      "p": "owner",
-      "g": "A",
-      "m": "sonnet"
-    },
-    {
-      "q": "사업자등록증 꼭 있어야 인증돼요",
-      "p": "teacher",
-      "g": "A",
-      "m": "sonnet"
-    },
-    {
-      "q": "인증 서류에 사업자가 필요한지",
-      "p": "it",
-      "g": "A",
-      "m": "sonnet"
     }
   ],
   "doc:/docs/admin/billing-upgrade#5/pay-no-verify": [
@@ -27737,12 +27719,6 @@
       "p": "parent",
       "g": "A",
       "m": "sonnet"
-    },
-    {
-      "q": "대형 학원 요금 기준",
-      "p": "terse",
-      "g": "A",
-      "m": "sonnet"
     }
   ],
   "policy:fit-small-private": [
@@ -28275,18 +28251,6 @@
       "m": "sonnet"
     },
     {
-      "q": "사업자 없이 교습소 운영해도 쓸 수 있나요",
-      "p": "parent",
-      "g": "A",
-      "m": "sonnet"
-    },
-    {
-      "q": "사업자 필요한가요 공부방인데",
-      "p": "terse",
-      "g": "A",
-      "m": "sonnet"
-    },
-    {
       "q": "소형 교실 요금",
       "p": "student",
       "g": "A",
@@ -28789,12 +28753,6 @@
     {
       "q": "회원가입 무료인가요",
       "p": "owner",
-      "g": "A",
-      "m": "sonnet"
-    },
-    {
-      "q": "회원가입하면 무료로 쓸 수 있나요",
-      "p": "teacher",
       "g": "A",
       "m": "sonnet"
     },

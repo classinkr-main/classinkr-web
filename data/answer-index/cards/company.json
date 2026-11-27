@@ -2867,7 +2867,6 @@
       "레퍼런스",
       "후기",
       "목동 쇼룸",
-      "학원도 쓸 수",
       "어떤 학원용"
     ],
     "covers": "국어·영어·과학·입시 학원부터 온라인·하이브리드 학원까지 클래스인을 쓰고, 비슷한 과목·운영 형태의 사례와 후기는 도입 상담이나 목동 쇼룸에서 더 자세히 보여 준다는 것",
@@ -7849,9 +7848,7 @@
       "대면 수업",
       "현장 수업",
       "학원 수업 시스템",
-      "교실 수업",
-      "어떤 서비스",
-      "누구를 위한 서비스"
+      "교실 수업"
     ],
     "covers": "클래스인이 온라인·오프라인·하이브리드 수업을 한 플랫폼에서 운영하는 교육용 SaaS이고 한국 학원에서는 수업 시스템 OS로 쓴다는 한 줄 소개",
     "notCovers": [
@@ -10013,7 +10010,6 @@
       "수업 중 AI 칠판 채점 → doc:/docs/software/app-capabilities-map#3/ai-board-summary",
       "AI 채점 결과 검토·게시 → doc:/docs/software/classin-ai-feature-guide#1/ai-grading-review",
       "LMS 기본 자동 채점·성적표 자동 생성 → doc:/docs/start/company-overview#3/lms-admin-dashboard",
-      "숙제 내주고 제출 현황 확인·채점하는 흐름 → doc:/docs/teacher/course-activities#4/homework-create",
       "숙제 채점 기준·답안 추가 → doc:/docs/teacher/course-activities#4/homework-settings"
     ],
     "negatives": [

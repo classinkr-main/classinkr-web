@@ -75,8 +75,7 @@
       "학원에서 임시 비밀번호를 받은 경우 → doc:/docs/start/signup#0/temp-password-account",
       "학부모에게 보낼 가입 안내 문구 → doc:/docs/start/signup#5/parent-message-template",
       "화면을 따라 하는 단계별 가입 안내(전화 번호로 등록하기·막힐 때 확인) → howto:guide:classin-account-signup",
-      "코스에 들어오려면 학생이 먼저 가입돼 있어야 하는지 → doc:/docs/teacher/course-members#1/signup-first",
-      "아이(학생) 계정을 학생이 쓸 번호·이메일로 따로 만드는 것 → doc:/docs/start/signup#5/child-own-account"
+      "코스에 들어오려면 학생이 먼저 가입돼 있어야 하는지 → doc:/docs/teacher/course-members#1/signup-first"
     ],
     "negatives": [
       {
@@ -106,10 +105,6 @@
       {
         "q": "코스 초대 전에 학생이 가입부터 해야 해요",
         "route": "doc:/docs/teacher/course-members#1/signup-first"
-      },
-      {
-        "q": "아이 계정은 따로 만들어야 하나요",
-        "route": "doc:/docs/start/signup#5/child-own-account"
       }
     ],
     "handoff": null,
@@ -9336,8 +9331,7 @@
       "학부모께 보낼 설치·가입 안내 문구 → doc:/docs/start/signup#5/parent-message-template",
       "가입 순서 → doc:/docs/start/signup#summary/signup-overview",
       "학원이 만들어 준 계정으로 로그인 → doc:/docs/start/signup#0/temp-password-account",
-      "학부모가 수업을 보기만 하는 방법(청강 권한·웹 라이브) → policy:parents-watch-only",
-      "아이(학생) 계정을 학생이 쓸 번호·이메일로 따로 만드는 법 → doc:/docs/start/signup#5/child-own-account"
+      "학부모가 수업을 보기만 하는 방법(청강 권한·웹 라이브) → policy:parents-watch-only"
     ],
     "negatives": [
       {
@@ -10496,7 +10490,6 @@
       "학부모가 따로 가입해야 하는지 → fixed:basics-parent-signup",
       "요금제 비교·추천 → policy:tutor-plan-recommend",
       "학생 프로필·닉네임 → doc:/docs/student/student-profile#summary/student-profile-overview",
-      "학생·아이 계정을 따로 만드는 방법 → doc:/docs/start/signup#5/child-own-account",
       "회원 가입·계정 등록 전체 순서 → doc:/docs/start/signup#summary/signup-overview",
       "학원이 만들어 준 계정으로 로그인 → doc:/docs/start/signup#0/temp-password-account"
     ],
@@ -10512,10 +10505,6 @@
       {
         "q": "학생 프로필 사진 바꾸는 법",
         "route": "doc:/docs/student/student-profile#summary/student-profile-overview"
-      },
-      {
-        "q": "계정 등록은 어디서 어떻게 해요",
-        "route": "doc:/docs/start/signup#summary/signup-overview"
       }
     ],
     "handoff": null,
@@ -10736,126 +10725,5 @@
     "auditRef": "audit/C-02.jsonl#field:demo-lesson-interview-free-account",
     "policyGoverned": true,
     "toneLocked": true
-  },
-  {
-    "id": "doc:/docs/start/signup#5/child-own-account",
-    "kind": "doc",
-    "tier": "standard",
-    "area": "account",
-    "topic": "아이(학생) 계정을 학생이 쓸 번호·이메일로 따로 만들기",
-    "answer": {
-      "lead": "none",
-      "sentences": [
-        {
-          "unit": "doc:/docs/start/signup#2",
-          "ids": [
-            0
-          ],
-          "hashes": [
-            "0ae0799ff67db813"
-          ]
-        },
-        {
-          "unit": "doc:/docs/start/signup#5",
-          "ids": [
-            5
-          ],
-          "hashes": [
-            "604b9611d2bf951e"
-          ]
-        },
-        {
-          "unit": "doc:/docs/start/signup#0",
-          "ids": [
-            7
-          ],
-          "hashes": [
-            "564fc61e8f17496a"
-          ]
-        }
-      ]
-    },
-    "sources": [
-      {
-        "path": "/docs/start/signup",
-        "heading": "학부모님께 보낼 안내 문구"
-      },
-      {
-        "path": "/docs/start/signup",
-        "heading": "이메일이나 휴대폰 번호로 인증하기"
-      },
-      {
-        "path": "/docs/start/signup",
-        "heading": "가입하기 전에"
-      }
-    ],
-    "asks": [
-      "howto",
-      "yesno"
-    ],
-    "concepts": [
-      "C_student_signup",
-      "C_signup",
-      "C_account"
-    ],
-    "anchors": [
-      "아이 계정 따로",
-      "아이 계정 만들기",
-      "학생 계정 따로",
-      "학생 계정 따로 만들기",
-      "자녀 계정 만들기",
-      "아이 아이디 만들기",
-      "아이 번호로 가입",
-      "아이 이메일로 가입"
-    ],
-    "covers": "수업에 들어갈 학생(아이) 계정은 앱에서 [회원 가입]으로 학생이 쓸 휴대폰 번호나 이메일을 아이디로 따로 만들고, 가입을 마치면 그 번호·이메일을 학원에 알려 준다는 것",
-    "notCovers": [
-      "학부모가 따로 가입해야 하는지·학부모 계정 연결 → fixed:basics-parent-signup",
-      "회원 가입 전체 순서 → doc:/docs/start/signup#summary/signup-overview",
-      "학원이 미리 만들어 준 계정으로 로그인 → doc:/docs/start/signup#0/temp-password-account",
-      "휴대폰 번호 입력 형식 → doc:/docs/start/signup#2/phone-number-format",
-      "학부모께 보낼 설치·가입 안내 문구 → doc:/docs/start/signup#5/parent-message-template",
-      "학생 계정으로 친구를 가르칠 때 무료 범위 → policy:student-account-tutor-friends-free"
-    ],
-    "negatives": [
-      {
-        "q": "학부모도 따로 가입해야 하나요",
-        "route": "fixed:basics-parent-signup"
-      },
-      {
-        "q": "학부모 계정을 아이 계정에 연결할 수 있나요",
-        "route": "fixed:basics-parent-signup"
-      },
-      {
-        "q": "가입 전체 순서가 궁금해요",
-        "route": "doc:/docs/start/signup#summary/signup-overview"
-      },
-      {
-        "q": "학원에서 임시 비번 받았는데 또 가입해야 하나요",
-        "route": "doc:/docs/start/signup#0/temp-password-account"
-      },
-      {
-        "q": "휴대폰 번호는 어떤 형식으로 넣어요",
-        "route": "doc:/docs/start/signup#2/phone-number-format"
-      },
-      {
-        "q": "학생 계정으로 친구들 가르쳐도 되나요",
-        "route": "policy:student-account-tutor-friends-free"
-      }
-    ],
-    "handoff": null,
-    "category": "onboarding",
-    "intent": "onboarding",
-    "suggestedQuestions": [
-      "휴대폰 번호는 어떻게 입력하나요?",
-      "학부모도 따로 가입해야 하나요?"
-    ],
-    "status": "active",
-    "provenance": {
-      "unit": "R4-D4",
-      "writer": "agent:opus#R4D4",
-      "at": "2026-11-27",
-      "legacyIds": []
-    }
   }
 ]
