@@ -47,6 +47,22 @@ export interface KnowledgeDeps {
 }
 
 export const NO_EVIDENCE_ANSWER = "근거를 찾지 못했습니다."
+
+/**
+ * 공개 문서만 남긴 근거 — 답이 여러 사람에게 보이는 곳(위컴 단체방)에 쓴다.
+ * 정리 지식·사고 선례·내부 문서·내부 전용 초안을 뺀다. 공개 문서와 공개 위젯 답(publicAnswer)·경고만 남긴다.
+ */
+export function publicOnlyEvidence(parts: InternalEvidenceParts): InternalEvidenceParts {
+  return {
+    curated: [],
+    incidents: [],
+    publicDocs: parts.publicDocs.filter((doc) => doc.kind === "public_doc" && doc.customerUse === "allowed"),
+    internalDocs: [],
+    publicAnswer: parts.publicAnswer,
+    internalDraft: null,
+    ...(parts.warning ? { warning: parts.warning } : {}),
+  }
+}
 export const CS_COPILOT_LINK_ID = "admin:cs-chatbot"
 /** 관련 상담 줄이 여는 상담 화면(consultations.ts CONSULTATION_INBOX_LINK_ID 와 같은 값 — 순환 가져오기를 피해 따로 둔다). */
 const CONSULTATION_LINK_ID = "admin:channel-talk"

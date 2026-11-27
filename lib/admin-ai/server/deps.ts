@@ -2,6 +2,7 @@ import "server-only"
 
 // 갈매봇 조율기의 서버 연결 — 실제 자료 함수를 deps 로 묶는다. 시험은 이 파일 대신 가짜 deps 를 쓴다.
 //  - 묻기: buildInternalEvidence(정리 지식·선례·공개/내부 문서) + 공개 챗봇 답 색인(읽기 전용, 고객용 문안 칸)
+//    내부 근거를 끈 연결(internalEvidence:false — 위컴 단체방)은 내부 문서 검색을 끄고 공개 문서만 싣는다(publicOnlyEvidence).
 //  - 담당자: resolveContact + buildContactDeps(상담 검색은 끈다 — 임베딩 검색이라 비용이 들고 R17 범위 결정 전).
 //    한국 담당표는 DB(internal_team_contacts, 설정 › 담당자 표)를 60초 캐시로 읽는다 — 실패면 빈 표 + 카드에 실패 표시.
 //  - 도구: lib/ops-tools 레지스트리·실행기
@@ -28,7 +29,7 @@ import { buildConsultationDeps } from "./consultation-deps"
 import { countRelatedConsultations, findConsultations } from "./consultations"
 import { findCustomerHistory } from "./customer-history"
 import { buildCustomerHistoryDeps } from "./customer-history-deps"
-import type { CustomerPhrasing } from "./knowledge"
+import { publicOnlyEvidence, type CustomerPhrasing } from "./knowledge"
 import { getAdminAiModelAdapter } from "./llm/adapter"
 import type { OrchestratorDeps } from "./orchestrator"
 import { readConfirmSetup } from "./ticket-claims"
@@ -73,12 +74,14 @@ export const serverOpsDeps: OpsDeps = {
  * canReadConsultations 는 상담 글(누가·요지)을 볼 수 있는 역할인가(actor.ts canReadConsultationContent) — 아니면 건수만.
  * customerContacts:false — 담당자 찾기에서 고객사 갈래(CRM 고객 조회)를 끈다(위컴 단체방처럼 답이 여러 사람에게 보일 때).
  * contactNames:false — 한국 지사·모름 담당 카드에 사람 이름(담당표·어드민 계정) 없이 역할만 싣는다(같은 곳).
+ * internalEvidence:false — 묻기 근거를 공개 문서만(내부 문서 검색을 끄고, 정리 지식·선례·내부 문서를 싣지 않는다)(같은 곳).
  */
 export function buildServerOrchestratorDeps(options: {
   sub: string
   canReadConsultations: boolean
   customerContacts?: boolean
   contactNames?: boolean
+  internalEvidence?: boolean
 }): OrchestratorDeps {
   const contactDeps = buildContactDeps({
     customers: options.customerContacts !== false,
@@ -90,9 +93,12 @@ export function buildServerOrchestratorDeps(options: {
     options.customerContacts !== false ? buildCustomerHistoryDeps({ findCustomersInText: contactDeps.findCustomersInText }) : null
   // 카드에 표를 실을지(확인 버튼) — 표 비밀 + 일회용 저장소가 있을 때만(ticket-claims.ts 한 곳에서 판정).
   const ticketSecret = readConfirmSetup().cardSecret
+  const internalEvidence = options.internalEvidence !== false
   return {
     knowledge: {
-      evidence: (question) => buildInternalEvidence(question, { includeInternalDocs: true }),
+      evidence: internalEvidence
+        ? (question) => buildInternalEvidence(question, { includeInternalDocs: true })
+        : async (question) => publicOnlyEvidence(await buildInternalEvidence(question, { includeInternalDocs: false })),
       customerPhrasing: answerIndexPhrasing,
       consultationCount: (question) => countRelatedConsultations(question, consultationDeps),
     },
