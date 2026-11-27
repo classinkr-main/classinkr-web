@@ -45,3 +45,18 @@ export function matchScheduledDay(cron: string, now: Date): ScheduledDayMatch {
     dayOfMonth !== "any" && dayOfWeek !== "any" ? domMatches || dowMatches : domMatches && dowMatches
   return dayMatches ? "due" : "not_due"
 }
+
+/** 예약 규칙 저장 때 쓰는 검사 — 크론이 읽을 수 없는 식을 받아 두면 규칙이 켜진 채 영영 돌지 않는다. */
+export const SCHEDULED_CRON_HELP =
+  '예약 식은 "분 시 일 월 요일" 다섯 칸이고, 일·월·요일 칸에는 *, 숫자, 쉼표 목록(1,15), 구간(1-5)만 쓸 수 있습니다. 예: 0 9 * * 1'
+
+export function scheduledCronProblem(triggerType: unknown, triggerConfig: unknown): string | null {
+  const config = triggerConfig && typeof triggerConfig === "object" ? (triggerConfig as Record<string, unknown>) : null
+  const isScheduled = triggerType === "scheduled" || config?.type === "scheduled"
+  if (!isScheduled) return null
+  const cron = config?.cron
+  if (typeof cron !== "string" || !cron.trim()) return `예약 식이 비어 있습니다. ${SCHEDULED_CRON_HELP}`
+  // 날짜는 판정에 영향이 없다 — 읽을 수 있는 식인지만 본다.
+  return matchScheduledDay(cron, new Date(0)) === "unsupported" ? `읽을 수 없는 예약 식입니다: "${cron}". ${SCHEDULED_CRON_HELP}` : null
+}
+

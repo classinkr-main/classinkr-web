@@ -76,4 +76,29 @@ describe("GET /api/cron/automation — 예약 규칙 실행 판정", () => {
     expect(body.errors).toHaveLength(1)
     expect(body.errors[0]).toContain("지원하지 않는 예약 식")
   })
+
+  it("실패한 실행 기록은 그날 몫을 막지 않는다 — 매월 규칙이 한 달을 통째로 건너뛰지 않게", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.setSystemTime(new Date("2026-12-01T09:00:05Z"))
+    mocks.getActiveRulesByTrigger.mockResolvedValue([rule("monthly-1", "0 9 1 * *")])
+    mocks.getAllLogs.mockResolvedValue([
+      { triggeredAt: "2026-12-01T01:00:00Z", status: "failed" },
+      { triggeredAt: "2026-11-01T09:00:00Z", status: "sent" },
+    ])
+
+    const body = await run()
+
+    expect(mocks.executeRule).toHaveBeenCalledWith("monthly-1")
+    expect(body.ran).toBe(1)
+  })
+
+  it("같은 날 이미 성공했거나 실행 중이면 건너뛴다", async () => {
+    vi.setSystemTime(new Date("2026-12-01T09:00:05Z"))
+    mocks.getActiveRulesByTrigger.mockResolvedValue([rule("monthly-1", "0 9 1 * *")])
+    for (const status of ["sent", "pending"]) {
+      mocks.getAllLogs.mockResolvedValue([{ triggeredAt: "2026-12-01T01:00:00Z", status }])
+      await run()
+    }
+    expect(mocks.executeRule).not.toHaveBeenCalled()
+  })
 })

@@ -37,7 +37,13 @@ describe("GET /api/cron/dispatch", () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  const call = () => GET(new NextRequest("https://classin.kr/api/cron/dispatch?dryRun=true"))
+  let lastRequest: NextRequest
+  const call = () => {
+    lastRequest = new NextRequest("https://classin.kr/api/cron/dispatch?dryRun=true", {
+      headers: { authorization: "Bearer test" },
+    })
+    return GET(lastRequest)
+  }
 
   it("시계에서 구한 슬롯으로 [slot] 본문을 그대로 부른다(요청·쿼리는 그대로 넘긴다)", async () => {
     vi.setSystemTime(new Date("2026-11-27T20:59:58Z"))
@@ -46,6 +52,9 @@ describe("GET /api/cron/dispatch", () => {
     expect(response.status).toBe(200)
     expect(mocks.runSlot).toHaveBeenCalledTimes(1)
     const [request, context] = mocks.runSlot.mock.calls[0]
+    // 받은 요청을 그대로 넘겨야 한다 — 새 요청을 만들면 Authorization 헤더가 빠져 [slot] 본문이 매시 401 로 죽는다.
+    expect(request).toBe(lastRequest)
+    expect((request as NextRequest).headers.get("authorization")).toBe("Bearer test")
     expect((request as NextRequest).nextUrl.searchParams.get("dryRun")).toBe("true")
     expect(await (context as { params: Promise<{ slot: string }> }).params).toEqual({ slot: "21" })
   })

@@ -2,7 +2,7 @@
 // 예전에는 "매일 09시"와 글자가 다른 식은 무조건 실행해 "매주 월요일"·"매월 1일" 규칙이 매일 발송됐다.
 import { describe, expect, it } from "vitest"
 
-import { matchScheduledDay } from "@/lib/automation-schedule"
+import { matchScheduledDay, scheduledCronProblem } from "@/lib/automation-schedule"
 import { PRESET_CRON_OPTIONS } from "@/lib/automation-types"
 
 const at = (iso: string) => new Date(iso)
@@ -61,3 +61,26 @@ describe("matchScheduledDay", () => {
     for (const preset of PRESET_CRON_OPTIONS) expect(matchScheduledDay(preset.cron, MON)).not.toBe("unsupported")
   })
 })
+
+describe("scheduledCronProblem — 저장 때 검사", () => {
+  it("예약 규칙이 아니면 검사하지 않는다", () => {
+    expect(scheduledCronProblem("on_submit", { type: "on_submit" })).toBeNull()
+    expect(scheduledCronProblem("delay", { type: "delay", delayHours: 3 })).toBeNull()
+  })
+
+  it("읽을 수 있는 예약 식은 통과한다(프리셋 전부)", () => {
+    for (const preset of PRESET_CRON_OPTIONS) {
+      expect(scheduledCronProblem("scheduled", { type: "scheduled", cron: preset.cron })).toBeNull()
+    }
+  })
+
+  it("비었거나 읽을 수 없는 예약 식은 사유를 돌려준다", () => {
+    for (const cron of ["", "   ", "0 9 * * MON", "0 9 */2 * *", "@daily", "0 0 9 * * 1"]) {
+      expect(scheduledCronProblem("scheduled", { type: "scheduled", cron })).toEqual(expect.any(String))
+    }
+    expect(scheduledCronProblem("scheduled", { type: "scheduled" })).toEqual(expect.any(String))
+    // 수정 요청은 triggerType 없이 triggerConfig 만 올 수 있다.
+    expect(scheduledCronProblem(undefined, { type: "scheduled", cron: "nope" })).toEqual(expect.any(String))
+  })
+})
+

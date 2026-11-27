@@ -64,8 +64,8 @@ function expandCronField(field, min, max, label) {
 }
 
 /**
- * cron path -> route file. 동적 세그먼트(`[slot]`)를 쓰는 라우트는 vercel.json 에
- * 구체값(`/api/cron/dispatch/07`)으로 등록되므로, 리터럴 디렉터리가 없으면
+ * cron path -> route file. 동적 세그먼트(`[slot]`)를 쓰는 라우트가 vercel.json 에
+ * 구체값(`/api/cron/dispatch/07`)으로 등록될 수 있으므로(2026-11-27 부터 디스패처는 `/api/cron/dispatch` 한 줄), 리터럴 디렉터리가 없으면
  * 같은 자리의 `[param]` 디렉터리로 내려간다. 이걸 안 하면 슬롯 크론이
  * 전부 "missing route file" 로 잡힌다.
  */

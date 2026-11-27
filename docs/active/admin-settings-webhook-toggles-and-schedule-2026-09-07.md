@@ -95,8 +95,8 @@ wecomOps 특례는 제거했다 — 거기서 지우면 연동 상태 화면에�
 ### 구조
 
 ```
-vercel.json          /api/cron/dispatch/00 … /23   (24개, 각 "0 H * * *")
-                     └ 슬롯 = UTC 시. 경로가 달라야 "경로당 하루 1회"에 안전하게 맞는다.
+vercel.json          /api/cron/dispatch   (1개, "0 * * * *" — 2026-11-27 부터. 그 전에는 /00 … /23 24개)
+                     └ 슬롯 = UTC 시. app/api/cron/dispatch/route.ts 가 시계에서 구해 아래 본문을 부른다.
 app/api/cron/dispatch/[slot]/route.ts
                      └ 슬롯 → KST 시로 바꾸고, 그 시각이 발송 시각인 잡만 실행
 site_settings.notification_schedule_json

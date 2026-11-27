@@ -59,11 +59,11 @@ async function isDue(rule: AutomationRule, now: Date): Promise<boolean> {
   if (dayMatch === "not_due") return false
 
   try {
-    const logs = await getAllLogs(rule.id)
-    if (logs.length === 0) return true
+    // 실패한 실행은 "이미 보냈다"가 아니다 — 실패 기록이 그날 몫(매주·매월 규칙이면 한 주·한 달)을 막지 않게 뺀다.
+    // 실행 중(pending)·성공(sent)만 본다. getAllLogs 는 triggered_at DESC 정렬이다.
+    const lastLog = (await getAllLogs(rule.id)).find((log) => log.status !== "failed")
+    if (!lastLog) return true
 
-    // 가장 최근 로그 (getAllLogs는 triggered_at DESC 정렬)
-    const lastLog = logs[0]
     const lastRanAt = new Date(lastLog.triggeredAt).getTime()
     const elapsed = now.getTime() - lastRanAt
     return elapsed > TWENTY_THREE_HOURS_MS
@@ -127,6 +127,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         errors.push(`[${rule.id}] ${rule.name}: ${message}`)
+        // 응답 본문만으로는 아무도 보지 못한다 — 런타임 로그에 규칙 id 와 함께 남긴다.
+        console.error(`[cron/automation] 규칙 실행 실패 — id=${rule.id}:`, message)
       }
     })
   )
