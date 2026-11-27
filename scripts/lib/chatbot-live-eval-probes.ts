@@ -275,6 +275,22 @@ function traceSegments(trace: unknown): FragmentSegment[] | null {
   return out
 }
 
+/**
+ * 모델 고르기(assist)가 조각 답을 채웠으면 결정형 판정(probe, 고르기 전 결정)의 그 조각을 흔적 parts 의 고른 카드로 바꾼다.
+ * 고르기를 쓰지 않은 줄(assist.used 가 참이 아님)은 그대로 돌려준다. 그래서 모델 끔 측정은 바뀌지 않는다.
+ * 이것이 없으면 고르기가 조각을 채워 알림이 빠진 줄을 '답 못 한 조각인데 알림 없음'(소리 없는 누락)으로 잘못 센다.
+ */
+function withAssistParts(segments: FragmentSegment[], trace: Record<string, unknown> | null): FragmentSegment[] {
+  const assist = trace && isRecord(trace.assist) ? trace.assist : null
+  if (!assist || assist.used !== true || !Array.isArray(trace?.parts) || trace.parts.length !== segments.length) return segments
+  const parts = trace.parts
+  return segments.map((segment, index) => {
+    const part = parts[index]
+    if (!isRecord(part) || part.by !== "assist" || typeof part.card !== "string" || !part.card || typeof part.kind !== "string") return segment
+    return { ...segment, kind: part.kind, card: part.card, by: "assist" as const }
+  })
+}
+
 /** 조각 기록을 만든다. 흔적의 조각 배열 > 결정형 판정(probe) > 조각 수만 있는 흔적 순으로 쓴다. */
 export function buildFragmentRecord(input: FragmentRecordInput): FragmentRecord {
   const trace = isRecord(input.trace) ? input.trace : null
@@ -294,6 +310,7 @@ export function buildFragmentRecord(input: FragmentRecordInput): FragmentRecord 
     segments = parts
       ? parts.map((part) => ({ text: part.text, kind: part.kind, card: part.card, by: part.card ? ("index" as const) : ("none" as const), conf: part.conf ?? null }))
       : [{ text: input.question, kind: decision.kind, card: decision.card, by: decision.card ? ("index" as const) : ("none" as const), conf: decision.conf ?? null }]
+    segments = withAssistParts(segments, trace)
   } else if (trace) {
     source = "count"
     const count = typeof trace.segments === "number" ? trace.segments : 1
