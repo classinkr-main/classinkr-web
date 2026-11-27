@@ -79,9 +79,11 @@ export interface ResolveConversationTurnOptions {
    */
   answersNewWords?: (routingText: string, previousQuestion: string, newWords: string[]) => boolean
   /**
-   * R3 a3(답 꼴 규격 4.5): "그리고·또·추가로·그럼"으로 시작하는 말을 새 질문으로 본다(카드를 다시 고른다). 부르는 쪽이 compiled 라우터에서만
-   * 켠다(compiledNextTurnMode). 앞 턴의 무엇을 가리키는 말(그거·그걸·거기), 내용 없이 다시 생긴 문제를 알리는 말("또 안 돼요"),
-   * 기기 이름 대답("그럼 아이패드는요"), 봇이 물은 정보의 대답은 지금처럼 잇는다. 끄면(기본) 지금 규칙 그대로다.
+   * R3 a3(답 꼴 규격 4.5): 더하는 접속어("그리고·또·추가로")로 시작하는 말을 새 질문으로 본다(카드를 다시 고른다). 부르는 쪽이 compiled
+   * 라우터에서만 켠다(compiledNextTurnMode). 앞 턴의 무엇을 가리키는 말(그거·그걸·거기), 내용 없이 다시 생긴 문제를 알리는 말("또 안 돼요"),
+   * 기기 이름 대답, 봇이 물은 정보의 대답, 앞 질문의 서술어를 그대로 잇는 "X도요?"("그리고 학생도요?")는 지금처럼 잇는다.
+   * "그럼·그러면"("그럼 마이크는요?")은 앞 질문의 틀을 이어 받는 말이라 이 규칙에 넣지 않고 지금 규칙(혼자 서는지·새 낱말을 답하는지)이 정한다
+   * (R3 반박 검토: 넣으면 생략형 이어 묻기가 앞 주제를 잃었다). 끄면(legacy) 지금 규칙 그대로다.
    */
   leadingConnectiveNewQuestion?: boolean
 }
@@ -93,8 +95,10 @@ export function compiledNextTurnMode(env: Record<string, string | undefined> = p
   return env.CHATBOT_COMPILED_NEXT_TURN?.trim().toLowerCase() === "off" ? "off" : "new"
 }
 
-// 새 질문을 여는 첫 낱말(규격 4.5).
-const LEADING_NEW_QUESTION_RE = /^(?:아\s*|참\s*|아참\s*)?(?:그리고|그리고요|또|또한|추가로|그럼|그럼요|그러면|그러면요)(?=\s|,|$)/
+// 새 질문을 여는 첫 낱말(규격 4.5): 더하는 접속어만. "그럼·그러면"은 앞 질문의 틀을 잇는 말이라 넣지 않는다.
+const LEADING_NEW_QUESTION_RE = /^(?:아\s*|참\s*|아참\s*)?(?:그리고|그리고요|또|또한|추가로)(?=\s|,|$)/
+// 앞 질문의 서술어를 그대로 잇는 생략형("학생도요?", "PC도?"): 서술어 없이 "…도(요)"로 끝난다.
+const ELLIPTICAL_ALSO_RE = /[\p{L}\p{N}]도요?\s*[?？!.~]*\s*$/u
 
 // ─── 입력 검사 ────────────────────────────────────────────────────────────
 
@@ -381,13 +385,14 @@ export function resolveConversationTurn(
   if (compactLength <= SLOT_MESSAGE_MAX && matchesSlotAnswer(previousTurn?.askedSlot, text, shape)) {
     return expand(previousTurn?.askedSlot === "choice" ? "choice" : "slot_answer")
   }
-  // "그리고 출결은요?", "또 숙제 기능도 있어요?": 새 질문을 여는 말은 새로 고른다(compiled 라우터, 규격 4.5).
+  // "그리고 출결은요?", "또 숙제 기능도 있어요?": 더하는 접속어로 여는 새 질문은 새로 고른다(compiled 라우터, 규격 4.5).
   if (
     options.leadingConnectiveNewQuestion &&
     LEADING_NEW_QUESTION_RE.test(text) &&
     !shape.objectDeictic &&
     shape.content.length > 0 &&
-    !DEVICE_ANSWER_RE.test(text.toLowerCase())
+    !DEVICE_ANSWER_RE.test(text.toLowerCase()) &&
+    !(ELLIPTICAL_ALSO_RE.test(text) && !shape.specificPredicate)
   ) {
     return none
   }

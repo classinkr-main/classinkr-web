@@ -476,10 +476,21 @@ describe("legacy generation: one compound-question line (CHATBOT_LEGACY_MULTI_PR
     expect(multiQuestionRequirement(MIXED)).toBeNull()
   })
 
-  it("adds the line only when the switch is on and the question has two question sentences", () => {
+  it("keeps the R2 【주제】 line when only the R2 switch is on (R3 rebut: the existing switch value keeps its behavior)", () => {
     vi.stubEnv("CHATBOT_LEGACY_MULTI_PROMPT", "on")
     vi.stubEnv("CHATBOT_LEGACY_STYLE_PROMPT", undefined)
     vi.stubEnv("CHATBOT_COMPOUND_HEAD", undefined)
+    expect(multiQuestionRequirement(MIXED)).toContain("물음마다 【주제】 머리 줄 한 줄을 쓰고")
+    expect(multiQuestionRequirement(MIXED)).not.toContain("'1. 주제'처럼 번호 머리 줄")
+    // R3 답 꼴 스위치를 켜면 번호 머리가 기본이다.
+    vi.stubEnv("CHATBOT_LEGACY_STYLE_PROMPT", "on")
+    expect(multiQuestionRequirement(MIXED)).toContain("'1. 주제'처럼 번호 머리 줄")
+  })
+
+  it("adds the line only when the switch is on and the question has two question sentences", () => {
+    vi.stubEnv("CHATBOT_LEGACY_MULTI_PROMPT", "on")
+    vi.stubEnv("CHATBOT_LEGACY_STYLE_PROMPT", undefined)
+    vi.stubEnv("CHATBOT_COMPOUND_HEAD", "number")
     expect(multiQuestionRequirement("녹화 영상 다시보기 어디서 봐요")).toBeNull()
     const line = multiQuestionRequirement(MIXED)
     expect(line).toContain("물음이 2개")

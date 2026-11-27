@@ -418,9 +418,16 @@ export function legacyStylePromptEnabled(env: PromptEnv = process.env): boolean 
   return env.CHATBOT_LEGACY_STYLE_PROMPT?.trim().toLowerCase() === "on"
 }
 
-/** 복합 답 머리 꼴(CHATBOT_COMPOUND_HEAD, 답 색인 렌더와 같은 스위치): bracket 이면 R2 【주제】, 그 밖(없음 포함)은 R3 "1. 주제"(결정 D2). */
+/**
+ * 복합 답 머리 꼴(CHATBOT_COMPOUND_HEAD, 답 색인 렌더와 같은 스위치): bracket 이면 R2 【주제】, number(numbered)면 R3 "1. 주제"(결정 D2).
+ * 값이 없으면 R3 답 꼴 스위치(CHATBOT_LEGACY_STYLE_PROMPT=on)를 켰을 때만 번호 머리다. R2 스위치(CHATBOT_LEGACY_MULTI_PROMPT=on)만 켠 운영은
+ * 지금처럼 R2 글을 글자 그대로 받는다(R3 반박 검토: 이미 쓰던 스위치 값의 동작을 말없이 바꾸지 않는다).
+ */
 function legacyCompoundHead(env: PromptEnv): "number" | "bracket" {
-  return env.CHATBOT_COMPOUND_HEAD?.trim().toLowerCase() === "bracket" ? "bracket" : "number"
+  const value = env.CHATBOT_COMPOUND_HEAD?.trim().toLowerCase()
+  if (value === "bracket") return "bracket"
+  if (value === "number" || value === "numbered") return "number"
+  return legacyStylePromptEnabled(env) ? "number" : "bracket"
 }
 
 /**
@@ -443,8 +450,8 @@ export const GUIDE_STYLE_REQUIREMENT = [
 
 // R2 B3(운영 담당 지시 "질문 2개를 한 번에 하면 하나로 쏠린다"): 스위치를 켰고, 묻는 문장(물음표·묻는 어미 문장, 번호·점 목록 항목)이
 // 둘 이상일 때만 순서대로 모두 답하게 한다. 답 색인의 잇는 말 나누기(쉼표·'이랑'·'-고')는 쓰지 않는다(한 질문을 잘게 쪼갤 수 있다).
-// 상담 안내 한 줄은 결정 2. 머리 줄은 R3 결정 D2 로 "1. 주제" + 바로 아래 결론 줄(답 꼴 규격 S10)이고, CHATBOT_COMPOUND_HEAD=bracket 이면
-// R2 글(【주제】, 결정 4)을 글자 그대로 낸다. CHATBOT_LEGACY_STYLE_PROMPT=on 이어도 붙는다(R3 답 꼴은 복합 꼴을 포함한다).
+// 상담 안내 한 줄은 결정 2. 머리 줄은 R3 결정 D2 로 "1. 주제" + 바로 아래 결론 줄(답 꼴 규격 S10)이고(R3 답 꼴 스위치 또는 CHATBOT_COMPOUND_HEAD=number),
+// R2 스위치만 켰거나 CHATBOT_COMPOUND_HEAD=bracket 이면 R2 글(【주제】, 결정 4)을 글자 그대로 낸다. CHATBOT_LEGACY_STYLE_PROMPT=on 이어도 붙는다.
 export function multiQuestionRequirement(question: string, env: PromptEnv = process.env): string | null {
   if (!legacyMultiPromptEnabled(env) && !legacyStylePromptEnabled(env)) return null
   const count = explicitQuestionCount(question)

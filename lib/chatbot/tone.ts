@@ -246,6 +246,11 @@ export function applyToneToAnswer(
     next = next
       .replace(/\n\n(?:그래도 안 되면|따라 하다 막히는 부분이 있으면) 담당자 상담으로 이어 드릴게요\.(?: 상담할 때[^\n]*)?$/, "")
       .replace(/(?:그래도 안 되면|따라 하다 막히는 부분이 있으면) 담당자 상담으로 이어 드릴게요\.\s*/, "")
+    // 연결 줄이 이미 상담 버튼을 가리키므로 본문의 같은 권유 문단("아래 상담 버튼으로 … 남겨 주시면 … 확인해 드려요.")은 뺀다(R3 반박 검토: 같은 안내가 두 번 나왔다).
+    next = next
+      .split("\n\n")
+      .filter((block, at, all) => !(all.length > 1 && CONSULT_BUTTON_PARAGRAPH_RE.test(block.trim())))
+      .join("\n\n")
     const refund = options.mentionsRefund && !next.includes("약속드릴 수 없") ? ` ${REFUND_PROMISE_LINE}` : ""
     const head = `${HANDOFF_NOW_LINE}${prior && next.startsWith(prior) ? ` ${prior}` : ""}${refund}`
     if (prior && next.startsWith(prior)) next = next.slice(prior.length).replace(/^\n\n/, "")
@@ -359,6 +364,8 @@ export const COMPILED_HANDOFF_NOW_LINE =
   "지금 바로 담당자와 연결해 드릴게요. 아래 [실시간 상담 연결]을 누르시면 상담원이 이 대화를 보고 이어서 도와드려요."
 export const COMPILED_REFUND_PROMISE_LINE = "환불이나 보상은 제가 채팅에서 약속드릴 수 없어요. 상담원이 이번 상황을 확인해 안내해 드려요."
 const COMPILED_STEPS_BRIDGE = "먼저 해 보실 수 있는 조치도 함께 남겨 둘게요."
+/** 상담 버튼으로 남기라는 권유만 있는 문단(연결 줄과 겹치는 안내). */
+const CONSULT_BUTTON_PARAGRAPH_RE = /^아래 (?:상담 버튼|\[실시간 상담 연결\])(?:으로|을 눌러)[^\n]*(?:남겨|알려|보내) 주시면[^\n]*(?:드려요|드립니다)\.$/
 
 /**
  * 말투 층·앞단(즉시 상담·이미 해 봄) 고정 문구의 니다체 → 요체. 이 목록에 있는 글 그대로만 바꾼다(카드·문서 문장은 건드리지 않는다).
@@ -375,6 +382,9 @@ export const COMPILED_YO_FIXED_PHRASES: readonly (readonly [string, string])[] =
   ["연결되면 상담원이 바로 안내해 드립니다.", "연결되면 상담원이 바로 안내해 드려요."],
   ["정리해 남겨 주시면 담당자가 확인해 드립니다.", "정리해 남겨 주시면 담당자가 확인해 드려요."],
   ["정리해 두시면 더 빨리 확인합니다.", "정리해 두시면 더 빨리 확인할 수 있어요."],
+  // 증상 안내 마무리(symptom-triage buildSymptomTopicAnswer)와 환불 접수 안내(service.ts): 다듬기를 거치지 않는 경로에도 남지 않게 여기서도 바꾼다(R3 반박 검토).
+  ["알려 주시면 더 빨리 확인합니다:", "알려 주시면 더 빨리 확인할 수 있어요:"],
+  ["말씀해 주시면 더 빨리 확인합니다.", "말씀해 주시면 더 빨리 확인할 수 있어요."],
   ["기술지원이 그 시간대 접속 기록을 보고 확인합니다.", "기술지원이 그 시간대 접속 기록을 보고 확인해요."],
 ]
 
@@ -432,6 +442,11 @@ export function applyCompiledToneToAnswer(
     next = next
       .replace(/\n\n(?:그래도 안 되면|따라 하다 막히는 부분이 있으면) 담당자 상담으로 이어 드릴게요\.(?: 상담할 때[^\n]*)?$/, "")
       .replace(/(?:그래도 안 되면|따라 하다 막히는 부분이 있으면) 담당자 상담으로 이어 드릴게요\.\s*/, "")
+    // 연결 줄이 이미 상담 버튼을 가리키므로 본문의 같은 권유 문단("아래 상담 버튼으로 … 남겨 주시면 … 확인해 드려요.")은 뺀다(R3 반박 검토: 같은 안내가 두 번 나왔다).
+    next = next
+      .split("\n\n")
+      .filter((block, at, all) => !(all.length > 1 && CONSULT_BUTTON_PARAGRAPH_RE.test(block.trim())))
+      .join("\n\n")
     const refund = options.mentionsRefund && !next.includes("약속드릴 수 없") ? ` ${COMPILED_REFUND_PROMISE_LINE}` : ""
     const head = `${COMPILED_HANDOFF_NOW_LINE}${prior && next.startsWith(prior) ? ` ${prior}` : ""}${refund}`
     if (prior && next.startsWith(prior)) next = next.slice(prior.length).replace(/^\n\n/, "")

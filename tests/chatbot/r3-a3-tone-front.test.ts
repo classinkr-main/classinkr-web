@@ -279,18 +279,24 @@ describe("R3 a3 compiled tone through the service", () => {
   }, 120_000)
 })
 
-describe("R3 a3 next turn: 그리고·또·추가로·그럼 open a new question (compiled only)", () => {
+describe("R3 a3 next turn: 그리고·또·추가로 open a new question (compiled only)", () => {
   const camera = { question: "카메라가 안 켜져요" }
   const on = { leadingConnectiveNewQuestion: true, answersNewWords: () => true }
 
-  it("picks again for a new question that opens with a connective", () => {
-    for (const message of ["그리고 출결은요?", "또 숙제는요?", "그럼 녹화본은요?", "추가로 요금은요?"]) {
+  it("picks again for a new question that opens with an additive connective", () => {
+    for (const message of ["그리고 출결은요?", "또 숙제는요?", "추가로 요금은요?"]) {
       expect(resolveConversationTurn(message, camera, null, on), message).toMatchObject({ reason: "none", expanded: false })
       // 끄면(legacy·스위치 off) 지금 규칙 그대로다.
       expect(resolveConversationTurn(message, camera, null, { answersNewWords: () => true }).expanded, message).toBe(
         message !== "추가로 요금은요?"
       )
     }
+  })
+
+  it("leaves 그럼·그러면 to the existing gates (R3 rebut: elliptical follow-ups keep the topic)", () => {
+    // 새 낱말을 답하면 잇고(스텁 true), 앞 답을 그대로 다시 낼 뿐이면(false) 새로 고른다. 스위치와 상관없이 지금 규칙과 같다.
+    expect(resolveConversationTurn("그럼 녹화본은요?", camera, null, on).expanded).toBe(true)
+    expect(resolveConversationTurn("그럼 녹화본은요?", camera, null, { ...on, answersNewWords: () => false }).expanded).toBe(false)
   })
 
   it("still continues pronoun references, device replies and retry reports", () => {

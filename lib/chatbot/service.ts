@@ -88,6 +88,7 @@ import {
   detectStrongToneSignals,
   glossForRouting,
   isEnglishSupportRequest,
+  toCompiledYoFixedPhrases,
 } from "@/lib/chatbot/tone"
 import {
   answerIndexDataDir,
@@ -143,6 +144,7 @@ import {
   type AnswerIndexHost,
 } from "@/lib/chatbot/answer-index/respond"
 import { isCompiledScope } from "@/lib/chatbot/answer-index/scope"
+import { toYoTone } from "@/lib/chatbot/answer-index/yo-tone"
 import type { AnswerIndexDecision, AnswerIndexRouter, AnswerIndexTrace } from "@/lib/chatbot/answer-index/types"
 import type { ChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
 import {
@@ -5784,9 +5786,16 @@ function applyConversationTone(core: ChatbotCore) {
     tone.priorContext = null
     tone.priorKind = null
   }
+  // compiled 라우터가 범위 밖이라 지금 흐름에 넘긴 답(R3 반박 검토, CHATBOT_COMPILED_OUT_SCOPE_TONE=yo 기본): 같은 라우터의 답이므로 말투를 요체로
+  // 맞추고(사람이 공개 범위를 정한 정책 주제는 글을 그대로 둔다) 아래 compiled 말투 층을 입힌다. 기본 라우터(legacy) 답은 그대로다.
+  const compiledOutScope = isCompiledOutScopeCore(core) && compiledOutScopeToneMode() === "yo"
+  if (compiledOutScope && !isPageContextExcludedQuestion(said) && !isPageContextExcludedQuestion(core.question)) {
+    core.response.answer = toCompiledYoFixedPhrases(toYoTone(core.response.answer).text)
+  }
   // compiled 라우터가 정한 답(R3 a3, CHATBOT_COMPILED_EMPATHY=strong 기본): 공감은 강한 표지에만 결론 다음 줄에, 고정 문구는 요체로.
   // '반복 문의'도 우리에게 다시 묻거나 같은 문제가 되풀이된다는 말만 센다(compiledRepeated). legacy 답은 아래 옛 판정 그대로다.
-  const signals = isCompiledFinalCore(core) && compiledEmpathyMode() === "strong" ? detectStrongToneSignals(said.redacted, tone) : null
+  const signals =
+    (isCompiledFinalCore(core) || compiledOutScope) && compiledEmpathyMode() === "strong" ? detectStrongToneSignals(said.redacted, tone) : null
   if (signals) tone.repeated = compiledRepeated(tone, signals)
   // 지난 문의를 전제로 한 질문은 "볼 수 없다"는 줄만 붙이고, 상담 연결은 화난·반복 문의일 때만 앞세운다.
   // 이미 상담원 대기 중이라고 항의하는 사람에게 "지금 바로 연결해 드릴게요"를 또 약속하지 않는다.
@@ -5819,6 +5828,7 @@ function applyConversationTone(core: ChatbotCore) {
       topicId: core.topicId,
       allowSalesFollowUp: !core.suppressSalesFollowUp &&
         !isBasicProductIntroQuestion(core.question) && !getLessonWorkflow(core.question),
+      compound: isCompiledFinalCore(core) && Boolean(core.answerIndex?.compound),
     })
   )
 }
@@ -7627,6 +7637,21 @@ async function streamAndApplyFinalAnswer({
  * 모든 안전 게이트(정제·길이클램프·사용성 판정·결정형 폴백)는 비스트리밍 경로와 동일하게 유지한다.
  */
 /** compiled 라우터가 범위 안에서 정한 코어(색인 판정·색인 앞 단계 답). 인사·거절 답·범위 밖 질문은 지금 흐름 코어라 아니다. */
+/**
+ * CHATBOT_COMPILED_OUT_SCOPE_TONE: yo(기본) · off. compiled 라우터에서 범위 밖(긴 질문 등)이라 지금 흐름이 만든 답에도 요체·강한 신호 공감을
+ * 입힐지(R3 반박 검토: 같은 라우터 답인데 니다체와 약한 신호 공감 첫마디가 남았다). compiled 라우터가 아니면 읽지 않는다.
+ */
+export function compiledOutScopeToneMode(env: Record<string, string | undefined> = process.env): "yo" | "off" {
+  const value = env.CHATBOT_COMPILED_OUT_SCOPE_TONE?.trim().toLowerCase()
+  return value === "off" || value === "0" || value === "false" ? "off" : "yo"
+}
+
+/** compiled 라우터가 범위 밖이라 지금 흐름(legacy)에 넘긴 코어. */
+function isCompiledOutScopeCore(core: ChatbotCore) {
+  const trace = core.answerIndex
+  return Boolean(trace && trace.router === "compiled" && trace.scope === "out")
+}
+
 function isCompiledFinalCore(core: ChatbotCore) {
   const trace = core.answerIndex
   if (!trace || trace.router !== "compiled" || trace.scope !== "in") return false

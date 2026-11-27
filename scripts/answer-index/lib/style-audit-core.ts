@@ -267,6 +267,8 @@ export function stripQuoted(text: string): string {
 export function sentenceTone(sentence: string): "nida" | "yo" | "other" {
   const body = sentence.trim().replace(/[.!?)"'”’\s]+$/, "")
   if (/(니다|니까)$/.test(body)) return "nida"
+  // 콜론 뒤에 목록이 이어지는 앞말("…더 빨리 확인합니다: 쓰는 기기, …")도 그 앞말의 체로 본다(R3 반박 검토: L9 가 이 꼴을 놓쳤다).
+  if (/(니다|니까)\s*[:：](?:\s|$)/.test(body)) return "nida"
   const tone = endingTone(sentence)
   return tone === "yo" ? "yo" : "other"
 }

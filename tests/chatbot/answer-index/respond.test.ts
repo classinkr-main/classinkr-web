@@ -793,7 +793,8 @@ describe("respond: R3 form (a1 — 1. 주제 머리·조각 안 점 단계·요�
       { env: R3 }
     )
     const answer = core.response.answer
-    expect(answer).toContain(`4. "다시보기 기간은 언제까지인가요"\n${SEGMENT_RETRY_LINE}`)
+    // 머리 이름은 손님 글을 따옴표째 쓰지 않고 묻는 갈래 명사구로 쓴다(R3 반박 검토).
+    expect(answer).toContain(`4. 다시 보기 기간\n${SEGMENT_RETRY_LINE}`)
     expect(answer).not.toContain(SEGMENT_NOTFOUND_LINE)
     expect(core.response.suggestedQuestions).toContain("다시보기 기간은 언제까지인가요?")
     expect(core.answerIndex.compound).toMatchObject({ cap: 1000 })

@@ -358,8 +358,11 @@ function quotedSpans(text: string): Array<[number, number]> {
 
 const inSpans = (spans: ReadonlyArray<[number, number]>, at: number) => spans.some(([start, end]) => at >= start && at < end)
 
-/** 문장 끝: 뒤에 문장 부호·닫는 따옴표·괄호가 오고 이어서 공백·줄 끝(한글이 바로 붙지 않는다). */
-const SENTENCE_END = String.raw`(?=[.!?…~]*["'”’)\]」』]*[.!?…]*(?:\s|$))`
+/**
+ * 문장 끝: 뒤에 문장 부호·닫는 따옴표·괄호가 오고 이어서 공백·줄 끝(한글이 바로 붙지 않는다).
+ * 콜론 뒤에 목록이 이어지는 앞말("…더 빨리 확인합니다: 쓰는 기기, …")도 문장 끝으로 본다(R3 반박 검토: 이 꼴이 니다체로 남아 말투가 섞였다).
+ */
+const SENTENCE_END = String.raw`(?=[.!?…~]*["'”’)\]」』]*[.!?…]*(?:\s|$)|[:：](?:\s|$))`
 const NIDA_WORD_RE = new RegExp(String.raw`([가-힣]+)(니다|니까)${SENTENCE_END}`, "g")
 
 /** 낱말 덩이 규칙(사전보다 먼저): '-하시기 바랍니다' → '-해 주세요', '-십시오' → '-세요'. */
@@ -377,6 +380,8 @@ const PHRASE_RULES: ReadonlyArray<{ re: RegExp; to: (match: RegExpExecArray) => 
     },
   },
   { re: new RegExp(String.raw`(참고|확인|양해|문의|주의|협조|이용|숙지|참조)\s?바랍니다${SENTENCE_END}`, "g"), to: (m) => `${m[1]}해 주세요` },
+  // 상담 마무리 줄의 "…알려 주시면 더 빨리 확인합니다"는 상대가 하는 일을 말하는 꼴이라 '확인해요'보다 '확인할 수 있어요'가 맞다(service 고정 문구와 같은 말).
+  { re: new RegExp(String.raw`(더\s?빨리\s)확인합니다${SENTENCE_END}`, "g"), to: (m) => `${m[1]}확인할 수 있어요` },
   { re: new RegExp(String.raw`([가-힣]+)십시오${SENTENCE_END}`, "g"), to: (m) => `${m[1]}세요` },
 ]
 
