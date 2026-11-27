@@ -141,8 +141,6 @@ export interface DecideContext {
    * 판정에는 쓰지 않고 판정의 tried 로 넘긴다(쓰는 곳은 a1 respond.ts — 스위치 CHATBOT_COMPILED_SKIP_TRIED).
    */
   tried?: string[]
-  /** 순위 뒤처리(허브·공백 양보)를 할지(score.ts rankYield). 없으면 CHATBOT_INDEX_HUB_YIELD. 양보 전 판정을 다시 볼 때 false 로 넘긴다. */
-  rankYield?: boolean
 }
 
 // ─── 환경변수 스위치(§3.8) ──────────────────────────────────────────────
@@ -271,8 +269,8 @@ function featuresOf(
 }
 
 /** 상위 후보 검사·반례 탈락·행선 가산을 마친 순위. */
-function rankWithChecks(index: CompiledAnswerIndex, query: IndexQuery, votes: readonly string[], disabled: ReadonlySet<string>, rankYield?: boolean) {
-  const scored = scoreCandidates(index, query, votes, { disabled, ...(rankYield === undefined ? {} : { rankYield }) })
+function rankWithChecks(index: CompiledAnswerIndex, query: IndexQuery, votes: readonly string[], disabled: ReadonlySet<string>) {
+  const scored = scoreCandidates(index, query, votes, { disabled })
   const negatives = scoreNegatives(index, query)
   const inputs = { negatives, maxVariantCos: scored.maxVariantCos, centroidCos: scored.centroidCos }
   const live = (card: number) => card >= 0 && card < index.cards.length && !disabled.has(index.cards[card].id)
@@ -312,7 +310,7 @@ function rankWithChecks(index: CompiledAnswerIndex, query: IndexQuery, votes: re
   }
   // 아직 검사하지 않은 상위 후보(마지막 라운드에 올라온 것)도 특징용으로 검사한다.
   for (const candidate of ranked.slice(0, CHECK_TOP)) if (candidate.card >= 0 && !candidate.check) candidate.check = checkCandidate(index, query, candidate.card, inputs)
-  return { ranked, knn: scored.knn, knnCountOf: scored.knnCountOf, yielded: scored.yielded }
+  return { ranked, knn: scored.knn, knnCountOf: scored.knnCountOf }
 }
 
 function fallbackKind(index: CompiledAnswerIndex, query: IndexQuery, text: string, isSymptomReport: (text: string) => boolean) {
@@ -355,11 +353,6 @@ export interface SegmentAnalysis {
   absentGapCard: number | null
   /** 못 찾음 갈래(문턱과 무관). */
   fallback: { kind: "clarify" | "abstain"; abstainReason: AnswerIndexDecision["abstainReason"] }
-  /**
-   * 1위 공백 카드를 순위 뒤처리로 뒤로 보냈으면 양보 전 분석(처음 부를 때 만든다). 양보받은 카드가 제 문턱을 넘지 못하면 resolveSegment 가 양보 전
-   * 판정(공백 답)을 쓴다(R3 반박 검토: 공백 답이 일반 못 찾음으로 떨어졌다). 양보가 없었으면 없다.
-   */
-  beforeYield?: () => SegmentAnalysis
 }
 
 export function analyzeSegment(index: CompiledAnswerIndex, text: string, context: DecideContext = {}, display?: string): SegmentAnalysis {
@@ -367,9 +360,7 @@ export function analyzeSegment(index: CompiledAnswerIndex, text: string, context
   const disabled = disabledCardIds(env)
   const isSymptomReport = context.isSymptomReport ?? ((value: string) => INDEX_SYMPTOM_RE.test(value.toLowerCase()))
   const query = prepareQuery(index, text)
-  const { ranked, knn, knnCountOf, yielded } = rankWithChecks(index, query, context.votes ?? [], disabled, context.rankYield)
-  let beforeYield: SegmentAnalysis | null = null
-  const gapYielded = yielded.some((item) => item.reason === "gap")
+  const { ranked, knn, knnCountOf } = rankWithChecks(index, query, context.votes ?? [], disabled)
 
   const asking = query.absent.length > 0 ? askingSentencesOf(text) : null
   const absentTargets = query.absent.map((match) => {
@@ -418,9 +409,6 @@ export function analyzeSegment(index: CompiledAnswerIndex, text: string, context
     absentCoverage,
     absentGapCard,
     fallback: fallbackKind(index, query, text, isSymptomReport),
-    ...(gapYielded
-      ? { beforeYield: () => (beforeYield ??= analyzeSegment(index, text, { ...context, rankYield: false }, display)) }
-      : {}),
   }
 }
 
@@ -505,11 +493,6 @@ export function resolveSegment(index: CompiledAnswerIndex, analysis: SegmentAnal
     if (answerable(0)) {
       return { ...base, kind: "answer", card: top1.id, conf: confs[0], unexplained: unexplainedOf(0), absentHit: null, absentTail: null, abstainReason: null }
     }
-  }
-  // 순위 뒤처리로 1위 공백 카드를 뒤로 보냈는데 양보받은 카드도 문턱을 넘지 못했으면 양보 전 판정(공백 답)을 쓴다. 양보는 구체적인 답이 있을 때만이다.
-  if (analysis.beforeYield) {
-    const before = resolveSegment(index, analysis.beforeYield(), threshold)
-    if (before.kind === "gap") return before
   }
   // 2·5·6·7. 못 찾음 갈래
   return { ...base, ...analysis.fallback, card: null, conf: realConf, unexplained: unexplainedOf(topReal), absentHit: null, absentTail: null }

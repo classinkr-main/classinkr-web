@@ -1000,6 +1000,11 @@ export function findCoveringLine(
   if (keys.length === 0) return null
   // 조각이 '안 열리면·안 와요'처럼 무엇이 안 되는 경우를 물으면 그 동작(2자 어간)이 줄에 있어야 한다(같은 주제의 다른 안내를 답으로 옮기지 않게).
   const failing = Array.from(normalizeText(segmentText).matchAll(/(?:안|못)\s*([가-힣]{1,2})/g), (match) => match[1])
+  // 조각의 명사 낱말(용언 꼴 뺌)은 모두 그 줄에 있어야 한다("전자칠판 사이즈와 사양" → 사이즈·사양까지).
+  const nouns = pieceContentWords(segmentText)
+    .filter((word) => !/(?:요|다|할|해|돼|되|하|죠|까|나)$/.test(word))
+    .map((word) => word.toLowerCase())
+  const yesNo = detectAskType(normalizeText(segmentText)) === "yesno"
   let best: { piece: number; block: number; line: number; list: boolean } | null = null
   for (let other = 0; other < pieces.length; other += 1) {
     const piece = pieces[other]
@@ -1013,6 +1018,12 @@ export function findCoveringLine(
         // 앞 단계를 받는 줄("그래도 안 되면 …")·짧은 줄·상담 안내 줄은 혼자 답이 되지 않는다.
         if (text.length < 12 || /^(?:그래도|그러면|그럼|이때|그다음)/.test(text) || isClosingLine(text) || CONSULT_GUIDE_RE.test(text)) continue
         if (!keys.every((key) => compact.includes(key))) continue
+        // 그 줄이 그 이름에 관한 줄이어야 한다: 줄이 이름으로 시작하거나 이름이 버튼 이름([…]) 안에 있다(지나가며 나온 낱말은 고르지 않는다).
+        const buttons = Array.from(text.matchAll(/\[([^\]\n]+)\]/g), (match) => match[1].toLowerCase().replace(/\s+/g, ""))
+        const about = keys.some((key) => compact.startsWith(key) || buttons.some((name) => name.includes(key)))
+        if (!about || nouns.some((noun) => !compact.includes(noun))) continue
+        // 되나요·있나요 물음은 그 줄이 된다·안 된다를 말해야 답이다("녹화 되나요?"에 녹화 화면 고르는 줄을 옮기지 않는다).
+        if (yesNo && !/수\s*있|수\s*없|돼요|되요|가능|없어요|않|못|켜요|켤\s*수/.test(text)) continue
         // 안 되는 경우를 묻는 조각은 그 줄도 안 되는 경우를 말해야 한다(부정어 + 그 동작 첫 글자).
         if (failing.length > 0 && (!/안|않|못|없/.test(text) || failing.some((stem) => !compact.includes(stem.slice(0, stem.length >= 2 ? 2 : 1))))) continue
         const list = /^(?:\d+[.)]|[-•·*–])\s/.test(raw.trim())

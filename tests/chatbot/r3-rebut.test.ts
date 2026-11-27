@@ -211,10 +211,4 @@ describe("R3 rebut: compound question decisions", () => {
     expect(splitQuestion("수업 시간과 장소가 어떻게 되나요?").segments.length).toBe(1)
     expect(splitQuestion("가격과 기능 차이가 뭐예요?").segments.length).toBe(1)
   })
-
-  it("keeps a gap answer when the card the gap yielded to cannot answer", () => {
-    const index = getRouterAnswerIndex()
-    const decision = decide(index, "화면 캡처 있나요")
-    expect(decision.kind).toBe("gap")
-  }, 60_000)
 })
