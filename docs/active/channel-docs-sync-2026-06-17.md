@@ -23,21 +23,22 @@
 
 ## 2. 무엇을 거르나
 
-- 채널 `state`(published/draft/unpublished) **전수 크롤이 기본** — 내용이 있는 초안(예: PC 설치, 교사 추가, AI 기능)은 유용하므로 포함한다.
+- **기본은 채널 published 글만** 받는다(2026-11-27부터). 초안·비공개 글은 `--include-drafts`를 줄 때만 받고, 그때도 `visibility=internal`, `noindex=true`로 넣는다. 공개 챗봇 검색은 `public`·`unlisted`를 읽으므로 `unlisted`도 공개와 같게 본다.
+- 본문의 **내부 블록**(예: "게시 전 확인(내부용)" 같은 머리)은 published 글이라도 빼고 경고를 남긴다. 머리가 제목이면 그 절, 인용·콜아웃이면 그 인용 묶음, 그 밖의 꼴(굵은 머리 줄·목록·문단)이면 그 줄부터 본문 끝까지 뺀다. 제목 자체에 내부 표시가 있으면 글 전체를 `internal`로 넣는다. 규칙과 시험: [scripts/lib/channel-documents-sync-policy.ts](../../scripts/lib/channel-documents-sync-policy.ts), `tests/scripts/channel-documents-sync-policy.test.ts`, `tests/scripts/sync-channel-documents-dry-run.test.ts`.
 - 빈 "작성중" 스텁(본문 < 24자)과 정확히 `테스트`/`test`/`샘플`/`sample` 제목은 제외(챗봇 답변 품질).
 - 채널톡 Documents 자체 메타 문서(`8472`, `8473`)와 짧은 중복 스텁(`44553`)은 제외한다. 챗봇은 ClassIn Korea 운영 자료만 검색하도록 유지한다.
 - 자동생성 제목 보정: `260407_코스 탈퇴 규정` → `코스 탈퇴 규정`, `한국어20260323_1109` → 본문 첫 제목에서 추출.
-- `--published-only`로 채널 published 상태만 좁힐 수 있다.
+- `--published-only`는 이제 기본값이라 받아만 둔다(`--include-drafts`와 같이 쓰면 오류).
 
 ## 3. 어디에 저장되나
 
 - `docs_categories`: `admin` = "[관리자] 사용 가이드"
 - `docs_articles`: slug `channel-talk-document-{articleId}`, `status=published`
-  - visibility: 기본 `unlisted`(공개 색인 제외, 챗봇·관리자 가이드에서 사용). 채널 published 글은 `--public`으로 공개 승격 가능. draft는 항상 `unlisted`.
+  - visibility: 채널 published 글은 기본 `unlisted`(공개 색인 제외, 챗봇·관리자 가이드에서 사용), `--public`으로 공개 승격 가능. 초안·비공개·내부 표시 글은 항상 `internal` + `noindex=true`(청크 metadata에도 `visibility: "internal"`)라 공개 챗봇 검색에서 빠지고 내부 코파일럿만 읽는다.
   - `updated_by=sync-channel-documents` — 관리자 수기 편집본(`classin-admin` 등)과 구분된다.
   - 본문에는 원문 URL을 넣지 않는다. 외부 원문 추적값은 `content_json.sourceUrl`/chunk metadata에만 보관해 챗봇 답변은 자체 운영 자료처럼 읽히게 한다.
 - `docs_ai_chunks`: 1800자 단위 청크 + 메타(sourceUrl, imageCount, fileCount, channelDocumentState)
-- 정합성 reconcile: 전수 크롤 시, 이번 세트에 없는 **자동 동기화 문서**는 `archived`로 내리고 청크를 정리한다. 수기 편집본은 건드리지 않는다.
+- 정합성 reconcile: 전수 크롤 시, 이번 세트에 없는 **자동 동기화 문서**는 `archived`로 내리고 청크를 정리한다. 수기 편집본은 건드리지 않는다. 기본(published만) 실행에서 고르지 않은 초안의 기존 행은 그대로 둔다 — 예전에 `unlisted`로 들어간 초안 행을 내리려면 `--include-drafts`로 다시 넣는다(그 행이 `internal`·`noindex`로 바뀐다).
 
 ## 4. 어떻게 참조되나
 
@@ -66,9 +67,10 @@ GEMINI_EMBED_DIM=1536                   # 선택 사항 (기본값: 1536)
 CLI 실행 옵션:
 - `--dry-run`: 쓰기 없이 파싱/동기화 미리보기
 - `--dump`: 추출된 마크다운 전문 스탬프 확인
-- `--published-only`: 채널 published 상태 아티클만 선택
+- `--include-drafts`: 초안·비공개 아티클까지 선택(그 글은 `internal`·`noindex`). 없으면 published만(기본)
+- `--published-only`: 기본값이라 받아만 둔다
 - `--public`: published 글의 visibility를 public으로 승격 (기본값: unlisted)
-- `--ids <id1,id2>`: 특정 아티클 ID만 핀포인트 동기화
+- `--ids <id1,id2>`: 특정 아티클 ID만 핀포인트 동기화(초안은 `--include-drafts`일 때만)
 
 ---
 
@@ -79,7 +81,8 @@ CLI 실행 옵션:
 npx tsx scripts/sync-channel-documents.ts --dry-run
 npx tsx scripts/sync-channel-documents.ts --dry-run --ids <id> --dump
 
-# 2) 전수 동기화 + 정합성 reconcile
+# 2) 전수 동기화(published만) + 정합성 reconcile
+#    출력의 "warning <id>: 내부 블록 n개" 줄은 채널 글에서 내부 블록을 지워 달라는 뜻이다.
 npx tsx scripts/sync-channel-documents.ts
 
 # 3) 임베딩 백필(누락분만, 멱등)
