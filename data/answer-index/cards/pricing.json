@@ -8857,8 +8857,8 @@
     "area": "classroom",
     "topic": "학원·강사가 학생 1:1 채팅을 볼 수 있는지(공개 안내에 없음)",
     "answer": {
-      "text": "학원이나 쌤이 1:1 채팅을 볼 수 있는지는 공개 안내에 안 나와 있어요. 못 본다고도, 본다고도 말 못 해요.",
-      "textHash": "53fc3668cd22d76f"
+      "text": "학원이나 선생님이 1:1 채팅을 볼 수 있는지는 공개 안내에서 확인되지 않았어요.\n그래서 볼 수 있다고도, 없다고도 말씀드리기 어려워요.",
+      "textHash": "37f82fcb4df36dab"
     },
     "auditRef": "audit/C-09.jsonl#field:student-private-chat-visible-to-teacher",
     "asks": [
