@@ -48,6 +48,9 @@ interface ChatComposerProps {
     isStreaming: boolean
     shouldReduceMotion: boolean | null
     sendQuestion: (question: string) => Promise<void>
+    // 입력창이 커질 때 맨 아래 근처의 목록을 맨 아래에 붙여 둘지. 셸이 답 머리를 맞춰 둔 채 받는 중이면 false 다 —
+    // 붙이면 목록 위 끝이 올라가 맞춰 둔 질문·답 머리가 밀려난다. 없으면 늘 붙인다.
+    shouldStickListToBottom?: () => boolean
 }
 
 // 입력 폼·입력 상태. 입력 상태를 여기서 구독해 글자를 칠 때 대화 목록과 셸이 다시 그려지지 않는다.
@@ -62,6 +65,7 @@ export function ChatComposer({
     isStreaming,
     shouldReduceMotion,
     sendQuestion,
+    shouldStickListToBottom,
 }: ChatComposerProps) {
     const input = useSyncExternalStore(draftStore.subscribe, draftStore.get, draftStore.get)
     const setInput = draftStore.set
@@ -80,7 +84,7 @@ export function ChatComposer({
             // 그려지지 않은 입력창(display:none 안 — 모바일 메뉴가 창을 가린 동안 등)은 잴 수 없다. 높이를 그대로 둔다.
             if (el.getClientRects().length === 0) return
             const container = messagesContainerRef.current
-            const wasNearBottom = container ? isNearBottom(container) : false
+            const wasNearBottom = container ? isNearBottom(container) && (shouldStickListToBottom?.() ?? true) : false
             const prevScrollTop = container ? container.scrollTop : 0
             const prev = el.offsetHeight
 
@@ -94,7 +98,7 @@ export function ChatComposer({
             el.style.height = `${height}px`
             el.style.overflowY = overflowY
 
-            // 입력창이 커지면 대화 목록이 줄어든다. 맨 아래를 보고 있었다면 계속 맨 아래에 둔다.
+            // 입력창이 커지면 대화 목록이 줄어든다. 맨 아래를 보고 있었다면 계속 맨 아래에 둔다(셸이 답 머리를 맞춰 둔 동안은 위 끝을 둔다).
             // 재려고 auto 로 줄인 사이 깎인 scrollTop 은 되돌린다(스크롤 앵커링이 없는 Safari 에서 남는다).
             if (container) {
                 const nextScrollTop = resolveListScrollTopAfterInputResize({
@@ -111,7 +115,7 @@ export function ChatComposer({
         resize()
         window.addEventListener("resize", resize)
         return () => window.removeEventListener("resize", resize)
-    }, [input, isVisible, inputRef, messagesContainerRef])
+    }, [input, isVisible, inputRef, messagesContainerRef, shouldStickListToBottom])
 
     function handleSubmit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()

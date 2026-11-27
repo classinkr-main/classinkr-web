@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
@@ -31,7 +31,18 @@ import { ChatbotHeader, NewChatUndoBar } from "@/components/ui/chatbot/ChatbotHe
 import { ChatComposer, createComposerDraftStore } from "@/components/ui/chatbot/ChatComposer"
 import { MessageList } from "@/components/ui/chatbot/MessageList"
 import { DEEP_CONSULTATION_ICON_SRC, containerVariants, itemVariants } from "@/components/ui/chatbot/constants"
-import { findQuestionAnchorId, latestMessageSignature } from "@/components/ui/chatbot/message-visibility"
+import { findCurrentTurnStart, findQuestionAnchorId, latestMessageSignature } from "@/components/ui/chatbot/message-visibility"
+import {
+    CONTINUE_READING_OVERLAP_PX,
+    pickAnchorTarget,
+    resolveModeAfterUserScroll,
+    resolveReadingScroll,
+    resolveReopenScroll,
+    shouldShowContinueHint,
+    type ReadingScrollMode,
+    type SavedListScroll,
+} from "@/components/ui/chatbot/reading-scroll"
+import { CHATBOT_HIT_AREA_CLASS } from "@/components/ui/chatbot-hit-area"
 import { useChatbotConversation } from "@/components/ui/chatbot/useChatbotConversation"
 import {
     resolveMobilePanelLayout,
@@ -43,13 +54,25 @@ import { useChatbotHistoryEntry, useModalBackground } from "@/components/ui/chat
 // 챗봇 위젯 셸: 런처·패널 틀·열기/닫기·포커스·스크롤·티저를 맡는다.
 // 대화 상태는 chatbot/useChatbotConversation, 헤더·목록·입력 폼·상담 카드는 chatbot/ 아래 모듈이 그린다.
 
-// 새 답을 맞출 때 질문 말풍선 위에 남기는 여백.
-const ANSWER_SCROLL_TOP_OFFSET_PX = 12
-// 질문 말풍선이 목록 높이의 이 비율보다 길면 질문 대신 답 머리를 맞춘다(긴 질문이 답을 밀어내지 않게).
-const QUESTION_ANCHOR_MAX_RATIO = 0.5
 // 끝 말풍선의 머리가 목록 아래 끝에서 이만큼 안쪽까지 내려가 있으면 '보이지 않는 새 답'으로 본다.
 const JUMP_TO_LATEST_FOLD_SLACK_PX = 8
 const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)"
+// 휠·키·손가락 입력 뒤 이만큼 안의 scroll 은 사용자가 움직인 것으로 본다. 끌기·관성 스크롤은 이어지는 동안 창을 늘린다.
+// 손가락은 누른 동안을 touchend 로 재지 않는다 — 답을 받는 동안 손가락 밑 문단이 다시 그려지면 touchend 가 목록까지 오지 않는다.
+const USER_SCROLL_INPUT_WINDOW_MS = 300
+// 셸이 맞춘 scroll 이 이만큼 안에 그 자리로 오면 셸의 것으로 보고, 사용자 입력 직후라도 방식을 바꾸지 않는다.
+const OWN_SCROLL_MATCH_MS = 200
+// 셸이 부드럽게 내리는 scroll 이 끝날 만한 시간.
+const AUTO_SCROLL_SETTLE_MS = 600
+// 마우스로 스크롤 막대를 누른 채 이보다 오래면 놓친 pointerup 으로 보고 잡음을 푼다(목록 맞춤이 영영 멈추지 않게).
+const USER_PRESS_STALE_MS = 10_000
+
+// 목록 안 말풍선 머리의 위치(보이는 목록 위 끝에서 px). 여는 중인 창은 scale 이 걸려 있어 그만큼 되돌린다.
+function measureTopInList(container: HTMLElement, element: HTMLElement): number {
+    const box = container.getBoundingClientRect()
+    const scale = container.offsetHeight > 0 && box.height > 0 ? box.height / container.offsetHeight : 1
+    return (element.getBoundingClientRect().top - box.top) / scale
+}
 
 
 const hiddenPathPrefixes = [
@@ -77,8 +100,8 @@ export function FloatingChatbot() {
     const pathname = usePathname()
     const shouldReduceMotion = useReducedMotion()
     const [isOpen, setIsOpen] = useState(false)
-    const [isAtBottom, setIsAtBottom] = useState(true)
     const [showJumpToLatest, setShowJumpToLatest] = useState(false)
+    const [showContinueHint, setShowContinueHint] = useState(false)
     const [muted, setMutedState] = useState(() => isMuted())
     const rootRef = useRef<HTMLDivElement | null>(null)
     const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -95,6 +118,18 @@ export function FloatingChatbot() {
     // '새 답변' 버튼: 목록 끝의 지문과, 사용자가 맨 아래에서 마지막으로 본 지문.
     const latestSignatureRef = useRef("")
     const seenSignatureRef = useRef("")
+    // 목록을 움직이는 방식(follow·anchor·hold, reading-scroll.ts)과 맞출 말풍선. 렌더와 상관없는 값이라 ref 로 둔다.
+    const readingModeRef = useRef<ReadingScrollMode>("hold")
+    const anchorIdRef = useRef<string | null>(null)
+    // 사용자가 목록을 직접 움직이는지 가르는 값: 마우스로 누른 시각(0 이면 안 누름), 마지막 입력 시각, 마지막 scrollTop,
+    // 셸이 마지막으로 맞춘 scrollTop 과 그 시각.
+    const userScrollRef = useRef({ pressedAt: 0, lastInputAt: 0, lastTop: 0, ownTop: -1, ownAt: 0 })
+    // 닫기 전 읽던 자리. 다시 열 때 대화가 그대로면 이 자리로 돌아간다.
+    const savedScrollRef = useRef<SavedListScroll | null>(null)
+    // 셸이 부드럽게 내리는 중인 시각의 끝(markAutoScroll).
+    const autoScrollUntilRef = useRef(0)
+    const lastQuestionIdRef = useRef<string | null>(null)
+    const isSendingRef = useRef(false)
     // 입력 중인 글. 셸이 저장소를 들고 있어 창을 닫았다 열어도 이어지고, 글자를 칠 때는 ChatComposer 만 다시 그려진다.
     const [draftStore] = useState(createComposerDraftStore)
 
@@ -123,7 +158,10 @@ export function FloatingChatbot() {
         pendingAssistantScrollIdRef,
         onBeforeSend: ({ clearDraft }) => {
             if (clearDraft) draftStore.set("")
-            setIsAtBottom(true)
+            // 보낸 질문과 대기 말풍선이 보이게 맨 아래를 따라간다. 답 말풍선이 생기면 그 질문을 맞춘다(CX-12).
+            readingModeRef.current = "follow"
+            anchorIdRef.current = null
+            setShowContinueHint(false)
         },
     })
 
@@ -170,6 +208,12 @@ export function FloatingChatbot() {
     useLayoutEffect(() => {
         hasUserMessagesRef.current = hasUserMessages
     }, [hasUserMessages])
+
+    const lastQuestionId = useMemo(() => messages[findCurrentTurnStart(messages)]?.id ?? null, [messages])
+    useLayoutEffect(() => {
+        lastQuestionIdRef.current = lastQuestionId
+        isSendingRef.current = isSending
+    }, [lastQuestionId, isSending])
 
     // 다이얼로그 열기/닫기 시점에 음향 효과 재생
     useEffect(() => {
@@ -230,33 +274,17 @@ export function FloatingChatbot() {
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen, abandonHistoryEntry])
 
-    // 처음 열면(아직 질문이 없으면) 환영 말풍선 머리부터 보이게 맨 위에서 시작하고, 이어지는 대화는 맨 아래로 간다(CX-12).
-    useEffect(() => {
-        if (!isOpen) return
-        const frame = window.requestAnimationFrame(() => {
-            const container = messagesContainerRef.current
-            if (!container) return
-            if (!hasUserMessagesRef.current) {
-                container.scrollTop = 0
-                setIsAtBottom(isNearBottom(container))
-                return
-            }
-            container.scrollTo({ top: container.scrollHeight, behavior: shouldReduceMotion ? "auto" : "smooth" })
-            seenSignatureRef.current = latestSignatureRef.current
-            setIsAtBottom(true)
-        })
-
-        return () => window.cancelAnimationFrame(frame)
-    }, [isOpen, shouldReduceMotion])
-
     // '새 답변' 버튼: 맨 아래가 아니고, 맨 아래에서 마지막으로 본 뒤 목록 끝이 바뀌었고, 끝 말풍선 머리가 화면 아래로 밀려나 있을 때만.
-    // 답을 질문 기준으로 맞춘 직후처럼 새 답 머리가 보이는 동안에는 띄우지 않는다(CX-12).
+    // 답을 질문 기준으로 맞춘 직후처럼 새 답 머리가 보이는 동안에는 띄우지 않는다(CX-12). 대신 지금 읽는 답이 아래로 이어지면
+    // '아래로 이어서 읽기' 표시를 둔다. 다시 열 때 돌아갈 읽던 자리도 여기서 적어 둔다.
     const updateJumpToLatest = useCallback(() => {
         const container = messagesContainerRef.current
         if (!container) return
+        savedScrollRef.current = { top: container.scrollTop, signature: latestSignatureRef.current }
         if (isNearBottom(container)) {
             seenSignatureRef.current = latestSignatureRef.current
             setShowJumpToLatest(false)
+            setShowContinueHint(false)
             return
         }
         const unseen = seenSignatureRef.current !== latestSignatureRef.current
@@ -265,8 +293,81 @@ export function FloatingChatbot() {
         const belowFold =
             Boolean(last) &&
             last.getBoundingClientRect().top > container.getBoundingClientRect().bottom - JUMP_TO_LATEST_FOLD_SLACK_PX
-        setShowJumpToLatest(unseen && belowFold)
+        const showJump = unseen && belowFold
+        setShowJumpToLatest(showJump)
+        setShowContinueHint(
+            shouldShowContinueHint({
+                hasUserMessages: hasUserMessagesRef.current,
+                jumpToLatestShown: showJump,
+                following: readingModeRef.current === "follow" || performance.now() < autoScrollUntilRef.current,
+                remainingBelow: container.scrollHeight - container.scrollTop - container.clientHeight,
+                lastHeadAboveFold: Boolean(last) && !belowFold,
+            })
+        )
     }, [])
+
+    // 셸이 부드럽게 내리는 동안('새 답변'·다 받은 렌더의 마지막 이동)은 '이어서 읽기'를 띄우지 않고, 다 내린 뒤 다시 잰다.
+    const markAutoScroll = useCallback(() => {
+        autoScrollUntilRef.current = performance.now() + AUTO_SCROLL_SETTLE_MS
+        window.setTimeout(updateJumpToLatest, AUTO_SCROLL_SETTLE_MS + 50)
+    }, [updateJumpToLatest])
+
+    // 지금 방식(readingModeRef)대로 목록을 한 번 맞춘다(reading-scroll.ts). 마우스로 스크롤 막대를 잡고 있는 동안은 움직이지 않는다.
+    const applyReadingScroll = useCallback((isSendingNow: boolean, smooth: boolean) => {
+        const container = messagesContainerRef.current
+        if (!container) return
+        const gesture = userScrollRef.current
+        if (gesture.pressedAt > 0 && performance.now() - gesture.pressedAt < USER_PRESS_STALE_MS) return
+        const anchorId = anchorIdRef.current
+        const anchor = anchorId ? container.querySelector<HTMLElement>(`[data-chat-message-id="${anchorId}"]`) : null
+        const decision = resolveReadingScroll({
+            mode: readingModeRef.current,
+            scrollTop: container.scrollTop,
+            scrollHeight: container.scrollHeight,
+            clientHeight: container.clientHeight,
+            anchorTop: anchor ? measureTopInList(container, anchor) : null,
+            isSending: isSendingNow,
+        })
+        readingModeRef.current = decision.mode
+        if (decision.scrollTop === null) return
+        if (smooth) {
+            markAutoScroll()
+            container.scrollTo({ top: decision.scrollTop, behavior: "smooth" })
+            return
+        }
+        container.scrollTop = decision.scrollTop
+        gesture.ownTop = container.scrollTop
+        gesture.ownAt = performance.now()
+    }, [markAutoScroll])
+
+    // 처음 열면(아직 질문이 없으면) 환영 말풍선 머리부터 보이게 맨 위에서 시작한다(CX-12). 이어지는 대화는 닫기 전 읽던 자리로
+    // 돌아가고, 닫힌 동안 대화가 바뀌었으면(받던 답이 끝남·새로고침 뒤 복원) 마지막 질문을 맞춘다 — 짧은 턴이면 맨 아래와 같다.
+    // 예전에는 늘 맨 아래로 가서, 긴 답을 머리부터 읽다 닫고 다시 열면 답 끝과 칩만 보였다.
+    useEffect(() => {
+        if (!isOpen) return
+        const frame = window.requestAnimationFrame(() => {
+            const container = messagesContainerRef.current
+            if (!container) return
+            const plan = resolveReopenScroll({
+                hasUserMessages: hasUserMessagesRef.current,
+                saved: savedScrollRef.current,
+                signature: latestSignatureRef.current,
+            })
+            if (plan.kind === "anchor-last-question") {
+                anchorIdRef.current = lastQuestionIdRef.current
+                readingModeRef.current = "anchor"
+                applyReadingScroll(isSendingRef.current, false)
+                seenSignatureRef.current = latestSignatureRef.current
+            } else {
+                container.scrollTop = plan.kind === "restore" ? plan.top : 0
+                readingModeRef.current = "hold"
+            }
+            userScrollRef.current.lastTop = container.scrollTop
+            updateJumpToLatest()
+        })
+
+        return () => window.cancelAnimationFrame(frame)
+    }, [isOpen, applyReadingScroll, updateJumpToLatest])
 
     const latestSignature = useMemo(() => latestMessageSignature(messages), [messages])
     useLayoutEffect(() => {
@@ -279,21 +380,58 @@ export function FloatingChatbot() {
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen, latestSignature, updateJumpToLatest])
 
+    // 목록 scroll. 휠·키·손가락 입력 직후거나 마우스로 스크롤 막대를 잡고 있으면 사용자가 움직인 것이다: 맞춤을 멈추고 그 자리를
+    // 존중하며, 받는 중에 스스로 맨 아래까지 내려오면 새 글을 따라간다(resolveModeAfterUserScroll). 셸이 맞춘 scroll 은 방식을 바꾸지 않는다.
     const handleScroll = () => {
         const container = messagesContainerRef.current
         if (!container) return
-
-        setIsAtBottom(isNearBottom(container))
+        const gesture = userScrollRef.current
+        const now = performance.now()
+        const top = container.scrollTop
+        const delta = top - gesture.lastTop
+        gesture.lastTop = top
+        const ours = now - gesture.ownAt < OWN_SCROLL_MATCH_MS && Math.abs(top - gesture.ownTop) <= 1
+        const pressed = gesture.pressedAt > 0 && now - gesture.pressedAt < USER_PRESS_STALE_MS
+        if (!ours && (pressed || now - gesture.lastInputAt < USER_SCROLL_INPUT_WINDOW_MS)) {
+            gesture.lastInputAt = now
+            readingModeRef.current = resolveModeAfterUserScroll({
+                mode: readingModeRef.current,
+                delta,
+                nearBottom: isNearBottom(container),
+                isSending,
+            })
+        }
         updateJumpToLatest()
+    }
+
+    const markUserScrollInput = () => {
+        userScrollRef.current.lastInputAt = performance.now()
+    }
+    // 마우스로 스크롤 막대를 끄는 동안. 목록 밖에서 놓아도 풀리게 창에서 기다린다. 손가락은 입력 창(markUserScrollInput)으로 가른다.
+    const handleListPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.pointerType === "touch") return
+        userScrollRef.current.pressedAt = performance.now()
+        const release = () => {
+            userScrollRef.current.pressedAt = 0
+            markUserScrollInput()
+            window.removeEventListener("pointerup", release)
+            window.removeEventListener("pointercancel", release)
+        }
+        window.addEventListener("pointerup", release)
+        window.addEventListener("pointercancel", release)
     }
 
     const jumpToLatest = () => {
         const container = messagesContainerRef.current
         if (!container) return
         pendingAssistantScrollIdRef.current = null
+        anchorIdRef.current = null
+        // 받는 중이면 맨 아래 새 글을 따라간다. 버튼이 내리는 scroll 은 셸의 것이다 — 바로 앞의 끌기 입력 창에 묻혀 사용자 것으로 읽히지 않게 지운다.
+        readingModeRef.current = isSending ? "follow" : "hold"
+        userScrollRef.current.lastInputAt = 0
         seenSignatureRef.current = latestSignatureRef.current
+        markAutoScroll()
         container.scrollTo({ top: container.scrollHeight, behavior: shouldReduceMotion ? "auto" : "smooth" })
-        setIsAtBottom(true)
         setShowJumpToLatest(false)
         // 버튼이 사라지므로 포커스를 옮겨 둔다: 정밀 포인터는 입력창, 터치는 대화 내용 영역.
         if (window.matchMedia(FINE_POINTER_QUERY).matches && inputRef.current) {
@@ -303,51 +441,66 @@ export function FloatingChatbot() {
         }
     }
 
-    // 맨 아래를 보고 있으면 답을 받는 동안 따라간다. 마지막 meta(출처·칩·피드백)는 보내기가 끝나는 렌더와 함께 그려지므로
-    // 끝난 직후 한 번 더 따라가 새 칩이 화면 밖에 남지 않게 한다.
+    // 입력창이 커질 때 목록을 맨 아래에 붙일지(ChatComposer). 답 머리를 맞추는 중(anchor)이거나 맞춰 둔 채 받는 중(hold)이면
+    // 붙이지 않는다 — 붙이면 입력창이 커진 만큼 질문·답 머리가 위로 밀린다. 따라가는 중·받은 뒤에는 예전처럼 붙인다.
+    const shouldStickListToBottom = useCallback(
+        () => readingModeRef.current === "follow" || (readingModeRef.current === "hold" && !isSendingRef.current),
+        []
+    )
+
+    // '아래로 이어서 읽기': 한 화면씩 내리되 앞 화면의 끝 줄을 남겨 어디까지 읽었는지 잇는다. 사용자가 내린 것으로 본다.
+    // 포커스는 대화 내용 영역으로 옮겨 이어서 화살표·PageDown 으로 읽게 한다(표시는 맨 아래에 닿으면 사라진다).
+    const continueReading = () => {
+        const container = messagesContainerRef.current
+        if (!container) return
+        markUserScrollInput()
+        container.scrollBy({
+            top: Math.max(container.clientHeight - CONTINUE_READING_OVERLAP_PX, container.clientHeight / 2),
+            behavior: shouldReduceMotion ? "auto" : "smooth",
+        })
+        container.focus({ preventScroll: true })
+    }
+
+    // 답을 받는 동안 목록 자리(CX-12). 보낸 뒤에는 맨 아래를 따라가고, 답 말풍선이 생기면 그 답을 낳은 질문(긴 질문이면 답 머리)을
+    // 목록 위쪽에 맞춘 뒤 멈춘다(hold) — 답이 길어져도 답 머리는 그 자리에 있고 사용자가 읽으며 내려간다. 예전에는 맞춘 뒤에도
+    // '맨 아래 근처면 따라가기'가 조각마다 이겨 답 머리가 위로 밀려 나갔고, 끝 meta 렌더에서 한 번 더 따라가 390px 튀었다.
+    // 답 말풍선이 생기기 전에 사용자가 목록을 움직였으면 맞추지 않는다. 다 받은 렌더의 마지막 이동(짧은 답에서 질문을 위로 맞추기·
+    // 따라가던 맨 아래)은 부드럽게 한다(움직임 줄이기 설정이면 바로). 여는 렌더는 위 열기 효과가 자리를 정한다.
     const followWasSendingRef = useRef(false)
+    const readingOpenRef = useRef(false)
     useEffect(() => {
-        if (!isOpen) return
+        if (!isOpen) {
+            readingOpenRef.current = false
+            followWasSendingRef.current = false
+            return
+        }
+        const justOpened = !readingOpenRef.current
+        readingOpenRef.current = true
         const wasSending = followWasSendingRef.current
         followWasSendingRef.current = isSending
-
-        if ((isSending || wasSending) && isAtBottom) {
-            const container = messagesContainerRef.current
-            if (container) {
-                container.scrollTop = container.scrollHeight
-            }
-        }
-    }, [messages, isSending, isAtBottom, isOpen])
-
-    // 새 답은 그 답을 낳은 질문 말풍선을 목록 위쪽에 맞춰 질문과 답 머리가 함께 보이게 한다(CX-12).
-    // 질문이 너무 길면 답 머리를 맞춘다.
-    useEffect(() => {
-        if (!isOpen) return
-        const messageId = pendingAssistantScrollIdRef.current
-        if (!messageId) return
+        if (justOpened) return
 
         const container = messagesContainerRef.current
-        const message = container?.querySelector<HTMLElement>(`[data-chat-message-id="${messageId}"]`)
-        if (!container || !message || !isAtBottom) return
-
-        const questionId = findQuestionAnchorId(messages, messageId)
-        const question = questionId
-            ? container.querySelector<HTMLElement>(`[data-chat-message-id="${questionId}"]`)
-            : null
-        const target =
-            question && question.offsetHeight <= container.clientHeight * QUESTION_ANCHOR_MAX_RATIO ? question : message
-
-        const containerRect = container.getBoundingClientRect()
-        const targetRect = target.getBoundingClientRect()
-        const nextTop = container.scrollTop + targetRect.top - containerRect.top - ANSWER_SCROLL_TOP_OFFSET_PX
-
-        container.scrollTop = Math.max(0, nextTop)
-        const alignedTop = target.getBoundingClientRect().top - container.getBoundingClientRect().top
-        if (!isSending || alignedTop <= ANSWER_SCROLL_TOP_OFFSET_PX + 2) {
+        if (!container) return
+        const pendingId = pendingAssistantScrollIdRef.current
+        const answer = pendingId ? container.querySelector<HTMLElement>(`[data-chat-message-id="${pendingId}"]`) : null
+        if (pendingId && answer) {
             pendingAssistantScrollIdRef.current = null
+            if (readingModeRef.current === "follow") {
+                const questionId = findQuestionAnchorId(messages, pendingId)
+                const question = questionId
+                    ? container.querySelector<HTMLElement>(`[data-chat-message-id="${questionId}"]`)
+                    : null
+                anchorIdRef.current =
+                    question && pickAnchorTarget(question.offsetHeight, container.clientHeight) === "question" ? questionId : pendingId
+                readingModeRef.current = "anchor"
+            }
         }
-    }, [isOpen, isSending, messages, isAtBottom])
 
+        const endOfTurn = wasSending && !isSending
+        if (!isSending && !endOfTurn) return
+        applyReadingScroll(isSending, endOfTurn && !shouldReduceMotion)
+    }, [isOpen, isSending, messages, shouldReduceMotion, applyReadingScroll])
 
     useEffect(() => {
         if (!isOpen) return
@@ -403,7 +556,8 @@ export function FloatingChatbot() {
 
     const handleNewChat = () => {
         if (!startNewChat()) return
-        setIsAtBottom(true)
+        readingModeRef.current = "hold"
+        anchorIdRef.current = null
         focusAfterConversationReset()
     }
 
@@ -414,7 +568,8 @@ export function FloatingChatbot() {
             const container = messagesContainerRef.current
             if (container) container.scrollTop = container.scrollHeight
             seenSignatureRef.current = latestSignatureRef.current
-            setIsAtBottom(true)
+            readingModeRef.current = "hold"
+            anchorIdRef.current = null
         })
     }
 
@@ -494,6 +649,13 @@ export function FloatingChatbot() {
                                     // 메시지 layout 애니메이션이 스크롤 이동으로 오해해 되돌린다.
                                     layoutScroll
                                     onScroll={handleScroll}
+                                    // 사용자가 직접 움직이는 scroll 을 가르는 입력(handleScroll).
+                                    onWheel={markUserScrollInput}
+                                    onKeyDown={markUserScrollInput}
+                                    onTouchStart={markUserScrollInput}
+                                    onTouchMove={markUserScrollInput}
+                                    onTouchEnd={markUserScrollInput}
+                                    onPointerDown={handleListPointerDown}
                                     variants={itemVariants}
                                     custom={shouldReduceMotion}
                                     // 대화 기록 영역(CX-27). 새 답은 셸의 안내 영역이 한 번 읽으므로 여기서는 낭독하지 않는다(aria-live off).
@@ -532,6 +694,25 @@ export function FloatingChatbot() {
                                         새 답변
                                     </button>
                                 ) : null}
+                                {/* 지금 읽는 답이 아래로 이어진다는 표시. 답 말풍선 밖 오른쪽 여백(말풍선 최대 폭 92%·84% 바깥)에 두어 글을 가리지 않는다.
+                                    누르면 한 화면씩 내린다. 보이는 36px, 누름 영역 44px. '새 답변' 버튼과 함께 뜨지 않는다. */}
+                                {showContinueHint ? (
+                                    <div className="pointer-events-none absolute bottom-3 right-1 z-10 md:right-4">
+                                        <button
+                                            type="button"
+                                            data-chat-continue-hint=""
+                                            onClick={continueReading}
+                                            aria-label="아래로 이어서 읽기"
+                                            title="아래로 이어서 읽기"
+                                            className={cn(
+                                                "pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) border border-line-strong bg-surface-sheet text-fg-muted transition-colors hover:border-fg-accent hover:text-fg-accent",
+                                                CHATBOT_HIT_AREA_CLASS
+                                            )}
+                                        >
+                                            <ArrowDown className="h-4 w-4" aria-hidden />
+                                        </button>
+                                    </div>
+                                ) : null}
                             </div>
 
                             {/* 하단 폼 및 에러 (Staggered Item 3) */}
@@ -545,6 +726,7 @@ export function FloatingChatbot() {
                                 isStreaming={isStreaming}
                                 shouldReduceMotion={shouldReduceMotion}
                                 sendQuestion={sendQuestion}
+                                shouldStickListToBottom={shouldStickListToBottom}
                             />
 
                             {/* 스크린 리더용 안내 전용 영역 (A11y) */}
