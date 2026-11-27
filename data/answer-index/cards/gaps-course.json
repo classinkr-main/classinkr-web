@@ -868,8 +868,9 @@
     ],
     "covers": "코스 구성원 명단을 엑셀 등으로 내려받는 기능은 공개 문서에 없다는 것",
     "notCovers": [
-      "수업 회차 엑셀 내보내기 → find-lesson",
-      "수업 기록 엑셀 → settlement-excel"
+      "수업 회차 엑셀 내보내기 → doc:/docs/admin/course-management#2/find-lesson",
+      "수업 기록 엑셀 → doc:/docs/admin/course-management#6/settlement-excel",
+      "엑셀로 학생 일괄 등록(올리기) → doc:/docs/admin/student-onboarding#3/excel-import-steps"
     ],
     "negatives": [
       {
