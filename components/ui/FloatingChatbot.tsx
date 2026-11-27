@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
+import { flushSync } from "react-dom"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
@@ -60,7 +61,8 @@ import { useChatbotHistoryEntry, useModalBackground } from "@/components/ui/chat
 const JUMP_TO_LATEST_FOLD_SLACK_PX = 8
 const FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)"
 // 휠·키·손가락 입력 뒤 이만큼 안의 scroll 은 사용자가 움직인 것으로 본다. 끌기·관성 스크롤은 이어지는 동안 창을 늘린다.
-// 손가락은 누른 동안을 touchend 로 재지 않는다 — 답을 받는 동안 손가락 밑 문단이 다시 그려지면 touchend 가 목록까지 오지 않는다.
+// 휠·키와 손가락을 뗀 뒤의 관성 스크롤에는 끝 신호가 없어 이 창이 있어야 한다. 손가락도 누른 동안을 touchend 로 재지 않고 같은 창을 쓴다:
+// 문단 key 를 순서로 바꿔 흐르는 동안 손가락 밑 문단이 새 요소로 바뀌지는 않지만, 문단이 목록으로 바뀌는 렌더에서는 여전히 바뀔 수 있다.
 const USER_SCROLL_INPUT_WINDOW_MS = 300
 // 셸이 맞춘 scroll 이 이만큼 안에 그 자리로 오면 셸의 것으로 보고, 사용자 입력 직후라도 방식을 바꾸지 않는다.
 const OWN_SCROLL_MATCH_MS = 200
@@ -308,9 +310,9 @@ export function FloatingChatbot() {
         const unseen = seenSignatureRef.current !== latestSignatureRef.current
         const items = container.querySelectorAll<HTMLElement>("[data-chat-message-id]")
         const last = items[items.length - 1]
-        const belowFold =
-            Boolean(last) &&
-            last.getBoundingClientRect().top > container.getBoundingClientRect().bottom - JUMP_TO_LATEST_FOLD_SLACK_PX
+        const listRect = container.getBoundingClientRect()
+        const lastHeadTop = last ? last.getBoundingClientRect().top - listRect.top : null
+        const belowFold = lastHeadTop !== null && lastHeadTop > listRect.height - JUMP_TO_LATEST_FOLD_SLACK_PX
         const showJump = unseen && belowFold
         setShowJumpToLatest(showJump)
         setShowContinueHint(
@@ -319,7 +321,9 @@ export function FloatingChatbot() {
                 jumpToLatestShown: showJump,
                 following: readingModeRef.current === "follow" || performance.now() < autoScrollUntilRef.current,
                 remainingBelow: container.scrollHeight - container.scrollTop - container.clientHeight,
-                lastHeadAboveFold: Boolean(last) && !belowFold,
+                lastIsAnswer: last?.dataset.chatMessageRole === "assistant",
+                lastHeadTop,
+                listHeight: listRect.height,
             })
         )
     }, [])
@@ -425,14 +429,38 @@ export function FloatingChatbot() {
     }, [isOpen, placeListForConversation])
 
     // 목록 높이가 바뀌면(키보드·창 크기·입력창이 커짐) 읽을 자리를 다시 잰다 — 맞춘 질문 머리가 그 자리에 남고, 빈 자리로 더 내려가지 않게.
+    // 표시('이어서 읽기')도 새 목록 아래 끝으로 다시 잰다(그리기 전에 — 표시가 올라간 자리에 질문 말풍선이 있을 수 있다).
     useEffect(() => {
         if (!isOpen || typeof ResizeObserver === "undefined") return
         const container = messagesContainerRef.current
         if (!container) return
-        const observer = new ResizeObserver(() => applyReadingRoom())
+        let lastHeight: number | null = null
+        const observer = new ResizeObserver(() => {
+            applyReadingRoom()
+            const height = container.clientHeight
+            if (lastHeight !== null && height !== lastHeight) flushSync(updateJumpToLatest)
+            lastHeight = height
+        })
         observer.observe(container)
         return () => observer.disconnect()
-    }, [isOpen, applyReadingRoom])
+    }, [isOpen, applyReadingRoom, updateJumpToLatest])
+
+    // 보이는 화면이 바뀌면(키보드가 열리고 닫힘·창 크기) 지금 턴 말풍선이 옛 화면 자리에서 새 자리로 미끄러진다(layout 애니메이션,
+    // 키보드가 닫히면 약 300px). 그동안 '이어서 읽기' 표시를 숨겨 미끄러지는 질문 말풍선과 겹치지 않게 하고, 자리를 잡은 뒤 다시 잰다.
+    // 화면 크기 구독(useChatbotViewport)은 resize 사건 안에서 바로 그리므로 여기서 숨기면 첫 프레임부터 겹치지 않는다.
+    // 숨기기는 화면이 바뀐 렌더에서 하고(앞 렌더 값과 견주기), 자리를 잡을 때까지 다시 띄우지 않는 표시는 layout effect 가 남긴다.
+    const viewportKey = viewport ? `${viewport.height}|${viewport.keyboardInset}` : null
+    const [hintViewportKey, setHintViewportKey] = useState(viewportKey)
+    if (hintViewportKey !== viewportKey) {
+        setHintViewportKey(viewportKey)
+        if (hintViewportKey !== null && viewportKey !== null && showContinueHint) setShowContinueHint(false)
+    }
+    const previousViewportKeyRef = useRef<string | null>(null)
+    useLayoutEffect(() => {
+        const previous = previousViewportKeyRef.current
+        previousViewportKeyRef.current = viewportKey
+        if (previous && viewportKey && previous !== viewportKey) markAutoScroll()
+    }, [viewportKey, markAutoScroll])
 
     const latestSignature = useMemo(() => latestMessageSignature(messages), [messages])
     useLayoutEffect(() => {
@@ -467,7 +495,9 @@ export function FloatingChatbot() {
                 isSending,
             })
         }
-        updateJumpToLatest()
+        // 표시('새 답변'·'이어서 읽기')는 이 scroll 의 자리로 바로 그린다. 다음 렌더로 미루면 한 프레임 늦게 숨어,
+        // 손가락으로 끄는 동안 그 사이 올라온 질문 말풍선과 겹친다(바뀐 게 없으면 다시 그리지 않는다).
+        flushSync(updateJumpToLatest)
     }
 
     const markUserScrollInput = () => {

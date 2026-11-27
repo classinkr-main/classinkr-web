@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest"
 import { CHAT_NEAR_BOTTOM_THRESHOLD_PX } from "@/components/ui/chatbot-input-autosize"
 import {
     ANSWER_SCROLL_TOP_OFFSET_PX,
+    CONTINUE_HINT_CLEARANCE_PX,
     pickAnchorTarget,
     resolveModeAfterUserScroll,
     resolveReadingRoomMinHeight,
@@ -183,18 +184,38 @@ describe("resolveReadingRoomMinHeight — 목록 아래 읽을 자리", () => {
 })
 
 describe("shouldShowContinueHint — 아래에 이어지는 글 표시", () => {
-    const base = { hasUserMessages: true, jumpToLatestShown: false, following: false, remainingBelow: 400, lastHeadAboveFold: true }
+    const base = {
+        hasUserMessages: true,
+        jumpToLatestShown: false,
+        following: false,
+        remainingBelow: 400,
+        lastIsAnswer: true,
+        lastHeadTop: 78,
+        listHeight: 414,
+    }
 
     it("지금 읽는 답이 아래로 이어지면 보인다", () => {
         expect(shouldShowContinueHint(base)).toBe(true)
+        // 끝 답 머리가 표시 자리 바로 위까지는 보인다.
+        expect(shouldShowContinueHint({ ...base, lastHeadTop: 414 - CONTINUE_HINT_CLEARANCE_PX })).toBe(true)
     })
 
     it("맨 아래 문턱 안·'새 답변' 버튼이 뜬 때·따라가는 중·지난 대화를 올려 보는 때·환영만 있을 때는 숨긴다", () => {
         expect(shouldShowContinueHint({ ...base, remainingBelow: CHAT_NEAR_BOTTOM_THRESHOLD_PX })).toBe(false)
         expect(shouldShowContinueHint({ ...base, jumpToLatestShown: true })).toBe(false)
         expect(shouldShowContinueHint({ ...base, following: true })).toBe(false)
-        expect(shouldShowContinueHint({ ...base, lastHeadAboveFold: false })).toBe(false)
+        expect(shouldShowContinueHint({ ...base, lastHeadTop: 500 })).toBe(false)
+        expect(shouldShowContinueHint({ ...base, lastHeadTop: null })).toBe(false)
         expect(shouldShowContinueHint({ ...base, hasUserMessages: false })).toBe(false)
+    })
+
+    it("끝 답 머리가 표시 자리(목록 아래 52px) 안으로 내려오면 숨긴다 — 그 위 질문 말풍선 오른쪽 아래 모서리가 표시와 겹치지 않게", () => {
+        // 앞 판 J1 휴대폰: 목록 414px, 질문 머리 321(높이 50), 끝 답 머리 387 — 맨 아래 8px 기준으로는 보였고 질문 말풍선과 약 5px 겹쳤다.
+        expect(CONTINUE_HINT_CLEARANCE_PX).toBe(12 + 36 + 4)
+        expect(shouldShowContinueHint({ ...base, lastHeadTop: 387 })).toBe(false)
+        expect(shouldShowContinueHint({ ...base, lastHeadTop: 414 - CONTINUE_HINT_CLEARANCE_PX + 1 })).toBe(false)
+        // 끝 말풍선이 질문이면(답이 아직 없다) 아래로 이어지는 답이 없으므로 띄우지 않는다.
+        expect(shouldShowContinueHint({ ...base, lastIsAnswer: false })).toBe(false)
     })
 })
 
@@ -245,5 +266,26 @@ describe("셸 배선(FloatingChatbot)", () => {
         expect(shell).toContain('aria-label="아래로 이어서 읽기"')
         expect(shell).toMatch(/data-chat-continue-hint[\s\S]{0,600}CHATBOT_HIT_AREA_CLASS/)
         expect(shell).toContain("shouldStickListToBottom={shouldStickListToBottom}")
+    })
+
+    it("표시 자리 규칙(CONTINUE_HINT_CLEARANCE_PX)은 표시의 실제 자리(아래 12px·높이 36px)와 같고, 목록 scroll·크기 바뀜에서는 표시를 바로 다시 그린다", () => {
+        expect(shell).toMatch(/absolute bottom-3 right-1 z-10 md:right-4">\s*<button[\s\S]{0,800}inline-flex h-9 w-9/)
+        expect(shell).toContain('lastIsAnswer: last?.dataset.chatMessageRole === "assistant"')
+        const scroll = shell.slice(shell.indexOf("const handleScroll = () => {"), shell.indexOf("const markUserScrollInput"))
+        expect(scroll).toContain("flushSync(updateJumpToLatest)")
+        // 목록 높이가 바뀌면 그리기 전에 다시 재고, 보이는 화면이 바뀌면(키보드) 말풍선이 자리를 잡을 때까지 숨긴다.
+        const resize = shell.slice(shell.indexOf("const observer = new ResizeObserver(() => {"), shell.indexOf("observer.observe(container)"))
+        expect(resize).toContain("flushSync(updateJumpToLatest)")
+        const viewportHide = shell.slice(shell.indexOf("const [hintViewportKey, setHintViewportKey]"), shell.indexOf("}, [viewportKey, markAutoScroll])"))
+        expect(viewportHide).toContain("setShowContinueHint(false)")
+        expect(viewportHide).toContain("markAutoScroll()")
+    })
+
+    it("문단·목록 항목 key 는 글이 아니라 순서다 — 흐르는 동안 손가락 밑 문단이 새 요소로 바뀌지 않게", () => {
+        const list = readFileSync(join(process.cwd(), "components/ui/chatbot/MessageList.tsx"), "utf8")
+        const content = list.slice(list.indexOf("const MessageContent = memo("), list.indexOf("function AnswerCopyButton("))
+        expect(content).not.toMatch(/key=\{`/)
+        expect(content.match(/key=\{(?:key|index|blockIndex)\}/g)?.length).toBeGreaterThanOrEqual(8)
+        expect(list).toContain("data-chat-message-role={message.role}")
     })
 })

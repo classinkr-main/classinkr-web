@@ -7,6 +7,8 @@ import { ArrowUpRight } from "lucide-react"
 import type { ChatLinkClick } from "@/components/ui/chatbot-link-navigation"
 import { sanitizePublicUrl } from "@/lib/safe-public-url"
 
+export { findAnswerHeadBlocks, isAnswerHeadLabel, parseAnswerHeadLine, splitAnswerBlocks } from "@/components/ui/chatbot/answer-heads"
+
 /*
  * 답 글 속 링크(CX-17).
  * - 사이트 안 공개 경로('(/contact)'·'/showroom'·'/docs/…')와 이 사이트 주소는 next/link 로 그린다. 휴대폰에서 누르면
@@ -178,5 +180,15 @@ export function LinkifiedText({
                 )
             })}
         </>
+    )
+}
+
+// 복합 답의 번호 머리 줄("1. 주제", 고르는 규칙은 answer-heads.ts). 굵기만 바꾼다 — 색·크기·행간은 본문 그대로라
+// 바로 아래 결론 줄과 한 문단처럼 이어진다. 14px 600 은 라벨 자리에만 쓴다(DESIGN.md 굵기): 이 줄은 물음마다의 라벨이다.
+export function AnswerHeadLine({ text, onNavigate }: { text: string; onNavigate?: (click: ChatLinkClick) => void }) {
+    return (
+        <p className="font-semibold" data-chat-answer-head="">
+            <LinkifiedText text={text} onNavigate={onNavigate} />
+        </p>
     )
 }
