@@ -103,7 +103,7 @@ export function OverviewOperationsPanels({ leads, leadState, onLeadRetry, operat
         </Link>)}</div>
       </> : leadState === "loading" ? <SectionSkeleton rows={4} /> : <div role="alert" className="py-8 text-sm text-[#615D59]">리드 조회 실패 · 0건이 아닙니다.<div><Retry label="리드" onRetry={onLeadRetry} /></div></div>}
     </Panel>
-    <Panel title="데모 현황" href="https://mkt.classin.co.kr/leads" note="Compass 실제 데모 회차 · 예정은 오늘부터 30일 · 완료는 이번 달 done 기록만 집계. 날짜 추정은 별도 표시합니다.">
+    <Panel title="데모 현황" href="https://mkt.classin.co.kr/leads" note="전사 · Compass 실제 데모 회차 · 예정은 오늘부터 30일 · 완료는 이번 달 done 기록만 집계. 날짜 추정은 별도 표시합니다.">
       {loading && !operations ? <SectionSkeleton rows={3} /> : demos ? <>
         <div className="flex items-end justify-between gap-3"><p className="text-[32px] font-bold tracking-[-0.04em] tabular-nums text-[#111110]">{demos.truncated ? "≥" : ""}{demos.upcomingCount}<span className="ml-2 text-xs font-normal tracking-normal text-[#615D59]">예정 회차</span></p><span className="pb-1 text-xs text-[#615D59]">오늘 {demos.todayCount} · 7일 {demos.next7Count}</span></div>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#615D59]"><span>월 완료 {demos.doneThisMonth}</span><span className={demos.unrecordedThisMonth ? TONES.warning : ""}>결과 미기록 {demos.unrecordedThisMonth}</span><span>노쇼 {demos.noShowThisMonth} · 취소 {demos.canceledThisMonth}</span></div>
@@ -113,7 +113,7 @@ export function OverviewOperationsPanels({ leads, leadState, onLeadRetry, operat
         {demos.truncated && <p role="status" className="mt-2 text-xs text-[#A8741A]">조회 상한에 도달해 일부 회차만 표시합니다.</p>}
       </> : <div role="status" className="py-7 text-sm text-[#615D59]">{operations?.demos.status === "forbidden" ? "CRM 읽기 권한이 필요합니다." : "데모 조회 실패 · 0건이 아닙니다."}{operations?.demos.status !== "forbidden" && <div><Retry label="데모" onRetry={onRetry} /></div>}</div>}
     </Panel>
-    <Panel title="설치·배송 예정" href="/admin/hardware#hardware-section-planned" note="재고 원본에 남은 미확정 출고 전량 · 건수는 품목 행 기준. 예정일은 원본 기록이며 설치 확정일을 뜻하지 않습니다.">
+    <Panel title="설치·배송 예정" href="/admin/hardware#hardware-section-planned" note="전사 · 재고 원본에 남은 미확정 출고 전량 · 건수는 품목 행 기준. 예정일은 원본 기록이며 설치 확정일을 뜻하지 않습니다.">
       {loading && !operations ? <SectionSkeleton rows={3} /> : installations ? <>
         <div className="flex items-end justify-between gap-3"><p className="text-[32px] font-bold tracking-[-0.04em] tabular-nums text-[#111110]">{installations.units.toLocaleString()}<span className="ml-2 text-xs font-normal tracking-normal text-[#615D59]">대 예정</span></p><span className="pb-1 text-xs text-[#615D59]">{installations.count}건 · 7일 {installations.next7Count}건</span></div>
         <p className="mt-3 text-xs text-[#A8741A]">예정일 경과 {installations.overdueCount} · 날짜 미지정 {installations.undatedCount}</p>

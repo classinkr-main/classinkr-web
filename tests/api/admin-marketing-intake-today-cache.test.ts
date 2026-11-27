@@ -109,12 +109,12 @@ describe("GET /api/admin/marketing/intake-today — unstable_cache 배선", () =
     expect(typeof truncated.todayReinflowCount).toBe("number")
   })
 
-  it("캐시 키를 v3 로 올렸다 — 재문의가 빠진 옛 건수(v2)를 재사용하지 않는다", async () => {
+  it("응답 모양이 바뀔 때마다 캐시 키를 올린다 — v5: 직접 문의 칸(directItems)·응대 상태가 없는 옛 응답을 재사용하지 않는다", async () => {
     vi.resetModules()
     await import("@/app/api/admin/marketing/intake-today/route")
 
     const call = unstableCacheCalls.find((c) => c.options?.revalidate === 20)
-    expect(call?.keyParts).toEqual(["marketing-intake-today-v4"])
+    expect(call?.keyParts).toEqual(["marketing-intake-today-v5"])
   })
 
   it("재문의 병합 리드(예전 생성·오늘 last_inflow_at)를 오늘 재유입으로 싣는다", async () => {

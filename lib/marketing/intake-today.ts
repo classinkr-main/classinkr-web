@@ -22,6 +22,10 @@ import { shareInFlight } from "@/lib/server/share-in-flight"
 
 /** 피드에 이름을 띄울 최대 행수 — 카드가 스크롤 없이 담는 높이. */
 const MAX_ITEMS = 8
+/** Overview "오늘 들어온 문의" 직접 문의 칸 — 하루치 홈페이지·쇼룸·도입 신청이 다 들어가는 상한. */
+const MAX_DIRECT_ITEMS = 24
+/** 같은 화면의 광고·자료 리드 칸. */
+const MAX_LEAD_ITEMS = 8
 
 async function loadIntakeToday(): Promise<IntakeFeedResult> {
   const windows = resolveIntakeWindows()
@@ -51,6 +55,8 @@ async function loadIntakeToday(): Promise<IntakeFeedResult> {
     // 브리지가 페이지네이션 후 count > 받은 행으로 판정한다(예전 .limit(500) 사본 비교는 없앴다).
     compassTruncated: !compass.down && compass.truncated === true,
     maxItems: MAX_ITEMS,
+    maxDirectItems: MAX_DIRECT_ITEMS,
+    maxLeadItems: MAX_LEAD_ITEMS,
   })
 }
 
@@ -76,7 +82,8 @@ export const getCachedIntakeToday = unstable_cache(
   // v3(2026-09-21): 어드민 리드도 유입 축(생성 또는 재문의 last_inflow_at)으로 세고 재유입을 표시한다 — 같은 모양이지만
   // 옛 값은 재문의가 빠진 건수라 섞이지 않게 키를 올린다.
   // v4(2026-11-04): 항목에 sourceKind·adminLeadId, 결과에 todayBySource 가 붙는다(Overview "지금" 띠의 소스 분해).
-  () => shareInFlight("marketing-intake-today-v4", loadIntakeToday),
-  ["marketing-intake-today-v4"],
+  // v5(2026-11-27): 항목에 formLabel·response, 결과에 directItems·leadItems 가 붙는다(Overview "오늘 들어온 문의" 시안 B).
+  () => shareInFlight("marketing-intake-today-v5", loadIntakeToday),
+  ["marketing-intake-today-v5"],
   { revalidate: 20, tags: [INTAKE_TODAY_CACHE_TAG] }
 )

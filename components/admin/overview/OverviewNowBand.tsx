@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/admin/viz"
 import { compassLeadUrl } from "@/lib/compass/normalize"
 import type { OverviewLeadMetrics } from "@/lib/admin/overview/lead-summary"
 import {
+  INTAKE_SOURCE_KIND_DOT,
   INTAKE_SOURCE_KIND_LABEL,
   INTAKE_SOURCE_KIND_ORDER,
   type IntakeFeedItem,
@@ -31,14 +32,6 @@ type SourceState = "loading" | "ready" | "error"
 const COUNT = new Intl.NumberFormat("ko-KR")
 const KST_HHMM = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Seoul" })
 
-// 유입 그룹 색점 — lib/crm/lead-attribution SOURCE_GROUP_DOT 과 같은 값(홈페이지·메타·접수·자료실·기타).
-const SOURCE_DOT: Record<IntakeSourceKind, string> = {
-  homepage: "#1D9E75",
-  ad: "#378ADD",
-  intake: "#17868F",
-  resources: "#BA7517",
-  other: "#888780",
-}
 
 export const LEADS_BOARD_HREF = "/admin/crm/customers/leads"
 const TRAFFIC_HREF = "/admin/traffic"
@@ -161,7 +154,7 @@ function FeedRow({ item }: { item: IntakeFeedItem }) {
         <span className="truncate text-[14px] font-semibold text-[#111110]">{who}</span>
         {detail ? <span className="truncate text-[12px] text-[#615D59] sm:text-[13px]">{detail}</span> : null}
         <span className="inline-flex items-center gap-1.5 text-[12px] text-[#31302E]">
-          <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ background: SOURCE_DOT[kind] }} />
+          <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ background: INTAKE_SOURCE_KIND_DOT[kind] }} />
           {INTAKE_SOURCE_KIND_LABEL[kind]}
         </span>
         {item.reinflow ? <span className="text-[12px] font-bold text-[#7A520F]">재유입</span> : null}
@@ -181,14 +174,14 @@ function FeedRow({ item }: { item: IntakeFeedItem }) {
   )
 }
 
-function IntakeFeed({ intake, maxItems, standalone = false }: { intake: LiveIntakeState; maxItems: number; standalone?: boolean }) {
+function IntakeFeed({ intake, maxItems }: { intake: LiveIntakeState; maxItems: number }) {
   const intakeData = intake.data
   const intakeMeasured = intakeData ? intakeData.adminMeasured || intakeData.compassMeasured : false
   const feed = intakeData?.items.slice(0, maxItems) ?? []
   return (
-      <div className={standalone ? "flex h-full flex-col" : "border-t border-[rgba(0,0,0,0.08)]"}>
+      <div className="border-t border-[rgba(0,0,0,0.08)]">
         <div className="flex items-center justify-between gap-3 px-5 pb-1.5 pt-3.5 sm:px-6">
-          {standalone ? <h2 id="overview-today-inquiries-heading" className="text-[16px] font-bold text-[#111110]">오늘 들어온 문의</h2> : <h3 className="text-[13px] font-bold text-[#111110]">오늘 들어온 문의</h3>}
+          <h3 className="text-[13px] font-bold text-[#111110]">오늘 들어온 문의</h3>
           <span className="text-[12px] text-[#615D59]">최근순</span>
         </div>
         {!intakeData && !intake.error ? (
@@ -207,7 +200,7 @@ function IntakeFeed({ intake, maxItems, standalone = false }: { intake: LiveInta
             ))}
           </ul>
         )}
-        <div className={`${standalone ? "mt-auto " : ""}flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-5 py-2 sm:px-6`}>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-5 py-2 sm:px-6">
           <span className="text-[12px] text-[#615D59]">
             {intakeData && !intakeData.compassMeasured
               ? "Compass 연결이 끊겨 어드민 리드만 셉니다 · 연결되면 자동으로 다시 셉니다"
@@ -221,18 +214,6 @@ function IntakeFeed({ intake, maxItems, standalone = false }: { intake: LiveInta
   )
 }
 
-/** "오늘 들어온 문의" 피드만 따로 — 띠와 같은 useLiveIntake 상태를 받는다(같은 응답·같은 갱신 주기). */
-export function OverviewTodayInquiries({ intake, maxItems = 6, className = "" }: { intake: LiveIntakeState; maxItems?: number; className?: string }) {
-  return (
-    <section
-      aria-labelledby="overview-today-inquiries-heading"
-      className={`overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white ${className}`}
-    >
-      <IntakeFeed intake={intake} maxItems={maxItems} standalone />
-    </section>
-  )
-}
-
 export interface OverviewNowBandProps {
   visitorState: SourceState
   visitorToday: { visitors: number; homeVisitors: number } | null
@@ -243,7 +224,7 @@ export interface OverviewNowBandProps {
   onLeadRetry: () => void
   intake: LiveIntakeState
   maxItems?: number
-  /** false 면 "오늘 들어온 문의" 피드를 띠 안에 그리지 않는다 — Overview 는 피드를 옆 칸(OverviewTodayInquiries)에 둔다. */
+  /** false 면 "오늘 들어온 문의" 피드를 띠 안에 그리지 않는다 — Overview 는 직접 문의·광고 리드를 나눈 별도 칸(OverviewTodayInquiries)에 둔다. */
   showFeed?: boolean
   className?: string
 }

@@ -73,7 +73,8 @@ import type { EmailCampaign } from "@/lib/marketing-types"
 import type { BugReport } from "@/lib/bugs-data"
 import type { PatchNote } from "@/lib/patch-notes-data"
 import { OverviewOperationsPanels, OverviewScorecard, type OverviewMetric } from "@/components/admin/overview/OverviewWorkspace"
-import { OverviewNowBand, OverviewTodayInquiries } from "@/components/admin/overview/OverviewNowBand"
+import { OverviewNowBand } from "@/components/admin/overview/OverviewNowBand"
+import { OverviewTodayInquiries } from "@/components/admin/overview/OverviewTodayInquiries"
 import { useLiveIntake } from "@/components/admin/overview/useLiveIntake"
 import type { OverviewOperationsSummary } from "@/lib/admin/overview/operations-summary"
 import type { OverviewCumulativeSummary } from "@/lib/admin/overview/cumulative-summary"
@@ -421,7 +422,8 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   // 기존 스트리밍 레인을 기다리지 않고 운영 두 소스를 독립 조회한다.
   useEffect(() => {
     let cancelled = false
-    void adminFetchJsonCached<OverviewOperationsSummary>("/api/admin/overview/operations?owner=__me", {
+    // 데모·설치 패널은 전사다(2026-11-27) — owner= (명시적 빈 값)이 전체 담당자. 생략하면 서버가 내 담당으로 읽는다.
+    void adminFetchJsonCached<OverviewOperationsSummary>("/api/admin/overview/operations?owner=", {
       adminTimeoutMs: OVERVIEW_FETCH_TIMEOUT_MS,
     }, { ttlMs: 0, force: true, persist: false }).then((data) => {
       if (!cancelled) setOperations(data)
@@ -972,10 +974,10 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     metric({ id: "response", group: "리드", label: "24h+ 신규 상태", value: `${unrespondedSignal?.unresponded24hCount ?? 0}건`, note: "내 담당 · 응답 이벤트 대리 지표 · 운영 리드 · 테스트 제외", href: "/admin/crm/customers/leads?filter=unresponded_24h&focus=risk&owner=__me", state: unrespondedSignal ? "ready" : sourceStates.leadActions, reference: "24시간 이내 후속 확인", tone: (unrespondedSignal?.unresponded24hCount ?? 0) > 0 ? "danger" : "neutral" }, "leadActions"),
     metric({ id: "inflow", group: "리드", label: "이번 주 유입", value: `${companyThisWeekLeads}건`, note: `전사 · 오늘 ${companyTodayLeads}건 · 테스트 제외`, href: "/admin/crm/customers/leads?sort=newest&unconfirmed=1", state: sourceStates.leads, trend: <Sparkline data={sparkCompanyLeads.slice(7)} /> }, "leads"),
     metric({ id: "conversion", group: "리드", label: "리드 전환율", value: `${convRate}%`, note: `내 담당 · 현재 누적 · 전환 ${converted}건`, href: "/admin/crm/customers/leads?filter=converted&owner=__me", state: sourceStates.leads }, "leads"),
-    { id: "demos", group: "데모", label: "데모 예정", value: `${demos?.truncated ? "≥" : ""}${demos?.upcomingCount ?? 0}회`, note: `오늘부터 30일 · 오늘 ${demos?.todayCount ?? 0} / 7일 ${demos?.next7Count ?? 0}`, href: "https://mkt.classin.co.kr/leads", state: operationsState("demos"), onRetry: retryOperations },
-    { id: "demo-results", group: "데모", label: "데모 완료 기록", value: `${demos?.truncated ? "≥" : ""}${demos?.doneThisMonth ?? 0}회`, note: `이번 달 · 결과 미기록 ${demos?.unrecordedThisMonth ?? 0}회`, reference: "Compass done 상태만", href: "https://mkt.classin.co.kr/leads", state: operationsState("demos"), tone: (demos?.unrecordedThisMonth ?? 0) > 0 ? "warning" : "neutral", onRetry: retryOperations },
-    { id: "installations", group: "설치·배송", label: "설치·배송 예정", value: `${installations?.units ?? 0}대`, note: `미확정 출고 ${installations?.count ?? 0}건 · 품목 행 기준`, href: "/admin/hardware#hardware-section-planned", state: operationsState("installations"), onRetry: retryOperations },
-    { id: "installation-dates", group: "설치·배송", label: "예정일 점검", value: `${(installations?.overdueCount ?? 0) + (installations?.undatedCount ?? 0)}건`, note: `날짜 경과 ${installations?.overdueCount ?? 0} / 미지정 ${installations?.undatedCount ?? 0}`, reference: "원본 예정일 기준", href: "/admin/hardware#hardware-section-planned", state: operationsState("installations"), tone: (installations?.overdueCount ?? 0) + (installations?.undatedCount ?? 0) > 0 ? "warning" : "neutral", onRetry: retryOperations },
+    { id: "demos", group: "데모", label: "데모 예정", value: `${demos?.truncated ? "≥" : ""}${demos?.upcomingCount ?? 0}회`, note: `전사 · 오늘부터 30일 · 오늘 ${demos?.todayCount ?? 0} / 7일 ${demos?.next7Count ?? 0}`, href: "https://mkt.classin.co.kr/leads", state: operationsState("demos"), onRetry: retryOperations },
+    { id: "demo-results", group: "데모", label: "데모 완료 기록", value: `${demos?.truncated ? "≥" : ""}${demos?.doneThisMonth ?? 0}회`, note: `전사 · 이번 달 · 결과 미기록 ${demos?.unrecordedThisMonth ?? 0}회`, reference: "Compass done 상태만", href: "https://mkt.classin.co.kr/leads", state: operationsState("demos"), tone: (demos?.unrecordedThisMonth ?? 0) > 0 ? "warning" : "neutral", onRetry: retryOperations },
+    { id: "installations", group: "설치·배송", label: "설치·배송 예정", value: `${installations?.units ?? 0}대`, note: `전사 · 미확정 출고 ${installations?.count ?? 0}건 · 품목 행 기준`, href: "/admin/hardware#hardware-section-planned", state: operationsState("installations"), onRetry: retryOperations },
+    { id: "installation-dates", group: "설치·배송", label: "예정일 점검", value: `${(installations?.overdueCount ?? 0) + (installations?.undatedCount ?? 0)}건`, note: `전사 · 날짜 경과 ${installations?.overdueCount ?? 0} / 미지정 ${installations?.undatedCount ?? 0}`, reference: "원본 예정일 기준", href: "/admin/hardware#hardware-section-planned", state: operationsState("installations"), tone: (installations?.overdueCount ?? 0) + (installations?.undatedCount ?? 0) > 0 ? "warning" : "neutral", onRetry: retryOperations },
     metric({ id: "revenue", group: "매출·운영", label: "내 FY 확정 매출", value: `${fmtCny(branchSummary?.revenue.confirmed ?? 0)} CNY`, note: "내 담당 · REV 확정 · 승인 개인 목표", reference: `연간 ${fmtCny(branchSummary?.revenue.goal ?? 0)} CNY`, progress: branchSummary?.revenue.goal ? branchSummary.revenue.confirmed / branchSummary.revenue.goal * 100 : undefined, href: "/admin/branch/ledger?period=Y", state: sourceStates.branch, trend: <Sparkline data={sparkRevenue} /> }, "branch"),
     metric({ id: "pipeline", group: "매출·운영", label: "파이프 커버리지", value: pipelineCoverage == null ? "—" : `${pipelineCoverage.toFixed(1)}x`, note: "연간 예상 파이프 ÷ 잔여목표", reference: "2.0x 이상 권장", href: "/admin/branch/ledger?period=Y", state: sourceStates.branch, tone: pipelineCoverage != null && pipelineCoverage < 2 ? "warning" : "neutral" }, "branch"),
     metric({ id: "renewal", group: "매출·운영", label: "리뉴얼 D-60", value: `${osSummary?.renewal.expiringSoonCount ?? 0}건`, note: osSourceError("renewal") ?? "NEO · 60일 내 만료", href: "/admin/crm/customers/accounts?expiring=1", state: osSourceState("renewal"), tone: (osSummary?.renewal.expiringSoonCount ?? 0) > 0 ? "warning" : "neutral" }, "os"),
@@ -1022,7 +1024,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       {/* 헤더 — eyebrow·소개문은 제거(사이드바가 위치를, 섹션이 내용을 이미 말한다).
           확보한 공간은 숫자에게 주고, 우측은 상시 바로가기만 남긴다. */}
       <div className="relative mb-7 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div><h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1><p className="mt-2 text-xs text-[#615D59]">누적·새 문의·방문·유입 추이는 전사 · 진행 중 리드·데모·설치·매출은 내 담당</p></div>
+        <div><h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1><p className="mt-2 text-xs text-[#615D59]">전사 기준 · 전체 지표의 진행 중 리드·전환율·매출만 내 담당</p></div>
         <div className="flex flex-wrap items-center gap-2">
           {[
             { href: "/admin/crm/customers/leads?sort=newest&unconfirmed=1", label: "문의 목록" },
@@ -1080,9 +1082,10 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       </div>
 
 
-      {/* 2줄: 먼저 볼 것 + 오늘 들어온 문의 */}
-      <div className="mb-10 grid grid-cols-1 gap-6 lg:grid-cols-12">
-      <section className="min-w-0 lg:col-span-7" aria-labelledby="overview-focus-heading">
+      {/* 2줄: 오늘 들어온 문의 — 직접 문의(홈페이지·쇼룸·도입) 먼저, 광고·자료 리드는 아래(시안 B) */}
+      <OverviewTodayInquiries intake={liveIntake} className="mb-10" />
+
+      <section className="mb-10" aria-labelledby="overview-focus-heading">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 id="overview-focus-heading" className="text-xl font-bold tracking-[-0.025em] text-[#111110]">먼저 볼 {Math.min(3, operationalAlerts.length)}가지</h2>
           <span className="text-xs text-[#615D59]">주의 {actionableOperationalAlertCount} · 기존 운영 우선순위</span>
@@ -1100,8 +1103,6 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
           </>}
         </div>
       </section>
-      <OverviewTodayInquiries intake={liveIntake} className="lg:col-span-5" />
-      </div>
 
       <OverviewOperationsPanels leadState={sourceStates.leads} onLeadRetry={() => retrySource("leads")} leads={sourceStates.leads === "ready" ? { new: companyFunnel.newLeads, contacted: companyFunnel.contactedLeads, converted: companyFunnel.converted, closed: companyFunnel.closedLeads } : null} operations={operations} loading={operationsLoading} onRetry={retryOperations} />
 

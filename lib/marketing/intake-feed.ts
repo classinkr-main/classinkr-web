@@ -21,7 +21,8 @@
 import { toBusinessStorageDateTime, getBusinessDateParts } from "@/lib/business-time"
 import { compassInflowInWindow, type CompassInflowEvent } from "@/lib/compass/inflow-window"
 import { isCompassMarketingChannel, normalizePhoneKey } from "@/lib/compass/normalize"
-import { getLeadSourceGroup, getMetaAdInfo, isTestLead } from "@/lib/crm/lead-attribution"
+import { SOURCE_GROUP_DOT, getLeadSourceGroup, getMetaAdInfo, getSourceGroup, isTestLead } from "@/lib/crm/lead-attribution"
+import { isLeadAwaitingResponse } from "@/lib/crm/lead-response-status"
 import { leadInflowInWindow, type LeadInflowEvent } from "@/lib/crm/lead-reinflow"
 import { shiftDays } from "@/lib/marketing/perf"
 import type { LeadRecord } from "@/lib/repositories/leads"
@@ -75,6 +76,8 @@ export interface CompassIntakeLead {
   meta_ad_id: string | null
   channel?: string | null
   platform?: string | null
+  /** Compass 퍼널 단계(new·contact·consult·demo·quote·bd·won·lost) — 어드민 리드가 없는 항목의 응대 상태 근거. */
+  stage?: string | null
   /** 생성 시각 — Compass 는 신규 insert 때 last_inflow_at 을 비워 둔다. 신규 유입의 시각은 이것뿐이다. */
   created_at: string | null
   /** 최신 재유입 시각(재유입이 없으면 null). */
@@ -98,6 +101,71 @@ export const INTAKE_SOURCE_KIND_LABEL: Record<IntakeSourceKind, string> = {
   intake: "쇼룸·도입 신청",
   resources: "자료",
   other: "기타",
+}
+
+/** 유입 경로 색점 — 리드 보드 SOURCE_GROUP_DOT 과 같은 값(홈페이지·메타·접수·자료실·수기·기타). */
+export const INTAKE_SOURCE_KIND_DOT: Record<IntakeSourceKind, string> = {
+  homepage: SOURCE_GROUP_DOT.homepage,
+  ad: SOURCE_GROUP_DOT.meta,
+  intake: SOURCE_GROUP_DOT.intake,
+  resources: SOURCE_GROUP_DOT.resources,
+  other: SOURCE_GROUP_DOT.manual_etc,
+}
+
+/**
+ * 직접 문의 — 사람이 홈페이지 폼·쇼룸 예약·도입 신청으로 직접 남긴 문의. Overview "오늘 들어온 문의"는
+ * 이 묶음을 위 칸에 따로 둔다(광고 리드가 많은 날에도 묻히지 않게 — 2026-11-27 시안 B).
+ */
+export const INTAKE_DIRECT_SOURCE_KINDS: ReadonlySet<IntakeSourceKind> = new Set<IntakeSourceKind>(["homepage", "intake"])
+
+export function isDirectIntakeKind(kind: IntakeSourceKind | null | undefined): boolean {
+  return INTAKE_DIRECT_SOURCE_KINDS.has(kind ?? "other")
+}
+
+/**
+ * 응대 상태 — 어드민 리드는 리드 보드와 같은 술어(isLeadAwaitingResponse = 응대 대상 소스 + 신규)로
+ * "응대 전"을 가르고 나머지는 리드 상태 그대로다. Compass 에만 있는 리드는 Compass 단계로 읽는다.
+ */
+export type IntakeResponseState = "awaiting" | "new" | "contacted" | "converted" | "closed"
+
+export const INTAKE_RESPONSE_LABEL: Record<IntakeResponseState, string> = {
+  awaiting: "응대 전",
+  new: "신규",
+  contacted: "연락 중",
+  converted: "전환",
+  closed: "종료",
+}
+
+function adminResponseState(lead: LeadRecord): IntakeResponseState | null {
+  if (isLeadAwaitingResponse(lead)) return "awaiting"
+  const status: string = lead.status
+  return status === "new" || status === "contacted" || status === "converted" || status === "closed" ? status : null
+}
+
+export function compassResponseState(stage: string | null | undefined): IntakeResponseState | null {
+  const value = stage?.trim().toLowerCase()
+  if (!value) return null
+  if (value === "new") return "awaiting"
+  if (value === "won") return "converted"
+  if (value === "lost") return "closed"
+  return "contacted"
+}
+
+/** 어드민 리드 source → 남긴 곳(폼) 라벨. 표에 없는 source 는 null(유입 경로 라벨만 보인다). */
+const INTAKE_FORM_LABEL: Record<string, string> = {
+  demo_modal: "데모 신청",
+  contact_page: "문의",
+  showroom_booking: "쇼룸 예약",
+  checkout_request: "도입 신청",
+  newsletter: "뉴스레터",
+  meta_lead_ads: "Meta 리드폼",
+}
+
+export function intakeFormLabelOfLead(lead: Pick<LeadRecord, "source">): string | null {
+  const source = (lead.source ?? "").trim()
+  const label = INTAKE_FORM_LABEL[source]
+  if (label) return label
+  return getSourceGroup(source) === "resources" ? "자료 신청" : null
 }
 
 export function intakeSourceKindOfLead(lead: LeadRecord): IntakeSourceKind {
@@ -136,6 +204,10 @@ export interface IntakeFeedItem {
   adminLeadId: string | null
   /** 소스 분해 축(IntakeSourceKind). */
   sourceKind: IntakeSourceKind
+  /** 남긴 곳(폼) — 어드민 리드 source 라벨(데모 신청·문의·쇼룸 예약·도입 신청…). Compass 에만 있으면 null. 옛 캐시 응답에는 없다. */
+  formLabel?: string | null
+  /** 응대 상태 — 어드민 리드가 있으면 리드 보드 기준, 없으면 Compass 단계. 읽을 수 없으면 null. 옛 캐시 응답에는 없다. */
+  response?: IntakeResponseState | null
   /**
    * 재유입인가 — 이 창에서 "이미 있던 리드가 다시 들어왔다"(생성은 창 밖, 최신 재유입이 창 안).
    *  - Compass: 최신 재유입(last_inflow_at)이 창 안.
@@ -163,6 +235,10 @@ export interface IntakeFeedResult {
   overlapCount: number
   /** 최근순 피드(최대 maxItems). */
   items: IntakeFeedItem[]
+  /** 오늘의 직접 문의(홈페이지·쇼룸·도입 신청) 최근순 — 전체 최근 피드에서 광고에 밀려 빠지지 않게 따로 싣는다. 옛 캐시 응답에는 없다. */
+  directItems?: IntakeFeedItem[]
+  /** 오늘의 광고·자료·기타 리드 최근순(최대 maxLeadItems). 옛 캐시 응답에는 없다. */
+  leadItems?: IntakeFeedItem[]
   adminMeasured: boolean
   compassMeasured: boolean
   /**
@@ -190,6 +266,9 @@ interface Bucket {
   sourceKind: IntakeSourceKind | null
   /** 기여한 유입(어드민·Compass) 중 하나라도 재유입이면 true. */
   reinflow: boolean
+  formLabel: string | null
+  /** 먼저 기여한 원천의 응대 상태 — 어드민 루프가 먼저 돌므로 접힌 항목은 리드 보드 기준이 이긴다. */
+  response: IntakeResponseState | null
 }
 
 function timeOf(value: string | null | undefined): number | null {
@@ -232,6 +311,8 @@ function foldInto(map: Map<string, Bucket>, foldKey: string, atMs: number, at: s
     adminLeadId: null,
     sourceKind: null,
     reinflow: false,
+    formLabel: null,
+    response: null,
   }
   map.set(foldKey, created)
   return created
@@ -258,6 +339,10 @@ export interface BuildIntakeFeedInput {
   /** 브리지 조회가 행 상한에 닿았는지 — 라우트가 판정해 넘긴다. */
   compassTruncated?: boolean
   maxItems?: number
+  /** 직접 문의 목록 상한 — 하루치가 다 들어가도록 넉넉히 둔다. */
+  maxDirectItems?: number
+  /** 광고·자료·기타 목록 상한. */
+  maxLeadItems?: number
 }
 
 /**
@@ -271,6 +356,8 @@ export function buildIntakeFeed({
   adNameById = null,
   compassTruncated = false,
   maxItems = 8,
+  maxDirectItems = 24,
+  maxLeadItems = 8,
 }: BuildIntakeFeedInput): IntakeFeedResult {
   const todayFrom = timeOf(windows.todayStartIso) ?? 0
   const todayTo = timeOf(windows.nowIso) ?? Number.MAX_SAFE_INTEGER
@@ -298,6 +385,8 @@ export function buildIntakeFeed({
       if (bucket.adminLeadId == null) bucket.adminLeadId = lead.id
       if (bucket.sourceKind == null) bucket.sourceKind = intakeSourceKindOfLead(lead)
       if (event.kind === "reinflow") bucket.reinflow = true
+      if (bucket.formLabel == null) bucket.formLabel = intakeFormLabelOfLead(lead)
+      if (bucket.response == null) bucket.response = adminResponseState(lead)
       fill(bucket, "name", clean(lead.name))
       fill(bucket, "org", clean(lead.org))
       fill(bucket, "adName", clean(getMetaAdInfo(lead)?.ad ?? lead.source_detail))
@@ -325,6 +414,7 @@ export function buildIntakeFeed({
       if (bucket.compassLeadId == null) bucket.compassLeadId = lead.id
       if (bucket.sourceKind == null) bucket.sourceKind = "ad"
       if (event.kind === "reinflow") bucket.reinflow = true
+      if (bucket.response == null) bucket.response = compassResponseState(lead.stage)
       fill(bucket, "name", clean(lead.name))
       fill(bucket, "org", clean(lead.academy))
       fill(bucket, "region", clean(lead.region))
@@ -337,11 +427,9 @@ export function buildIntakeFeed({
   const compassMeasured = compassLeads != null
   const measured = adminMeasured || compassMeasured
 
-  const items = [...today.values()]
-    // 동시각 동률은 접기 키로 갈라 전순서를 만든다(내부 키라 응답에는 나가지 않는다).
-    .sort((a, b) => b.atMs - a.atMs || a.foldKey.localeCompare(b.foldKey))
-    .slice(0, maxItems)
-    .map<IntakeFeedItem>((bucket) => ({
+  // 동시각 동률은 접기 키로 갈라 전순서를 만든다(내부 키라 응답에는 나가지 않는다).
+  const sorted = [...today.values()].sort((a, b) => b.atMs - a.atMs || a.foldKey.localeCompare(b.foldKey))
+  const toItem = (bucket: Bucket): IntakeFeedItem => ({
       key: displayKey(bucket),
       at: bucket.at,
       name: bucket.name,
@@ -353,8 +441,13 @@ export function buildIntakeFeed({
       compassLeadId: bucket.compassLeadId,
       adminLeadId: bucket.adminLeadId,
       sourceKind: bucket.sourceKind ?? "other",
+      formLabel: bucket.formLabel,
+      response: bucket.response,
       reinflow: bucket.reinflow,
-    }))
+    })
+  const items = sorted.slice(0, maxItems).map(toItem)
+  const directItems = sorted.filter((bucket) => isDirectIntakeKind(bucket.sourceKind)).slice(0, maxDirectItems).map(toItem)
+  const leadItems = sorted.filter((bucket) => !isDirectIntakeKind(bucket.sourceKind)).slice(0, maxLeadItems).map(toItem)
 
   let overlapCount = 0
   let todayReinflowCount = 0
@@ -374,6 +467,8 @@ export function buildIntakeFeed({
     delta: measured ? today.size - yesterday.size : null,
     overlapCount,
     items,
+    directItems,
+    leadItems,
     adminMeasured,
     compassMeasured,
     compassTruncated,

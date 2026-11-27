@@ -488,3 +488,64 @@ describe("buildIntakeFeed", () => {
     expect(compassOnly?.adminLeadId).toBeNull()
   })
 })
+
+describe("buildIntakeFeed — 직접 문의 칸 · 응대 상태(2026-11-27 Overview 시안 B)", () => {
+  const windows: IntakeWindows = resolveIntakeWindows(NOW)
+
+  it("광고가 최근 피드를 다 채워도 직접 문의(홈페이지·쇼룸·도입)는 directItems 에 남는다", () => {
+    const ads = Array.from({ length: 6 }, (_, index) =>
+      compassNew({ id: 9000 + index, created_at: `2026-08-28T05:0${index}:00.000Z` })
+    )
+    const result = buildIntakeFeed({
+      adminLeads: [
+        lead({ source: "contact_page", name: "박원장", timestamp: "2026-08-28T01:00:00.000Z" }),
+        lead({ source: "showroom_booking", name: "윤원장", timestamp: "2026-08-28T00:30:00.000Z" }),
+      ],
+      compassLeads: ads,
+      windows,
+      maxItems: 3,
+    })
+    expect(result.items.map((item) => item.sourceKind)).toEqual(["ad", "ad", "ad"])
+    expect(result.directItems?.map((item) => item.name)).toEqual(["박원장", "윤원장"])
+    expect(result.directItems?.map((item) => item.formLabel)).toEqual(["문의", "쇼룸 예약"])
+    expect(result.leadItems).toHaveLength(6)
+    expect(result.leadItems?.every((item) => item.sourceKind === "ad")).toBe(true)
+  })
+
+  it("어드민 리드는 리드 보드 술어로, Compass 에만 있는 리드는 단계로 응대 상태를 읽는다", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [
+        lead({ source: "demo_modal", status: "new", name: "응대전" }),
+        lead({ source: "newsletter", status: "new", name: "뉴스레터" }),
+        lead({ source: "contact_page", status: "contacted", name: "연락중" }),
+      ],
+      compassLeads: [
+        compassNew({ name: "콤파스신규", stage: "new" }),
+        compassNew({ name: "콤파스데모", stage: "demo" }),
+        compassNew({ name: "콤파스실패", stage: "lost" }),
+        compassNew({ name: "단계없음" }),
+      ],
+      windows,
+      maxItems: 20,
+    })
+    const byName = new Map(result.items.map((item) => [item.name, item.response]))
+    expect(byName.get("응대전")).toBe("awaiting")
+    expect(byName.get("뉴스레터")).toBe("new")
+    expect(byName.get("연락중")).toBe("contacted")
+    expect(byName.get("콤파스신규")).toBe("awaiting")
+    expect(byName.get("콤파스데모")).toBe("contacted")
+    expect(byName.get("콤파스실패")).toBe("closed")
+    expect(byName.get("단계없음")).toBeNull()
+  })
+
+  it("두 원천이 접히면 어드민 리드의 응대 상태가 이긴다", () => {
+    const result = buildIntakeFeed({
+      adminLeads: [lead({ phone: "010-2222-3333", source: "contact_page", status: "contacted" })],
+      compassLeads: [compassNew({ phone_key: "01022223333", stage: "new" })],
+      windows,
+    })
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0].response).toBe("contacted")
+    expect(result.directItems).toHaveLength(1)
+  })
+})
