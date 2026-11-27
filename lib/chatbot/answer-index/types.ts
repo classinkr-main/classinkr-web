@@ -337,6 +337,16 @@ interface AnswerCardBase {
    * 없으면 개념 겹침 규칙(assist.ts policyTopicBlocks)으로 정한다.
    */
   policyTopicAllowed?: boolean
+  /**
+   * 말투 변환 제외 표시(R3 계약 칸, 규격 S7). 정책 문구 소유자가 정한 글처럼 렌더가 요체로 바꾸면 안 되는 카드에 단다.
+   * R3 단계 0에서는 이름만 둔다(읽는 곳은 a1 요체 변환·V-14).
+   */
+  toneLocked?: boolean
+  /**
+   * 카드 역할(R3 계약 칸, 규격 S9). hub 는 총괄 소개 카드로, 구체 카드가 후보에 있으면 양보한다(c1 score.ts). tier 는 그대로 둔다.
+   * R3 단계 0에서는 이름만 둔다.
+   */
+  role?: "hub"
 }
 
 export interface DocCardAnswer {
@@ -465,6 +475,10 @@ export interface AnswerVariant {
   g: "A" | "B"
   /** 생성 모델 등급. */
   m: string
+  /**
+   * 한 변형 문장에 물음이 둘 들어 있어도 되는 표시(R3 계약 칸, V-15). 사람이 단다. 없으면 splitQuestion 으로 2조각 이상이면 V-15 실패다.
+   */
+  compoundOk?: boolean
 }
 
 /** 카드 id → 변형 목록. */
@@ -810,7 +824,15 @@ export interface AnswerIndexSegmentDecision {
   symptom?: boolean
   /** 머리 줄 이름(조각 주절의 비일반 개념의 문서 형태, 손님 글이 아니다). 정하지 못하면 없음. */
   label?: string
+  /**
+   * 덮임 점검 결과(R3 계약 칸, 규격 4.4). 조각을 고른 카드가 그 조각을 실제로 답하는지: pass · asks_mismatch · no_overlap · not_covers.
+   * R3 단계 0에서는 이름만 둔다(채우는 곳은 a2 decide.ts combineSegments).
+   */
+  coverage?: AnswerIndexSegmentCoverage
 }
+
+/** 덮임 점검 판정(규격 4.4). */
+export type AnswerIndexSegmentCoverage = "pass" | "asks_mismatch" | "no_overlap" | "not_covers"
 
 /**
  * 주의 표시(R2 낱말 장치: 낱말 하나는 결정이 아니라 표시). 결정형이 알아본 신호를 모델 지시문·측정에 넘긴다.

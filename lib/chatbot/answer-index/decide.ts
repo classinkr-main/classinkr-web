@@ -109,6 +109,11 @@ export interface DecideContext {
   isSymptomReport?: (text: string) => boolean
   /** 환경변수(시험용). 없으면 process.env. */
   env?: Env
+  /**
+   * 질문에서 뽑은 '이미 해 본 동작' 표지(R3 계약 칸, 규격 S14: 재설치·재시작·업데이트·다시 로그인·껐다 켜기 등).
+   * R3 단계 0에서는 이름만 둔다(뽑는 곳은 a2 normalize.ts, 쓰는 곳은 a1 respond.ts — 스위치 CHATBOT_COMPILED_SKIP_TRIED).
+   */
+  tried?: string[]
 }
 
 // ─── 환경변수 스위치(§3.8) ──────────────────────────────────────────────
