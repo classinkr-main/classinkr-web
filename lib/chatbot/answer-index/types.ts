@@ -826,9 +826,12 @@ export interface AnswerIndexSegmentDecision {
   label?: string
   /**
    * 덮임 점검 결과(R3 계약 칸, 규격 4.4). 조각을 고른 카드가 그 조각을 실제로 답하는지: pass · asks_mismatch · no_overlap · not_covers.
-   * R3 단계 0에서는 이름만 둔다(채우는 곳은 a2 decide.ts combineSegments).
+   * decide.ts combineSegments 가 채운다(CHATBOT_SEGMENT_COVERAGE 를 끄면 없다). 조각 판정으로 고른 카드는 pass, 다른 조각·원문 카드로 채운
+   * 자리는 그 카드의 판정이다. pass 가 아닌데 답한 조각은 다시 고른 카드(coverageCard 가 걸린 카드)이거나, 정한 조각이 다 걸려 하나 남긴 자리다.
    */
   coverage?: AnswerIndexSegmentCoverage
+  /** 덮임 점검에 걸려 이 조각에서 뺀 카드(다시 골랐거나 알림으로 둔 조각). 답 글에는 쓰지 않는다. */
+  coverageCard?: string
 }
 
 /** 덮임 점검 판정(규격 4.4). */
@@ -870,6 +873,8 @@ export interface AnswerIndexTraceSegment {
   noticeKind?: AnswerIndexNoticeKind
   /** 못 정한 조각을 따로 물었을 때의 판정(측정용). */
   alone?: AnswerIndexDecisionKind
+  /** 덮임 점검 판정(AnswerIndexSegmentDecision.coverage 와 같다, R3 a2). */
+  coverage?: AnswerIndexSegmentCoverage
 }
 
 export type AnswerIndexNoticeKind = "retry" | "notfound" | "absent" | "symptom"
@@ -904,6 +909,11 @@ export interface AnswerIndexDecision {
   rescue?: "vote" | null
   /** 주의 표시(없는 개념 형태 등). 없거나 빈 배열이면 신호 없음. */
   cautions?: AnswerIndexCaution[]
+  /**
+   * 질문에 든 '이미 해 본 동작' 이름(규격 S14, R3 a2: DecideContext.tried, 없으면 normalize.ts extractTriedActions). 없으면 칸이 없다.
+   * 판정에는 쓰지 않는다. 렌더(respond.ts, CHATBOT_COMPILED_SKIP_TRIED)가 그 단계를 뺄 때 읽는다.
+   */
+  tried?: string[]
 }
 
 /** ChatbotCore.answerIndex 에 싣는 흔적. 응답에는 싣지 않는다. */

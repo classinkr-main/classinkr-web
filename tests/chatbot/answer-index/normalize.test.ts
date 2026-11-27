@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   detectAskType,
+  extractTriedActions,
   glossForIndex,
   isTailOnly,
   normalizeForIndex,
@@ -128,6 +129,23 @@ describe("범위 관문", () => {
   it("문장 끝 어미 뒤 공백도 문장 경계로 센다", () => {
     expect(countSentences("로그인이 안 돼요 비밀번호 바꿨어요 다시 해도 안 돼요 도와주세요")).toBe(4)
     expect(countSentences("녹화 되나요")).toBe(1)
+  })
+})
+
+describe("이미 해 본 동작(R3 a2, 규격 S14)", () => {
+  it("이미 했다는 표지와 동작 말이 함께 있을 때만 그 동작 이름을 뽑는다", () => {
+    expect(extractTriedActions("앱을 지웠다가 다시 깔았는데도 수업 알림이 안 와요")).toEqual(["재설치"])
+    expect(extractTriedActions("재부팅도 해 봤고 업데이트도 했는데 화면이 까맣게 나와요")).toEqual(["업데이트", "재시작"])
+    expect(extractTriedActions("로그아웃하고 다시 로그인했는데 그대로예요")).toEqual(["다시 로그인"])
+    expect(extractTriedActions("칠판 껐다 켜도 터치가 안 돼요")).toEqual(["껐다 켜기"])
+    expect(extractTriedActions("업데이트 후에도 화면 공유가 안 돼요")).toEqual(["업데이트"])
+    expect(extractTriedActions("이미 여러 번 재설치했어요")).toEqual(["재설치"])
+  })
+
+  it("해 보라는 물음·원인 서술만 있으면 뽑지 않는다", () => {
+    expect(extractTriedActions("재설치하면 되나요?")).toEqual([])
+    expect(extractTriedActions("업데이트 자동으로 되나요")).toEqual([])
+    expect(extractTriedActions("이미 수업이 시작됐는데 학생이 못 들어와요")).toEqual([])
   })
 })
 
