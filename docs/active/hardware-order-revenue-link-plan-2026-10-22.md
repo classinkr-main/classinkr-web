@@ -19,7 +19,7 @@
 | 오더 시작점 | 견적 승인. |
 | 리드 | 같은 학교·학원이면 기존 고객에 자동 연결한다. 딜은 견적을 만들 때 자동으로 생긴다. |
 | 기록 단위 | 입고 1건 = 물량번호 1개(여러 품목이 한 번에). 출고 1건 = 고객 1곳의 물량 = 오더 1건. |
-| 하드웨어 승인 | 하드웨어가 들어간 건은 무조건 **이왕찬 또는 지사장**의 승인을 받는다. 고객 승인이나 담당자 처리만으로는 오더가 되지 않는다. |
+| 하드웨어 승인 | 하드웨어가 들어간 건은 무조건 **[담당자 8] 또는 지사장**의 승인을 받는다. 고객 승인이나 담당자 처리만으로는 오더가 되지 않는다. |
 
 이 결정은 [입력 가속 기획](./hardware-input-speed-plan-2026-09-20.md)의 "어드민 수기 입력의 범위"에 답한다.
 최종은 (c) 출고까지 전부이고, 옮기는 순서는 (a) 입고부터다(§5).
@@ -27,14 +27,14 @@
 **하드웨어 승인 권한의 현재 상태(2026-10-22 코드 확인).**
 
 - 승인 권한은 기존 기능 권한 `hardware.finalize`로 표현한다. 사람 이름을 코드에 넣지 않는다([Admin OS 운영 결정](./admin-os-operating-decisions-2026-07-11.md) §1: 역할이 아니라 슈퍼 어드민이 사용자별로 부여).
-- 지금 이 권한은 이왕찬 계정에만 부여돼 있고(`supabase/migrations/20260711_admin_rbac_actor_audit.sql`), 슈퍼 어드민은 비상용으로 항상 통과한다(`lib/admin-auth.ts`의 `hasAdminCapability`).
+- 지금 이 권한은 [담당자 8] 계정에만 부여돼 있고(`supabase/migrations/20260711_admin_rbac_actor_audit.sql`), 슈퍼 어드민은 비상용으로 항상 통과한다(`lib/admin-auth.ts`의 `hasAdminCapability`).
 - 지사장 역할(`BRANCH`)에는 자동으로 들어가지 않는다.
 - 지금 이 권한이 막는 것은 배송 예정 → 실제 출고 확정, 실현된 기록 수정, 원장 취소, 시트 스냅샷 복원이다. 오더 승인은 새로 더한다(§4-3).
 - 견적의 `pending_approval` 상태는 파트너 공유만 막고, 실제 승인 절차는 없다(`app/api/portal/quotes/[id]/share/route.ts`).
 
 **후속 결정(2026-10-22).**
 
-- 권한은 지금 그대로 둔다. 이왕찬과 같은 권한을 다른 계정에 더 켜지 않는다.
+- 권한은 지금 그대로 둔다. [담당자 8]과 같은 권한을 다른 계정에 더 켜지 않는다.
 - 견적은 고객에게 보내기 전에 따로 승인받지 않는다. 승인은 오더로 확정할 때와 출고 확정 때다.
 - §4-5(출고 ↔ REV 매출 짝짓기)와 구현 단계 S5는 확장할 때만 한다. 지금은 만들지 않는다.
 
@@ -73,9 +73,9 @@
  └ 고객·딜 자동 생성(견적 작성 화면에 이미 있음)
 
 고객이 견적 승인
- └ 하드웨어가 들어 있으면 '하드웨어 승인 대기'로 올리고 이왕찬·지사장에게 알림
+ └ 하드웨어가 들어 있으면 '하드웨어 승인 대기'로 올리고 [담당자 8]·지사장에게 알림
 
-이왕찬 또는 지사장이 승인  ← 오더 시작
+[담당자 8] 또는 지사장이 승인  ← 오더 시작
  └ 오더번호 발급 (예: ORD-2610-014)
  └ 고객 단위 한 묶음으로 배송 예정 자동 등록 → 가용 재고에서 미리 뺀다
 
@@ -117,7 +117,7 @@
 - 하드웨어 줄(재고 품목이 있거나 확인 필요인 줄)이 있으면 **하드웨어 승인 대기**로 만든다. 없으면(소프트웨어·서비스만) 바로 승인되고 오더번호가 붙는다(결정자 "자동(하드웨어 없음)").
 - 승인 요청 알림: 고객 링크 경로는 견적 진행 알림(`quote.accepted`)에 "하드웨어 승인 대기" 안내 줄이 붙는다. 담당자 경로는 `hardware.order.approval_requested`(승인 필요) 알림이 따로 간다. 둘 다 기존 WeCom 웹훅 경로를 쓴다.
 - 반려 알림: 반려하면 `hardware.order.rejected`(사유 + "견적을 고쳐 새 버전으로 승인받으면 다시 올라온다")가 자동으로 나간다(2026-10-27 운영자 결정). 반려·취소 카드의 "다시 알리기"로 또 보낼 수 있다. 알림 실패는 반려를 막지 않는다.
-- 하드웨어 탭 홈의 **하드웨어 승인 대기**(`components/admin/hardware/inventory/OrderApprovalSection.tsx`)에서 `hardware.finalize` 권한자(이왕찬, 지사장=슈퍼 어드민)만 승인·반려·취소한다(`app/api/admin/hardware/orders/[id]/route.ts`). 목록은 하드웨어 편집 역할 전원이 본다. 결정은 감사 로그(`hardware.order.approve|reject|cancel`)에 남는다. 반려·취소는 사유가 필수다.
+- 하드웨어 탭 홈의 **하드웨어 승인 대기**(`components/admin/hardware/inventory/OrderApprovalSection.tsx`)에서 `hardware.finalize` 권한자([담당자 8], 지사장=슈퍼 어드민)만 승인·반려·취소한다(`app/api/admin/hardware/orders/[id]/route.ts`). 목록은 하드웨어 편집 역할 전원이 본다. 결정은 감사 로그(`hardware.order.approve|reject|cancel`)에 남는다. 반려·취소는 사유가 필수다.
 - 승인하면 오더번호 `ORD-YYMM-NNN`(한국 시간 달 기준, 달마다 001부터)을 발급하고, 견적 줄 × 재고 품목마다 배송 예정(창고 → 고객, 상태 "배송 예정")을 만든다. 배송 예정의 `reference_no`는 견적 줄 참조(`portal-quote:<견적>:line:<줄>`)라 CRM 오더 대사 목록에서 그 줄이 빠지고, 오더번호는 `raw.order_no`와 메모에 실린다(시트 '3.출고 현황' 오더번호 열과 같은 자리). 배송 예정을 만들지 못하면 승인을 되돌린다.
 - 중복 방지: 승인은 "승인 대기 → 승인됨" 상태 전이로 한 번만 통과한다(동시에 눌러도 한 사람만). 오더번호는 DB 유니크 인덱스로 하나뿐이고, 겹치면 다음 번호로 다시 잡는다.
 - 오더번호가 붙으면(승인·자동 승인) 딜을 확정(confirmed)으로 올린다. 전진만 하고, contact·quote·contract 단계일 때만이다. 딜에 오더번호 칸을 따로 두지 않고 오더가 `deal_id`로 딜을 가리킨다.
@@ -166,7 +166,7 @@ T3에서 "출고가 매출을 만든다"로 바뀌므로, §4-5의 짝짓기 로
 | --- | --- | --- |
 | S1 ✅ | 시트 매시간 자동 가져오기(무변경이면 건너뜀), 출고 시트 오더번호 열 읽기, 대사 뷰 배송 예정 버그 수정 — **2026-10-22 구현**. 운영 반영은 마이그레이션 `20261022_hw_rev_matches_exclude_planned.sql` 적용 + 운영 배포 후 | `app/api/cron/link-hourly/route.ts`, `lib/hardware/sheet-auto-import.ts`, `lib/branch/parsers/hw.ts`, `lib/repositories/hardware-inventory.ts`, `vercel.json` |
 | S2 ✅ | 리드 → 고객 자동 연결 — **2026-10-22 구현**. 견적 작성 시 고객·딜 자동 생성은 이미 있다(`QuickQuoteComposer`의 `resolveDeal`). 운영 반영은 마이그레이션 `20261022_crm_lead_auto_confirm.sql` 적용 + 운영 배포 후 | `lib/server/lead-customer-autolink.ts`, `lib/repositories/crm-source-links.ts`, `app/api/cron/link-hourly/route.ts` |
-| S3 ✅ | 견적 승인 → 하드웨어 승인 대기(이왕찬·지사장) → 오더번호 + 배송 예정 자동 등록, 딜 확정 단계 이동 — **2026-10-22 구현**. 멤버 설정의 권한 이름은 "하드웨어 승인·최종 확정 · 이왕찬 담당"(지사장은 슈퍼 어드민이라 권한 없이도 가능). 운영 반영은 마이그레이션 `20261022_sales_orders.sql` 적용 + 운영 배포 후 | `lib/repositories/sales-orders.ts`, `lib/orders/order-lines.ts`, `app/api/admin/hardware/orders/`, 견적 승인 라우트 2곳, `components/admin/hardware/inventory/OrderApprovalSection.tsx`, `components/admin/settings/MembersPanel.tsx` |
+| S3 ✅ | 견적 승인 → 하드웨어 승인 대기([담당자 8]·지사장) → 오더번호 + 배송 예정 자동 등록, 딜 확정 단계 이동 — **2026-10-22 구현**. 멤버 설정의 권한 이름은 "하드웨어 승인·최종 확정 · [담당자 8] 담당"(지사장은 슈퍼 어드민이라 권한 없이도 가능). 운영 반영은 마이그레이션 `20261022_sales_orders.sql` 적용 + 운영 배포 후 | `lib/repositories/sales-orders.ts`, `lib/orders/order-lines.ts`, `app/api/admin/hardware/orders/`, 견적 승인 라우트 2곳, `components/admin/hardware/inventory/OrderApprovalSection.tsx`, `components/admin/settings/MembersPanel.tsx` |
 | S4 ✅ | 시트 출고 줄 ↔ 오더 연결, 앱 예약 대체, 딜 단계 이동, 오더번호 없는 출고의 "시트 확인 필요" 목록 — **2026-10-22 구현**. 새 마이그레이션 없음(S3의 `20261022_sales_orders.sql`을 쓴다) | `lib/orders/sheet-order-sync.ts`, `lib/orders/sheet-order-check.ts`, `lib/orders/deal-stage.ts`, `lib/repositories/hardware-inventory.ts`(가져오기), `app/api/admin/hardware/orders/sheet-check/route.ts`, `OrderApprovalSection` |
 | S5 | 출고 ↔ REV 짝짓기 + 누락 목록 — **확장할 때만(보류)** | `lib/repositories/hw-rev-reconcile.ts`, 대사 뷰 |
 

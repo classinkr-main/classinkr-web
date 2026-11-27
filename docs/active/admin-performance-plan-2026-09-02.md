@@ -147,7 +147,7 @@ Compass 저장소(`classinkr-main/crm`)에는 이 세션에 푸시 권한이 없
 | Pool 설정 | `connectionTimeoutMillis` 5초, `idleTimeoutMillis` 10초, `keepAlive`, `max` 5, 유휴 에러 핸들러 |
 | 캘린더 미러 원자화 | delete + upsert 단일 트랜잭션, `jsonb_to_recordset` 단일 문, 0건 가드 유지 |
 | Meta 크론 | `maxDuration` 선언, 부분 실패를 `partial`/`partialAt`로 응답에 노출 |
-| 담당자 1줄 | `push_neocrm.mjs` OWNERS에 황찬우 |
+| 담당자 1줄 | `push_neocrm.mjs` OWNERS에 [담당자 6] |
 | 스키마 정합 도구 | `scripts/schema-diff.mjs`(읽기 전용), `schema.sql`에 `activities.deleted_at`, 코드에서 추론한 누락 DDL은 `scripts/schema.missing.sql`로 분리(실물 대조 후 이관) |
 | 문서 | `docs/p0-sync-safety-2026-09-02.md`: 적용 순서와 롤백 |
 
