@@ -302,7 +302,7 @@ npm run check:db --  --strict
 
 2026-11-25 적용 확인: 서울 프로젝트에 기존 `chatbot_claude_labels` 마이그레이션만 적용했다. 두 테이블의 RLS와 anon 차단, 집계 함수의 service_role 실행 권한과 anon·authenticated 실행 거절, service_role의 두 테이블 INSERT 권한을 카탈로그에서 재확인했다. 제공자·라벨링·답 색인 모델 스위치와 기존 행은 변경하지 않았다.
 
-### 2026-11-23 총판 정산 스냅샷 — 서울 프로젝트 미적용
+### 2026-11-23 총판 정산 스냅샷 — 서울 프로젝트 적용 완료(2026-11-27, 스냅샷 업로드는 아직)
 
 [총판 정산](../hardware-ops/distributor-settlement.md) §7 의 쿼드러닝 계정 보드. 코드보다 먼저든 나중이든 된다(폴백이 있다).
 적용 뒤 스냅샷을 한 번 올린다: `node --env-file=.env.local scripts/upload-partner-settlement-snapshot.mjs <snapshot.json>`(운영 DB에 쓴다).
@@ -311,7 +311,7 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261123_partner_settlement_snapshots.sql` | 총판마다 최신 정산 스냅샷 한 행 `partner_settlement_snapshots`(`partner` PK·`snapshot` jsonb·`generated_at`·`updated_by`·`updated_at` 트리거). RLS deny-all(정책 0, service_role 전용), 멱등 | 총판 미수금 탭 위 보드가 "아직 올라오지 않았다" 한 줄로 바뀌고 Overview 정산 잔액 카드가 그려지지 않는다. 견적별 총판 미수금은 그대로다 | `npm run check:db` 의 `partner_settlement_snapshots` 프로브(warning, 행 0이면 업로드 안내), 또는 `select to_regclass('public.partner_settlement_snapshots') is not null;` → `true` |
 
-### 2026-11-24 총판 견적서 확인 · 발행 후 수정 · 할인 · 문구 — 서울 프로젝트 미적용
+### 2026-11-24 총판 견적서 확인 · 발행 후 수정 · 할인 · 문구 — 서울 프로젝트 적용 완료(2026-11-27)
 
 총판이 공유 링크에서 [견적 확인]을 누른 기록과, 발행 뒤 금액 수정 기록([총판 정산](../hardware-ops/distributor-settlement.md) §4-1·§4-2).
 코드는 미적용 DB 에서도 돈다 — 확인 버튼과 발행 후 수정만 막힌다. **이 기능을 쓰기 전에 적용한다.**
@@ -320,7 +320,7 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261124_distributor_settlement_confirm_revise.sql` | `distributor_settlements` 에 `distributor_confirmed_at`·`distributor_confirmed_name`(60자 CHECK)·`revised_at`·`discount`(JSONB, mode CHECK)·`document_text`(JSONB) 추가. 멱등(`ADD COLUMN IF NOT EXISTS`·`DROP CONSTRAINT IF EXISTS`) | 정산 조회는 새 칸 없이 다시 읽는다(42703 폴백). 총판 링크에 확인 버튼이 나오지 않고, 발행 후 금액 수정과 할인·제목·기타사항을 넣은 저장은 503 "적용 필요". 발행 전 편집·발행·입금·고객 동의 자동 생성은 그대로 된다 | `npm run check:db` 의 `distributor_settlements`(총판 견적서 확인·발행 후 수정) 프로브(warning), 또는 `select count(*) from information_schema.columns where table_name = 'distributor_settlements' and column_name in ('distributor_confirmed_at','distributor_confirmed_name','revised_at','discount','document_text');` → `5` |
 
-### 2026-11-26 REV 엔트리 읽기 색인 · 중복 색인 정리 — 색인 추가는 적용 완료(2026-11-27), 중복 색인 정리는 미적용
+### 2026-11-26 REV 엔트리 읽기 색인 · 중복 색인 정리 — 서울 프로젝트 적용 완료(2026-11-27)
 
 [어드민·Compass 점검(2026-11-25)](admin-compass-audit-2026-11-25.md) §3 에서 만든 색인 전용 마이그레이션 두 개다.
 둘 다 코드와 순서가 무관하다(미적용이어도 동작은 같고 성능·경고만 다르다). 표·칼럼·정책은 건드리지 않는다.
@@ -333,7 +333,7 @@ npm run check:db --  --strict
 - 색인 생성은 트랜잭션 안에서 돌아 그동안 `branch_rev_period_entries` 쓰기(시트 임포트·주간 마감)가 잠깐 막힌다. 임포트가 돌지 않는 때 적용한다.
 - 롤백 파일은 `supabase/rollbacks/20261126_*.rollback.sql` 이다.
 
-### 2026-11-27 공개 키 직접 INSERT 차단 · `is_active_admin()` 역할 조건 — 서울 프로젝트 미적용
+### 2026-11-27 공개 키 직접 INSERT 차단 · `is_active_admin()` 역할 조건 — 서울 프로젝트 적용 완료(2026-11-27)
 
 [어드민·Compass 점검(2026-11-25)](admin-compass-audit-2026-11-25.md) §2-1 C-1 · C-2 의 접근 정책 변경이다(2026-11-26 승인). 코드와 순서가 무관하다 — 이 저장소의 쓰기는 전부 service role 을 거친다.
 
