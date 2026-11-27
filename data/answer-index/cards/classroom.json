@@ -12171,7 +12171,9 @@
     "notCovers": [
       "라이브·플레이백 옵션이 안 보일 때 → doc:/docs/teacher/lesson-web-live#1/web-live-no-option",
       "만든 뒤 링크 복사 → doc:/docs/teacher/lesson-web-live#1/web-live-link-copy",
-      "대시보드에서 만들기 → doc:/docs/teacher/lesson-web-live#1/web-live-admin-create"
+      "대시보드에서 만들기 → doc:/docs/teacher/lesson-web-live#1/web-live-admin-create",
+      "폰·태블릿으로 수업 듣기 → doc:/docs/start/mobile-install#summary/mobile-class-on-phone",
+      "컴퓨터에 설치가 필요한지 → doc:/docs/start/pc-install#summary/pc-install-overview"
     ],
     "negatives": [
       {
@@ -27269,7 +27271,9 @@
       "시청 로그인·비밀번호 설정 → doc:/docs/teacher/lesson-web-live#2/web-live-login-password",
       "생방송 리플레이와 코스 다시보기 링크 차이 → doc:guide:web-live-create/replay-vs-course-link",
       "웹 라이브 사용 조건·요금제 → doc:/docs/teacher/lesson-web-live#summary/web-live-plan",
-      "웹 라이브 시청자 수·동시 접속 → doc:/docs/admin/web-live-playback#5/viewer-detail"
+      "웹 라이브 시청자 수·동시 접속 → doc:/docs/admin/web-live-playback#5/viewer-detail",
+      "폰·태블릿으로 수업 듣기 → doc:/docs/start/mobile-install#summary/mobile-class-on-phone",
+      "컴퓨터에 설치가 필요한지 → doc:/docs/start/pc-install#summary/pc-install-overview"
     ],
     "negatives": [
       {

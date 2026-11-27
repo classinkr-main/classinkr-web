@@ -10012,7 +10012,9 @@
       "모든 과목 적용 여부 → doc:/docs/software/app-capabilities-map#summary/ai-not-always",
       "수업 중 AI 칠판 채점 → doc:/docs/software/app-capabilities-map#3/ai-board-summary",
       "AI 채점 결과 검토·게시 → doc:/docs/software/classin-ai-feature-guide#1/ai-grading-review",
-      "LMS 기본 자동 채점·성적표 자동 생성 → doc:/docs/start/company-overview#3/lms-admin-dashboard"
+      "LMS 기본 자동 채점·성적표 자동 생성 → doc:/docs/start/company-overview#3/lms-admin-dashboard",
+      "숙제 내주고 제출 현황 확인·채점하는 흐름 → doc:/docs/teacher/course-activities#4/homework-create",
+      "숙제 채점 기준·답안 추가 → doc:/docs/teacher/course-activities#4/homework-settings"
     ],
     "negatives": [
       {

@@ -32163,7 +32163,9 @@
       "칠판 판매 여부·제조 → policy:basics-sells-hardware",
       "다른 회사 칠판에서 소프트웨어만 → policy:other-brand-board-software-only",
       "TV·프로젝터 호환 → fixed:basics-existing-tv-projector",
-      "무료 체험 신청 위치 → doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
+      "무료 체험 신청 위치 → doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
+      "컴퓨터에서 클래스인을 쓰려면 갖출 사양·조건 → doc:/docs/start/pc-install#5/min-spec",
+      "폰·태블릿으로 수업에 들어갈 수 있는지 → doc:/docs/start/mobile-install#summary/mobile-class-on-phone"
     ],
     "negatives": [
       {
