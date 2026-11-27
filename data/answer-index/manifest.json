@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "dataVersion": "ai-2b3cd6ae1fda",
+  "dataVersion": "ai-17d2acfc41a6",
   "sources": {
     "app/about/AboutPageClient.tsx": "201307dd2bc22b3b",
     "app/about/layout.tsx": "cbced2f28647c89c",
@@ -123,43 +123,43 @@
   },
   "outputs": {
     "absent.json": {
-      "sha": "5e3474c4aa10917a",
-      "count": 276
+      "sha": "e12339cb398cc89b",
+      "count": 277
     },
     "audit/C-01.jsonl": {
-      "sha": "d9db556cf3c253b6",
+      "sha": "140dc6fbfccbc67f",
       "count": 44
     },
     "audit/C-02.jsonl": {
-      "sha": "c5255298ca201eb5",
+      "sha": "82ad88f33b539d98",
       "count": 44
     },
     "audit/C-03.jsonl": {
-      "sha": "bab3cbe7d6a88c88",
+      "sha": "4c628161d74d0a14",
       "count": 47
     },
     "audit/C-04.jsonl": {
-      "sha": "7e232768f16f14de",
+      "sha": "43fb526f3ca4bcb9",
       "count": 47
     },
     "audit/C-05.jsonl": {
-      "sha": "85bffdefee0bc6b8",
+      "sha": "98657fe909a526b4",
       "count": 47
     },
     "audit/C-06.jsonl": {
-      "sha": "3d4d3616ab22d7d4",
+      "sha": "77c0740bc63c19c8",
       "count": 40
     },
     "audit/C-07.jsonl": {
-      "sha": "5986d4cc76e47be2",
+      "sha": "82302d22f8b6d7af",
       "count": 44
     },
     "audit/C-08.jsonl": {
-      "sha": "8799fa8ff9953fa7",
+      "sha": "15e446e89b84eff4",
       "count": 44
     },
     "audit/C-09.jsonl": {
-      "sha": "fe024d3157c6de43",
+      "sha": "fd5506e4bfca765f",
       "count": 44
     },
     "audit/C-10.jsonl": {
@@ -167,35 +167,35 @@
       "count": 44
     },
     "audit/C-11.jsonl": {
-      "sha": "485d0f2e17982826",
+      "sha": "c11065932ce93ae7",
       "count": 41
     },
     "audit/C-12.jsonl": {
-      "sha": "254474fa11f18dd2",
+      "sha": "9cd120dee45967cc",
       "count": 46
     },
     "audit/C-13.jsonl": {
-      "sha": "ebe45529cda768f6",
+      "sha": "f4085b1356e045fc",
       "count": 45
     },
     "audit/C-14.jsonl": {
-      "sha": "7ef12c42d4569d5a",
+      "sha": "225e2ae3bf33a0d5",
       "count": 45
     },
     "audit/C-15.jsonl": {
-      "sha": "d25a6a3dc0744d37",
+      "sha": "039cb5d16c33b872",
       "count": 45
     },
     "audit/C-16.jsonl": {
-      "sha": "2ea3b48f8f13f1d3",
+      "sha": "93fcdf5852c45048",
       "count": 45
     },
     "audit/C-17.jsonl": {
-      "sha": "dfc42d85fad57168",
+      "sha": "027aed8b62851d58",
       "count": 45
     },
     "audit/C-18.jsonl": {
-      "sha": "0e4fa8871806edba",
+      "sha": "261f9c893acb23a2",
       "count": 45
     },
     "audit/C-19.jsonl": {
@@ -203,63 +203,63 @@
       "count": 5
     },
     "audit/C-20.jsonl": {
-      "sha": "5b4ab296a3c16f03",
+      "sha": "301ca9faa1c1ee01",
       "count": 45
     },
     "audit/C-21.jsonl": {
-      "sha": "b1e67d8391bca3de",
+      "sha": "9d5134796f6f3b76",
       "count": 15
     },
     "audit/C-22.jsonl": {
-      "sha": "2962cf48d90fa9b4",
+      "sha": "a310851cdc0e3967",
       "count": 45
     },
     "audit/C-23.jsonl": {
-      "sha": "076076a1c5f5c3c9",
+      "sha": "3c06685c16ab8690",
       "count": 45
     },
     "audit/C-24.jsonl": {
-      "sha": "b0970190cf234da7",
+      "sha": "3736767ca688b4b0",
       "count": 34
     },
     "audit/C-25.jsonl": {
-      "sha": "ea7450a13e668c8d",
+      "sha": "73fec3d9dd3a65fe",
       "count": 45
     },
     "audit/C-26.jsonl": {
-      "sha": "18f5e34c99b19cc9",
+      "sha": "c36f4aca34b9259c",
       "count": 28
     },
     "audit/C-27.jsonl": {
-      "sha": "16920bd5cade0beb",
+      "sha": "6c20813851b856eb",
       "count": 45
     },
     "audit/C-28.jsonl": {
-      "sha": "b1bf54dad1bfd526",
+      "sha": "54ee4e146609b6fd",
       "count": 45
     },
     "audit/C-29.jsonl": {
-      "sha": "441dcd2504a34199",
+      "sha": "534523197a7ff065",
       "count": 8
     },
     "audit/C-30.jsonl": {
-      "sha": "579fc17392bb7794",
+      "sha": "2932efc3dc348b4b",
       "count": 45
     },
     "audit/C-31.jsonl": {
-      "sha": "d43bb67ed4928202",
+      "sha": "f40d2294e308a3a3",
       "count": 45
     },
     "audit/C-32.jsonl": {
-      "sha": "9d3e198807f2a176",
+      "sha": "8e5c2a824fcf13b3",
       "count": 9
     },
     "audit/C-33.jsonl": {
-      "sha": "0a8544fb057025e1",
+      "sha": "0b33b9f7b27cbe15",
       "count": 45
     },
     "audit/C-34.jsonl": {
-      "sha": "5fb59ae161a7f15d",
+      "sha": "a40f7fb7029f91e6",
       "count": 44
     },
     "audit/human-queue.json": {
@@ -267,35 +267,35 @@
       "count": 92
     },
     "calibration.json": {
-      "sha": "ac909a03e0038824",
+      "sha": "0b8efff9603c8dc7",
       "count": 8
     },
     "cards/account.json": {
-      "sha": "714af3100293075c",
+      "sha": "4351d1b077b72229",
       "count": 112
     },
     "cards/admin.json": {
-      "sha": "9a5013b88f9ed697",
+      "sha": "3d02eb94d69a90b9",
       "count": 177
     },
     "cards/board.json": {
-      "sha": "b81a5c753e5a1af7",
+      "sha": "c44dcbba1e2e3f0e",
       "count": 343
     },
     "cards/classroom.json": {
-      "sha": "4319be41b7f1f68a",
+      "sha": "abf450eef506f769",
       "count": 357
     },
     "cards/company.json": {
-      "sha": "f38c57f940ecea96",
+      "sha": "96adb57b9977587f",
       "count": 194
     },
     "cards/course.json": {
-      "sha": "909ea5b0a39dc00a",
+      "sha": "b3e0a3d80042b113",
       "count": 200
     },
     "cards/gaps-account.json": {
-      "sha": "7c9443f0708c07c0",
+      "sha": "0f68bc3009fcf8f9",
       "count": 23
     },
     "cards/gaps-admin.json": {
@@ -307,7 +307,7 @@
       "count": 34
     },
     "cards/gaps-classroom.json": {
-      "sha": "7568c56209e73456",
+      "sha": "d62c551127317cc5",
       "count": 22
     },
     "cards/gaps-company.json": {
@@ -315,7 +315,7 @@
       "count": 26
     },
     "cards/gaps-course.json": {
-      "sha": "8faeeebdd5e6b597",
+      "sha": "b19a9b374f2fd9a7",
       "count": 24
     },
     "cards/gaps-homework.json": {
@@ -323,8 +323,8 @@
       "count": 27
     },
     "cards/gaps-pricing.json": {
-      "sha": "1b0dfd3e170f9052",
-      "count": 25
+      "sha": "579d74d5befa85f9",
+      "count": 26
     },
     "cards/gaps-recording.json": {
       "sha": "ac9dff25a8c87f49",
@@ -335,35 +335,35 @@
       "count": 24
     },
     "cards/gaps-support.json": {
-      "sha": "c002af4ca5080616",
-      "count": 16
+      "sha": "07fb3824923b2699",
+      "count": 17
     },
     "cards/gaps-trust.json": {
       "sha": "2157e2f4e148c875",
       "count": 19
     },
     "cards/homework.json": {
-      "sha": "0412ebc5a60179df",
+      "sha": "9caf589f87d85e43",
       "count": 223
     },
     "cards/pricing.json": {
-      "sha": "4cb1e183345ea3e3",
+      "sha": "cd9d7f99f9e5c168",
       "count": 127
     },
     "cards/recording.json": {
-      "sha": "0af0886a0d1f06b4",
+      "sha": "a37108353d2dba0b",
       "count": 212
     },
     "cards/start.json": {
-      "sha": "381e2f96b9afbf14",
+      "sha": "117475306b99b3fe",
       "count": 133
     },
     "cards/support.json": {
-      "sha": "c5411f62a3bb06f1",
+      "sha": "d9ac9cd4d4a25845",
       "count": 36
     },
     "cards/trust.json": {
-      "sha": "47ed272e62e16de2",
+      "sha": "656b4249ba6b0fc7",
       "count": 20
     },
     "eval/calibration-set.json": {
@@ -371,7 +371,7 @@
       "count": 288
     },
     "generic-words.json": {
-      "sha": "de22e8eecfadf952",
+      "sha": "f35b538205ae1b04",
       "count": 4
     },
     "inventory.json": {
@@ -383,8 +383,8 @@
       "count": 1459
     },
     "lexicon.json": {
-      "sha": "839f70a680ad1030",
-      "count": 1159
+      "sha": "852b28eb6d7b701a",
+      "count": 1161
     },
     "site-facts.json": {
       "sha": "21e2943d0893d437",
@@ -415,15 +415,15 @@
       "count": 196
     },
     "variants/board.json": {
-      "sha": "3f989f07ce577cce",
+      "sha": "0a4af8f54123b154",
       "count": 385
     },
     "variants/classroom.json": {
-      "sha": "108e88ae33c0343b",
+      "sha": "9b49ffdf7453974e",
       "count": 360
     },
     "variants/company.json": {
-      "sha": "411771db7c980f4d",
+      "sha": "c3de37748d4e11da",
       "count": 214
     },
     "variants/course.json": {
@@ -439,7 +439,7 @@
       "count": 22
     },
     "variants/gaps-board.json": {
-      "sha": "bed6e71093444982",
+      "sha": "cb96174e3b52fecc",
       "count": 34
     },
     "variants/gaps-classroom.json": {
@@ -483,7 +483,7 @@
       "count": 249
     },
     "variants/pricing.json": {
-      "sha": "7c9873230e52980b",
+      "sha": "834365d6c67d70c1",
       "count": 150
     },
     "variants/recording.json": {
@@ -491,7 +491,7 @@
       "count": 225
     },
     "variants/start.json": {
-      "sha": "b3416adbba5b9c5f",
+      "sha": "b6cda0eb92cae26a",
       "count": 158
     },
     "variants/support.json": {
