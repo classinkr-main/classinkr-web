@@ -381,7 +381,28 @@ export function approvalResultLine(action: "check" | "apply", outcome: ApprovalO
   return { text: `${outcome.done}건 ${verb}됨`, alert: false }
 }
 
-/** 시안 3 — 대기 중인 변경을 화면 아래 한 줄(어두운 바)로. 확인·반영은 체크 큐와 같은 일괄 함수, 반영은 한 번 더 묻는다. */
+/** 변경 대기 줄을 접어 둔 상태 — 사람마다 브라우저에 남는다(남의 화면에는 영향 없음). */
+export const APPROVAL_BAR_COLLAPSED_STORAGE_KEY = "ledger.approval-bar.collapsed"
+
+function readApprovalBarCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(APPROVAL_BAR_COLLAPSED_STORAGE_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+function writeApprovalBarCollapsed(collapsed: boolean) {
+  try {
+    if (collapsed) window.localStorage.setItem(APPROVAL_BAR_COLLAPSED_STORAGE_KEY, "1")
+    else window.localStorage.removeItem(APPROVAL_BAR_COLLAPSED_STORAGE_KEY)
+  } catch {
+    // 저장소를 못 쓰면 이번 화면에서만 접힌다.
+  }
+}
+
+/** 시안 3 — 대기 중인 변경을 화면 아래 한 줄(어두운 바)로. 확인·반영은 체크 큐와 같은 일괄 함수, 반영은 한 번 더 묻는다.
+ *  × 로 접으면 작은 알약 하나("변경 대기 N건")만 남는다 — 대기 건을 잊지 않게 완전히 숨기지는 않는다. 다시 누르면 펼친다. */
 export function ApprovalBar({ drafts, serverQueue, sheetWriteMode = "off", applyBusy = false, onCheck, onApply, onShowAll }: {
   drafts: LedgerDraft[]
   serverQueue: boolean
@@ -396,6 +417,16 @@ export function ApprovalBar({ drafts, serverQueue, sheetWriteMode = "off", apply
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ text: string; alert: boolean } | null>(null)
+  // SSR 하이드레이션 안전: 펼친 상태로 시작하고 마운트 뒤 저장값을 읽는다.
+  const [collapsed, setCollapsed] = useState(false)
+  useEffect(() => {
+    setCollapsed(readApprovalBarCollapsed())
+  }, [])
+  const toggleCollapsed = (next: boolean) => {
+    setCollapsed(next)
+    setConfirming(false)
+    writeApprovalBarCollapsed(next)
+  }
   const checkPlan = planBulkCheck(drafts)
   const applyPlan = planBulkApply(drafts)
   const total = drafts.reduce((sum, draft) => sum + (Number.isFinite(draft.amount) ? draft.amount : 0), 0)
@@ -411,6 +442,22 @@ export function ApprovalBar({ drafts, serverQueue, sheetWriteMode = "off", apply
       setBusy(false)
       setConfirming(false)
     }
+  }
+
+  if (collapsed) {
+    if (drafts.length === 0) return null
+    return (
+      <button
+        type="button"
+        onClick={() => toggleCollapsed(false)}
+        aria-expanded={false}
+        aria-label={`변경 대기 ${drafts.length}건 — 펼치기`}
+        className="sticky bottom-4 z-30 inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[#1F1D1A] px-3 text-[12.5px] font-semibold tabular-nums text-white shadow-[0_8px_20px_rgba(17,17,16,0.16)] hover:bg-[#31302E]"
+      >
+        변경 대기 {drafts.length}건 · ¥{cny(total)}
+        <span aria-hidden className="text-[#A39E98]">▴</span>
+      </button>
+    )
   }
 
   return (
@@ -455,6 +502,16 @@ export function ApprovalBar({ drafts, serverQueue, sheetWriteMode = "off", apply
           ) : null}
         </>
       )}
+      <button
+        type="button"
+        onClick={() => toggleCollapsed(true)}
+        aria-expanded
+        aria-label="변경 대기 줄 접기"
+        title="접기 — 작은 알약으로 남고, 누르면 다시 펼칩니다"
+        className="-mr-1 inline-flex size-8 items-center justify-center rounded-lg text-[16px] leading-none text-[#A39E98] hover:bg-[rgba(255,255,255,0.08)] hover:text-white"
+      >
+        <span aria-hidden>×</span>
+      </button>
     </div>
   )
 }

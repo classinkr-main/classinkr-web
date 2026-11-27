@@ -235,6 +235,12 @@ describe("ApprovalBar — 확인 문구·결과 줄", () => {
     expect(off).toContain("1건 장부에 반영")
     expect(off).not.toContain("시트·장부")
   })
+
+  it("펼친 줄에는 접기(×) 버튼이 있다", () => {
+    const noop = async () => ({ done: 0, failed: 0 })
+    const html = renderToStaticMarkup(<ApprovalBar drafts={[draft("d1", "checked", 100)]} serverQueue onCheck={noop} onApply={noop} onShowAll={() => {}} />)
+    expect(html).toContain('aria-label="변경 대기 줄 접기"')
+  })
 })
 
 describe("LedgerSimpleView — 상단 한 줄은 켜짐일 때만", () => {
