@@ -754,7 +754,8 @@ describe("respond: R3 form (a1 — 1. 주제 머리·조각 안 점 단계·요�
       question,
       { env: R3 }
     )
-    expect(core.response.answer.startsWith(`1. "출석부를 엑셀로 받을 수 있나요"\n${SEGMENT_RETRY_LINE}\n\n2. 수업 중 학생 채팅 막기\n`)).toBe(true)
+    // 같은 답의 다른 머리가 명사구면 따옴표 조각 글 대신 갈래 명사구로 맞춘다(R3 반박 검토). 모두 알림이면 조각 글 그대로다(아래 시험).
+    expect(core.response.answer.startsWith(`1. 출석\n${SEGMENT_RETRY_LINE}\n\n2. 수업 중 학생 채팅 막기\n`)).toBe(true)
     expect(core.response.suggestedQuestions[0]).toBe("출석부를 엑셀로 받을 수 있나요?")
     expect(r3Fails(core.response.answer, 2)).toEqual([])
   })

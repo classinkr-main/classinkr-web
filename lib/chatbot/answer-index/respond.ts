@@ -1052,6 +1052,12 @@ const ASPECT_LABELS: ReadonlyArray<readonly [RegExp, string]> = [
   [/어디서?\s*(?:설정|바꾸|바꿔|켜)/, "설정 위치"],
   [/어디/, "위치"],
   [/언제|기간|까지/, "기간"],
+  [/고치|고쳐|수정/, "수정"],
+  [/중지|멈추|멈춰|끄는|끄기/, "중지"],
+  [/이어지|이어져/, "이어지는지"],
+  [/링크/, "링크"],
+  [/학부모|부모님/, "학부모"],
+  [/출석|출결/, "출석"],
 ]
 
 /** 맞는 갈래 둘까지 잇는다("다시 보기 기간"). '안 … 때' 갈래는 혼자 쓴다. */
@@ -1075,7 +1081,8 @@ function distinctLabels(labels: readonly string[], texts: readonly string[]): st
     const base = label.split("·")[0]
     const aspect = aspectLabel(texts[at] ?? "", label)
     const next = aspect ? `${base} ${aspect}` : null
-    out.push(next && !out.includes(next) ? next : label)
+    // 갈래도 못 정하면 차례를 붙여 가른다("비용(두 번째 질문)").
+    out.push(next && !out.includes(next) ? next : `${label}(${ordinalLabel(at)})`)
   })
   return out
 }
@@ -1168,8 +1175,13 @@ function noticeLabel(segment: AnswerIndexSegmentDecision, at: number, head: Comp
     const broad = BROAD_LABEL_WORDS.has(segment.label.replace(/\s+/g, ""))
     return aspect && (aspect.startsWith("안 ") || broad) ? `${segment.label.split("·")[0]} ${aspect}` : segment.label
   }
-  return aspectLabel(segment.text) ?? segmentTextLabel(segment.text) ?? ordinalLabel(at)
+  // 구어체 조각("이거 깔려면 어케해요")은 따옴표째 머리로 쓰지 않고 갈래 명사구로 쓴다. 그 밖은 짧은 조각 글(규격 S10-2)을 먼저 쓴다.
+  if (COLLOQUIAL_RE.test(segment.text)) return aspectLabel(segment.text) ?? segmentTextLabel(segment.text) ?? ordinalLabel(at)
+  return segmentTextLabel(segment.text) ?? aspectLabel(segment.text) ?? ordinalLabel(at)
 }
+
+/** 구어체·줄임 말투(어케·뭐임·되요·있음?·ㅠ·~나 끝). */
+const COLLOQUIAL_RE = /어케|어떡|뭐임|머임|되요|돼여|되여|있음\??\s*$|없음\??\s*$|함\??\s*$|[ㅠㅜㅋㅎ]|[가-힣]나\s*\??\s*$|않나|볼수|할수|돼\??\s*$/
 
 /**
  * 추천 질문 칩에 넣을 조각 글: 묻는 꼴이 온전하고(꼬리를 나눠 붙인 글·'-고'로 끝나는 글은 아님) 그 글만 물으면 답이 나오는 조각만(품질-11).
@@ -1377,7 +1389,12 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
     })
     // 같은 머리 이름이 겹치면 뒤 조각에 묻는 갈래를 붙인다("인증코드" · "인증코드 안 올 때").
     const firstSegmentOf = pieces.map((_piece, position) => segments[pieceAt.indexOf(position)]?.text ?? "")
-    const labels = distinctLabels(pieces.map((piece) => piece.label), firstSegmentOf)
+    // 한 답 안에 명사구 머리와 따옴표 조각 글 머리가 섞이면 따옴표 머리를 갈래 명사구로 바꾼다(머리 꼴을 맞춘다, R3 반박 검토).
+    const quoted = (label: string) => /^"/.test(label)
+    const raw = pieces.map((piece) => piece.label)
+    const mixed = raw.some(quoted) && raw.some((label) => !quoted(label))
+    const unified = mixed ? raw.map((label, position) => (quoted(label) ? (aspectLabel(firstSegmentOf[position]) ?? label) : label)) : raw
+    const labels = distinctLabels(unified, firstSegmentOf)
     labels.forEach((label, position) => {
       pieces[position] = { ...pieces[position], label }
     })
