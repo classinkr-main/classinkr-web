@@ -710,7 +710,7 @@ describe("importHardwareFromBranchSheets", () => {
     const items = new Map([["86 IFP", { id: "item-86" }]])
     const outbound = (raw: Record<string, unknown>) => ({
       id: "out-1", logistics_no: "C3", outbound_date: "2026-10-23", owner: "Minji", product: "86 IFP", quantity: 3,
-      revenue: 5850, destination: "성남여자고등학교", serials: [], progress: "배송 예정", type: "Sales", remarks: null,
+      revenue: 5850, destination: "[기관 D]", serials: [], progress: "배송 예정", type: "Sales", remarks: null,
       raw, synced_at: "2026-10-22T00:00:00Z",
     })
     const plain = buildHardwareSheetImportRows({ inbound: [], outbound: [outbound({})], stock: [] }, items).rows[0]

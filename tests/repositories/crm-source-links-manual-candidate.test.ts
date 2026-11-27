@@ -85,7 +85,7 @@ afterEach(() => {
 })
 
 const LEAD_ID = "6f1c2b3a-4d5e-4f60-8a71-9b8c7d6e5f40"
-const CUSTOMER = { id: "cust-1", partner_account_id: null, name: "리첸수학학원", campus_name: null, contact_name: "김원장" }
+const CUSTOMER = { id: "cust-1", partner_account_id: null, name: "[기관 C]", campus_name: null, contact_name: "김원장" }
 
 describe("updateCrmSourceLinkStatus — 제외 되돌리기", () => {
   it("rejected 행에 stale 액션을 주면 가드 없이 재검수로 되돌린다", async () => {
@@ -96,7 +96,7 @@ describe("updateCrmSourceLinkStatus — 제외 되돌리기", () => {
           source_system: "lead",
           source_object: "leads",
           source_record_key: LEAD_ID,
-          normalized_name: "리첸수학학원",
+          normalized_name: "[기관 C]",
           target_type: "customer",
           target_id: CUSTOMER.id,
           status: "rejected",
@@ -123,7 +123,7 @@ describe("createManualCrmLinkCandidate — 리드·Neo CRM 원천", () => {
         {
           id: LEAD_ID,
           name: "김원장",
-          org: "리첸수학학원",
+          org: "[기관 C]",
           phone: "010-1234-5678",
           email: null,
           status: "contacted",
@@ -154,11 +154,11 @@ describe("createManualCrmLinkCandidate — 리드·Neo CRM 원천", () => {
     })
     expect(upsert?.payload.metadata).toMatchObject({
       manual: true,
-      source_label: "리첸수학학원",
-      lead_org: "리첸수학학원",
+      source_label: "[기관 C]",
+      lead_org: "[기관 C]",
       source_owner: "문준혁",
       source_priority: "lead_intake_high",
-      target_label: "리첸수학학원",
+      target_label: "[기관 C]",
     })
     // 이름이 같으니 점수가 후보 문턱을 넘는다.
     expect(Number(upsert?.payload.confidence)).toBeGreaterThan(0.8)
@@ -170,9 +170,9 @@ describe("createManualCrmLinkCandidate — 리드·Neo CRM 원천", () => {
       external_crm_records: [
         {
           object_api_key: "account",
-          external_id: "4006219659975492",
-          normalized_name: "리첸수학학원",
-          display_name: "리첸수학학원",
+          external_id: "9000000000000001",
+          normalized_name: "[기관 C]",
+          display_name: "[기관 C]",
           owner_name: "문준혁",
           status: null,
           amount: null,
@@ -188,7 +188,7 @@ describe("createManualCrmLinkCandidate — 리드·Neo CRM 원천", () => {
     await createManualCrmLinkCandidate({
       sourceSystem: "xiaoshouyi",
       sourceObject: "account",
-      sourceRecordKey: "4006219659975492",
+      sourceRecordKey: "9000000000000001",
       targetType: "customer",
       targetId: CUSTOMER.id,
     })
@@ -197,12 +197,12 @@ describe("createManualCrmLinkCandidate — 리드·Neo CRM 원천", () => {
     expect(upsert?.payload).toMatchObject({
       source_system: "xiaoshouyi",
       source_object: "account",
-      source_record_key: "4006219659975492",
+      source_record_key: "9000000000000001",
       status: "candidate",
     })
     expect(upsert?.payload.metadata).toMatchObject({
       manual: true,
-      external_id: "4006219659975492",
+      external_id: "9000000000000001",
       object_api_key: "account",
       owner_name: "문준혁",
       source_priority: "xiaoshouyi_crm_primary",
@@ -215,7 +215,7 @@ describe("createManualCrmLinkCandidate — 리드·Neo CRM 원천", () => {
       external_crm_records: [
         {
           object_api_key: "contact",
-          external_id: "4006219659975499",
+          external_id: "9000000000000003",
           normalized_name: "김원장",
           display_name: "김원장",
           owner_name: null,
@@ -234,7 +234,7 @@ describe("createManualCrmLinkCandidate — 리드·Neo CRM 원천", () => {
     // 이 테스트는 소스 판정이 링크 행을 따라갔는지만 본다.
     await expect(
       createManualCrmLinkCandidate({
-        sourceRecordKey: "4006219659975499",
+        sourceRecordKey: "9000000000000003",
         targetType: "customer",
         targetId: CUSTOMER.id,
       })

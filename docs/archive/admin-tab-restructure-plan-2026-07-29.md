@@ -394,7 +394,7 @@ import { ADMIN_NAV, ADMIN_NAV_CATEGORIES, type AdminNavCategory, type AdminNavIt
 export type NavPlacement = "primary" | "folded" | "deny"
 export type NavPresetKey = "staff" | "sales" | "marketing" | "cs" | "lead" | "branch" | "super"
 
-/** 문준혁(SUPER_ADMIN) 전용 — 다른 어떤 프리셋에도 열리지 않는다(오버라이드로만 예외 부여). */
+/** [담당자 7](SUPER_ADMIN) 전용 — 다른 어떤 프리셋에도 열리지 않는다(오버라이드로만 예외 부여). */
 export const MOON_ONLY_HREFS: readonly string[] = [
   "/admin/overview",
   "/admin/chatbot",
@@ -1734,7 +1734,7 @@ git commit -m "feat(admin-calendar): 공개 행사 관리 진입점 + 행사 우
 
 `components/admin/BlogPostEditor.tsx`의 AI 블록(`{/* AI 다듬기 */}` 주석 아래 `space-y-1.5` div) 안에서 **"초안 생성" 블록 전체를 "본문 다듬기" 버튼 위로** 옮긴다. 두 블록의 내용은 그대로다 — 순서만 바뀐다.
 
-회의 근거: "본문 다듬기 초안 생성 먼저 아니에요"(정규성). 빈 글에서 시작하는 순서가 실제 작업 순서다.
+회의 근거: "본문 다듬기 초안 생성 먼저 아니에요"([담당자 1]). 빈 글에서 시작하는 순서가 실제 작업 순서다.
 
 옮긴 뒤 구조:
 
@@ -2015,15 +2015,15 @@ Expected: FAIL — 모듈 없음
  * 곧 캘린더 이벤트의 assignee다(lib/team-member-calendars.ts 참조).
  */
 export const TEAM_MEMBER_COLORS: Record<string, string> = {
-  문준혁: "#084734", // 딥 그린
-  정규성: "#B85C33", // 테라코타
-  신희성: "#0E766E", // 틸
-  김민재: "#6D4AA8", // 퍼플
+  [담당자 7]: "#084734", // 딥 그린
+  [담당자 1]: "#B85C33", // 테라코타
+  [담당자 3]: "#0E766E", // 틸
+  [담당자 9]: "#6D4AA8", // 퍼플
   김정무: "#1F4E79", // 네이비
-  이왕찬: "#A8741A", // 앰버
-  황찬우: "#9B2C5D", // 마젠타
-  박한: "#3F6212", // 올리브
-  진소망: "#5B6470", // 슬레이트
+  [담당자 8]: "#A8741A", // 앰버
+  [담당자 6]: "#9B2C5D", // 마젠타
+  [담당자 2]: "#3F6212", // 올리브
+  [담당자 4]: "#5B6470", // 슬레이트
 }
 
 export const TEAM_MEMBER_FALLBACK_COLOR = "#A39E98"
@@ -2190,7 +2190,7 @@ git commit -m "docs(admin): 탭 재구성 구현 결과 반영"
 
 ## 배포 후 절차 (스펙 §8)
 
-구현·배포가 끝난 뒤 문준혁이 직접 수행한다. **코드 작업이 아니다.**
+구현·배포가 끝난 뒤 [담당자 7]이 직접 수행한다. **코드 작업이 아니다.**
 
 1. Supabase Management API로 `20260729_admin_nav_access.sql` 적용
 2. 자기 계정에 `nav_preset = 'super'` 부여 → 새 사이드바 확인

@@ -11,11 +11,11 @@ const SYNCED_AT = "2026-08-05T08:55:10.172+00:00"
 
 function row(overrides: Partial<MatchingAccountServiceRow> = {}): MatchingAccountServiceRow {
   return {
-    account_id: "4006219659975492",
+    account_id: "9000000000000001",
     balance: 5135,
     expire_at: "2026-12-30T16:00:00+00:00",
     source_synced_at: SYNCED_AT,
-    source_refs: { shroffAccountExternalIds: ["4003673471861377"] },
+    source_refs: { shroffAccountExternalIds: ["9000000000000002"] },
     ...overrides,
   }
 }
@@ -24,7 +24,7 @@ function lookup(overrides: Partial<MatchingAccountServiceLookup> = {}): Matching
   return {
     sourceSystem: "xiaoshouyi",
     sourceObject: "account",
-    sourceRecordKey: "4006219659975492",
+    sourceRecordKey: "9000000000000001",
     targetType: "customer",
     targetId: "cust-1",
     ...overrides,
@@ -34,8 +34,8 @@ function lookup(overrides: Partial<MatchingAccountServiceLookup> = {}): Matching
 describe("buildMatchingAccountServiceIndex", () => {
   it("계정 id 와 ShroffAccount id 양쪽으로 색인한다", () => {
     const index = buildMatchingAccountServiceIndex([row()])
-    expect(index.byAccountId.get("4006219659975492")?.balance).toBe(5135)
-    expect(index.byShroffAccountId.get("4003673471861377")?.balance).toBe(5135)
+    expect(index.byAccountId.get("9000000000000001")?.balance).toBe(5135)
+    expect(index.byShroffAccountId.get("9000000000000002")?.balance).toBe(5135)
   })
 
   it("문자열 잔액을 숫자로 정규화하고, 숫자가 아니면 null 로 둔다", () => {
@@ -76,7 +76,7 @@ describe("resolveMatchingAccountService", () => {
   it("ShroffAccount 소스 행을 source_refs 매핑으로 되짚는다", () => {
     const result = resolveMatchingAccountService(
       index,
-      lookup({ sourceObject: "ShroffAccount__c", sourceRecordKey: "4003673471861377" })
+      lookup({ sourceObject: "ShroffAccount__c", sourceRecordKey: "9000000000000002" })
     )
     expect(result?.resolvedVia).toBe("source_shroff_account")
     expect(result?.expireAt).toBe("2026-12-30T16:00:00+00:00")
@@ -90,7 +90,7 @@ describe("resolveMatchingAccountService", () => {
         sourceObject: "saved_place",
         sourceRecordKey: "place-1",
         targetType: "external_account",
-        targetId: "4006219659975492",
+        targetId: "9000000000000001",
       })
     )
     expect(result?.resolvedVia).toBe("target_external_account")

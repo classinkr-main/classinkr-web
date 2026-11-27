@@ -87,7 +87,7 @@
 | 8 | 데모/행사 | B | Compass=데모 회차, 이 저장소=행사·설치 | 현행(이미 통폐합 완료 사례) | `lead_demos`에 `public_event_id` 연결키. 단 §5 R5의 쓰기 공백을 먼저 메운다 | S | P2 |
 | 9 | 페이지 방문 | C | Compass=설명회 랜딩(event repo), 이 저장소=classin.co.kr | 각자 | `crm.page_visits` DDL 기록만 | S | P0(DDL) |
 | 10 | NeoCRM 쓰기 | **A** | 양쪽(등록 표식이 서로 단절) | 이 저장소 `crm_write_requests` 승인 큐 | 중복 대사 → 표식 미러 → 쓰기 창구 단일화. XLSX 폴백 유지 | S→L | P0/P1 |
-| 11 | 담당자 정본 | **A** | 이 저장소 DB, Compass는 하드코딩 사본 | 이 저장소(`crm_xiaoshouyi_owner_names` + `admin_profiles`) | 황찬우 ownerId 누락 수리 + `team_directory_v` 역방향 뷰 | S | P0/P1 |
+| 11 | 담당자 정본 | **A** | 이 저장소 DB, Compass는 하드코딩 사본 | 이 저장소(`crm_xiaoshouyi_owner_names` + `admin_profiles`) | [담당자 6] ownerId 누락 수리 + `team_directory_v` 역방향 뷰 | S | P0/P1 |
 | 12 | 인증/세션 | C | 각자 | 각자 | Compass actor 신뢰 등급 표기, 개인 비밀번호 전환. Supabase Auth 강제 이관은 하지 않음 | S~M | P1/P2 |
 
 A분류(진짜 중복)는 3.5개다. 매출원장 미러, NeoCRM 쓰기, 담당자 정본, 그리고 리드 도메인 안의 Meta 리드애즈 축.
@@ -98,7 +98,7 @@ A분류(진짜 중복)는 3.5개다. 매출원장 미러, NeoCRM 쓰기, 담당�
 
 **NeoCRM 쓰기.** Compass는 XLSX 내보내기와 로컬 MCP 스크립트(`scripts/push_neocrm.mjs`, 머신 바운드)로 리드를 생성하고 `crm.leads.neocrm_registered_at/neocrm_lead_id`에만 표식을 남긴다. 이 저장소는 `crm_write_requests` 승인 큐로 쓰고 `crm_source_links(target_type='external_lead')`에 표식을 남긴다. 두 표식은 서로를 모른다. 이 저장소가 등록한 리드를 Compass가 재등록할 수 있다. 되돌리기 비용이 큰 남의 CRM 오염이므로 1회성 3자 대사(NeoCRM KR 리드 ↔ `neocrm_lead_id` ↔ `crm_source_links.target_id`)가 먼저다. 장기 목표는 승인·재시도·감사가 이미 구현된 이 저장소 큐를 유일한 쓰기 창구로 두는 것이다. XLSX 폴백은 MCP 토큰이 짧고 머신 바운드라 제거하면 안 된다.
 
-**담당자 정본.** 같은 ownerId·EEO 코드가 Compass `lib/neocrm.ts`, `scripts/push_neocrm.mjs`, 이 저장소 `crm_xiaoshouyi_owner_names` 시드, `admin_profiles.neo_owner_id` 네 곳에 있다. 이미 드리프트가 발생했다. 황찬우가 Compass XLSX 경로에는 있고 MCP 경로 `OWNERS`에는 없다. 이 저장소는 `20260828_owner_names_add_chanwoo.sql`로 보정했다. 가장 싼 승리는 `crm_xiaoshouyi_owner_names`와 `admin_profiles`를 조인한 `team_directory_v` 뷰를 만들고 Compass가 상수 대신 이 뷰를 읽게 하는 것이다. DB 장애 시 로그인 화면이 죽지 않도록 하드코딩은 폴백으로 남긴다. Compass의 `MKT_PERSONS`는 화이트리스트이고 이 저장소의 `is_excluded`는 블랙리스트이므로 변환 방향에 주의한다.
+**담당자 정본.** 같은 ownerId·EEO 코드가 Compass `lib/neocrm.ts`, `scripts/push_neocrm.mjs`, 이 저장소 `crm_xiaoshouyi_owner_names` 시드, `admin_profiles.neo_owner_id` 네 곳에 있다. 이미 드리프트가 발생했다. [담당자 6]가 Compass XLSX 경로에는 있고 MCP 경로 `OWNERS`에는 없다. 이 저장소는 `20260828_owner_names_add_chanwoo.sql`로 보정했다. 가장 싼 승리는 `crm_xiaoshouyi_owner_names`와 `admin_profiles`를 조인한 `team_directory_v` 뷰를 만들고 Compass가 상수 대신 이 뷰를 읽게 하는 것이다. DB 장애 시 로그인 화면이 죽지 않도록 하드코딩은 폴백으로 남긴다. Compass의 `MKT_PERSONS`는 화이트리스트이고 이 저장소의 `is_excluded`는 블랙리스트이므로 변환 방향에 주의한다.
 
 ### 4.4 통합하면 안 되는 것
 
@@ -386,7 +386,7 @@ create index if not exists idx_leads_email_lower on public.leads (lower(email)) 
 | 2 | `revenue-sync.yml` 삭제, 크론 시크릿 이름 통일 | Compass | S | R2 |
 | 3 | Compass `schema.sql` 정합화: 프로덕션 `pg_dump --schema-only` 대조 후 테이블 5개·컬럼(`meta_ad_id`, `confirmed_*`)을 append. `activities.deleted_at` 실재 확인 | Compass | S | §7.1, §4 도메인 2·5·9 |
 | 4 | Meta 리드 웹훅 시크릿 미설정 시 503 | Compass | S | R6 |
-| 5 | NeoCRM 3자 대사 리포트(NeoCRM KR 리드 ↔ `neocrm_lead_id` ↔ `crm_source_links.target_id`) + `push_neocrm.mjs` 황찬우 1줄 | Compass, Admin | S | §4 도메인 10·11 |
+| 5 | NeoCRM 3자 대사 리포트(NeoCRM KR 리드 ↔ `neocrm_lead_id` ↔ `crm_source_links.target_id`) + `push_neocrm.mjs` [담당자 6] 1줄 | Compass, Admin | S | §4 도메인 10·11 |
 | 6 | 운영 확인: 두 Vercel 프로젝트 플랜과 크론 실행 로그, Meta 앱 leadgen 구독 URL 목록 | 운영 | S | R15, §4 도메인 1 |
 | **P1 (다음 스프린트)** | | | | |
 | 7 | 스키마 계약에 브리지 뷰 7개 프로브 + "필수 컬럼 존재" 프로브 추가. 2026-08-28 마이그레이션 4건 등재 | Admin | S | §6.1, §8.6 |

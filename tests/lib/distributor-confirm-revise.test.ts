@@ -40,7 +40,7 @@ const BASE: DistributorSettlementRecord = {
   sourceVersionId: "qv_1",
   issuedVersionId: "qv_1",
   distributorName: "퀴드러닝",
-  distributorContactName: "배철웅",
+  distributorContactName: "[담당자 1]",
   distributorEmail: "dist@example.com",
   distributorPhone: null,
   issueTrigger: "on_accept",
@@ -232,9 +232,9 @@ describe("고객 동의 → 총판 견적서", () => {
 
 describe("총판 확인", () => {
   it("처음 확인하면 총판에게 확인 메일, 사내에 메일 포함 알림을 보낸다", async () => {
-    const confirmed = { ...BASE, confirmedAt: "2026-11-24T02:00:00.000Z", confirmedByName: "배철웅" }
+    const confirmed = { ...BASE, confirmedAt: "2026-11-24T02:00:00.000Z", confirmedByName: "[담당자 1]" }
     const ctx = await loadService({ settlementSequence: [BASE], confirmResult: { status: "confirmed", settlement: confirmed } })
-    const outcome = await ctx.service.confirmDistributorQuote({ token: BASE.shareToken!, confirmedByName: "배철웅" })
+    const outcome = await ctx.service.confirmDistributorQuote({ token: BASE.shareToken!, confirmedByName: "[담당자 1]" })
 
     expect(outcome.status).toBe("confirmed")
     expect(ctx.sendEmail).toHaveBeenCalledTimes(1)

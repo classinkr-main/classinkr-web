@@ -9,7 +9,7 @@ import {
   reviewReasonAfterSave,
   type DistributorSettlementRecord,
 } from "@/lib/distributor-settlements"
-import { buildConfigurableStandardQuoteDetails, finalizeStandardQuoteDetails, resolveQuoteSupplier } from "@/lib/standard-quote-template"
+import { STANDARD_QUOTE_SUPPLIER, buildConfigurableStandardQuoteDetails, finalizeStandardQuoteDetails, resolveQuoteSupplier } from "@/lib/standard-quote-template"
 
 /**
  * 설치 완료 → 총판 정산 자동 준비 · 검토 요청(2026-11).
@@ -89,7 +89,7 @@ const CUSTOMER_QUOTE = finalizeStandardQuoteDetails(
   {
     ...buildConfigurableStandardQuoteDetails({ templateId: "recording_studio", baseQuantity: 2 }),
     ...resolveQuoteSupplier("recording_studio"),
-    recipientCompanyName: "성남여고",
+    recipientCompanyName: "[기관 A]",
   },
   "recording_studio"
 )
@@ -102,9 +102,9 @@ const DRAFT: DistributorSettlementRecord = {
   sourceVersionId: "qv_1",
   issuedVersionId: null,
   distributorName: "퀴드러닝",
-  distributorContactName: "배철웅",
+  distributorContactName: "[담당자 1]",
   distributorEmail: null,
-  distributorPhone: "010-9238-5874",
+  distributorPhone: "010-0000-0000",
   issueTrigger: "on_accept",
   autoEmail: true,
   priceTemplateId: null,
@@ -206,7 +206,7 @@ async function loadService(options: {
         valid_until: null,
         total_amount: 16_600_000,
       },
-      customerName: "성남여고",
+      customerName: "[기관 A]",
     }),
   }))
   vi.doMock("@/lib/notifications/emit-event", () => ({ emitNotificationEvent }))
@@ -234,7 +234,7 @@ describe("설치 완료 → 총판 정산 자동 준비 · 검토 요청", () =>
       issueTrigger: "on_install",
       priceTemplateId: "tpl_1",
       distributorName: "퀴드러닝",
-      distributorContactName: "배철웅",
+      distributorContactName: STANDARD_QUOTE_SUPPLIER.contactName,
     })
     // 녹화 세트만 포함, 안내 줄은 빠지고, 원가는 템플릿 값.
     expect(params.input.lines).toHaveLength(1)

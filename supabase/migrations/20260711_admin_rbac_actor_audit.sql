@@ -29,7 +29,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS admin_profiles_single_hardware_finalizer
   ON public.admin_profiles ((1))
   WHERE capabilities @> ARRAY['hardware.finalize']::TEXT[];
 
--- 기존 명시 권한을 먼저 정리한 뒤 이왕찬 계정에만 최종 승인 권한을 부여한다.
+-- 기존 명시 권한을 먼저 정리한 뒤 [담당자 5] 계정에만 최종 승인 권한을 부여한다.
 -- neo_owner_id는 이름 변경에도 유지되는 외부 CRM 식별자이며, display_name은
 -- 마이그레이션 순서상 매핑 컬럼이 비어 있는 환경을 위한 제한적 보조 기준이다.
 UPDATE public.admin_profiles

@@ -138,7 +138,7 @@ describe("KA 분기 고객", () => {
   const deals = [
     deal("한빛영어학원", "KA", "BD", "Han", { "2026-10": 100, "2026-11": 50, "2027-01": 999 }, { "2026-10": 100 }),
     deal(" 한빛영어학원 ", "ka", "BD", "Han", { "2026-12": 30 }, {}),
-    deal("새솔수학", "KA", "MKT", "신희성", { "2026-11": 80 }, { "2026-11": 80 }),
+    deal("[기관 F]", "KA", "MKT", "신희성", { "2026-11": 80 }, { "2026-11": 80 }),
     deal("작은학원", "SME", "BD", "Han", { "2026-11": 500 }, { "2026-11": 500 }),
   ]
 
@@ -146,14 +146,14 @@ describe("KA 분기 고객", () => {
     const ka = buildKaSection(deals, { now, team: "ALL" })
     expect(ka.quarter).toBe("FY2026-Q3")
     expect(ka.months).toEqual(["2026-10", "2026-11", "2026-12"])
-    expect(ka.customers.map((c) => [c.customer, c.confirmed, c.open, c.deals])).toEqual([["한빛영어학원", 100, 80, 2], ["새솔수학", 80, 0, 1]])
+    expect(ka.customers.map((c) => [c.customer, c.confirmed, c.open, c.deals])).toEqual([["한빛영어학원", 100, 80, 2], ["[기관 F]", 80, 0, 1]])
     expect([ka.confirmed, ka.open, ka.customerCount]).toEqual([180, 80, 2])
   })
 
   it("팀·개인 범위는 REV 딜의 팀·담당(한글 별칭 포함)으로 거른다", () => {
-    expect(buildKaSection(deals, { now, team: "MKT" }).customers.map((c) => c.customer)).toEqual(["새솔수학"])
+    expect(buildKaSection(deals, { now, team: "MKT" }).customers.map((c) => c.customer)).toEqual(["[기관 F]"])
     const personal = buildKaSection(deals, { now, team: "ALL", manager: "Heesung" })
-    expect(personal.customers.map((c) => [c.customer, c.manager])).toEqual([["새솔수학", "Heesung"]])
+    expect(personal.customers.map((c) => [c.customer, c.manager])).toEqual([["[기관 F]", "Heesung"]])
   })
 })
 
@@ -166,7 +166,7 @@ describe("KA 진행 서술 근거 · Compass 기록", () => {
   const now = new Date("2026-11-25T01:00:00Z")
   const ka = { quarter: "FY2026-Q3", months: [], confirmed: 0, open: 0, customerCount: 2, customers: [
     { customer: "한빛 영어학원", manager: "Han", team: "BD", confirmed: 100, open: 0, total: 100, deals: 1 },
-    { customer: "새솔수학", manager: "Heesung", team: "MKT", confirmed: 0, open: 80, total: 80, deals: 1 },
+    { customer: "[기관 F]", manager: "Heesung", team: "MKT", confirmed: 0, open: 80, total: 80, deals: 1 },
   ] }
 
   it("본문의 전화·이메일을 가린다", () => {

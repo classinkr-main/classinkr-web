@@ -36,7 +36,7 @@ leads.assigned_to (non-null, distinct)   = 0   ← 컬럼 전부 NULL (실제 �
 admin_profiles.display_name (distinct=2) = ["classin-admin", "MOON"]
 NEO User 디렉터리 (external_crm_records, object_api_key='User', source_system='xiaoshouyi'):
     total records      = 2000
-    external_id (ownerId) = 16자리 숫자, 예 3637150237793118
+    external_id (ownerId) = 16자리 숫자, 예 [NEO 소유자 ID]
     display_name shape    = "中文名-EEOxxxxx", 예 "谷岩-EEO00002", "李朝-EEO01104"
 crm_xiaoshouyi_owner_names (큐레이팅 숫자→korean_name 오버라이드) = 10 rows
 
@@ -100,7 +100,7 @@ crm_xiaoshouyi_owner_names (큐레이팅 숫자→korean_name 오버라이드) =
 - Distinct destinations: **85**
 - Total revenue (non-null-destination 풀): **750,080**
 
-distinct destination 값은 전부 사람이 입력한 학원/기관명 — 예: `세정학원`, `봉담 종로엠스쿨`, `과사람 동래 본원`, `대치스파르타`, `이미숙국어`, `명문서일학원`, `캐슬 에듀`, `학문당`, `미지원교육`. **물류 코드·송장번호·주소 0건.**
+distinct destination 값은 전부 사람이 입력한 학원/기관명 — 예: `세정학원`, `봉담 종로엠스쿨`, `과사람 동래 본원`, `[기관 V]`, `이미숙국어`, `[기관 U]`, `캐슬 에듀`, `학문당`, `미지원교육`. **물류 코드·송장번호·주소 0건.**
 
 ### HW 매출 편중 (top-10 destination)
 | # | destination | revenue | share % | cum % |
@@ -113,7 +113,7 @@ distinct destination 값은 전부 사람이 입력한 학원/기관명 — 예:
 | 6 | 윤유경플러스 | 30,860 | 4.11 | 50.19 |
 | 7 | 학문당 | 25,155 | 3.35 | 53.55 |
 | 8 | 진수학 | 23,360 | 3.11 | 56.66 |
-| 9 | 대치스파르타 | 19,960 | 2.66 | 59.32 |
+| 9 | [기관 V] | 19,960 | 2.66 | 59.32 |
 | 10 | 미지원교육 | 18,410 | 2.45 | 61.78 |
 
 **Top-10 누적 share = 61.78%** (블루프린트 77.55% 미재현 — 분모/메트릭 차이 추정).
@@ -143,7 +143,7 @@ HW 매출(`branch_hw_outbound.revenue`, KRW 원장)은 NEO opportunity USD와 **
 | ratio (accounts per lead) | **281.33** |
 | `crm_customer_events` 존재 | **NO** — PGRST205 "Could not find the table 'public.crm_customer_events' in the schema cache" |
 
-샘플 account display name (전부 `object_api_key='account'`, `leads` 행 없는 실제 고객 기관): 페트라비전학원, 새봄수학, 클래스원영어, 어바인어학원, 아소비 춘천.
+샘플 account display name (전부 `object_api_key='account'`, `leads` 행 없는 실제 고객 기관): [기관 W], [기관 X], [기관 Y], [기관 Z], 이미숙국어.
 
 `lead_contact_logs` (마이그 `20260409_schema_fixes.sql`):
 - `lead_id UUID NOT NULL REFERENCES public.leads(id) ON DELETE CASCADE`

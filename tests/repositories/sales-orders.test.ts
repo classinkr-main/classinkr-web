@@ -302,18 +302,18 @@ describe("approveSalesOrder", () => {
     getDeal.mockResolvedValue({ id: "deal_1", current_stage: "quote" })
     queue.push({ data: [orderRow()], error: null }) // 현재 오더
     queue.push({ data: [{ order_no: "ORD-2610-001" }], error: null }) // 이번 달 번호
-    queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-002", decided_by: "이왕찬" })], error: null }) // claim
+    queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-002", decided_by: "[담당자 5]" })], error: null }) // claim
     queue.push({
-      data: [orderRow({ status: "approved", order_no: "ORD-2610-002", decided_by: "이왕찬", planned_movement_ids: ["mv_1"] })],
+      data: [orderRow({ status: "approved", order_no: "ORD-2610-002", decided_by: "[담당자 5]", planned_movement_ids: ["mv_1"] })],
       error: null,
     })
     createHardwareMovements.mockResolvedValue([{ id: "mv_1" }])
 
-    const order = await approveSalesOrder("so_1", { actor: "이왕찬", now: NOW })
+    const order = await approveSalesOrder("so_1", { actor: "[담당자 5]", now: NOW })
 
     expect(order).toMatchObject({ status: "approved", orderNo: "ORD-2610-002", plannedMovementIds: ["mv_1"] })
     const claim = calls.find((call) => call.op === "update")
-    expect(claim?.payload).toMatchObject({ status: "approved", order_no: "ORD-2610-002", decided_by: "이왕찬" })
+    expect(claim?.payload).toMatchObject({ status: "approved", order_no: "ORD-2610-002", decided_by: "[담당자 5]" })
     expect(claim?.filters).toContainEqual(["eq", "status", "pending_approval"])
 
     expect(createHardwareMovements).toHaveBeenCalledTimes(1)
@@ -327,7 +327,7 @@ describe("approveSalesOrder", () => {
       toLocation: "한빛학원",
       status: "배송 예정",
       referenceNo: "portal-quote:qd_1:line:a",
-      createdBy: "이왕찬",
+      createdBy: "[담당자 5]",
       raw: { order_no: "ORD-2610-002", sales_order_id: "so_1", quote_document_id: "qd_1" },
       // 재고관리 프로세스(§6 D5): 유형 세일즈 · 오더 고객 · 담당 = 딜 담당(없으면 요청자 이름, 계정 id 없음).
       outboundType: "sales",
@@ -349,7 +349,7 @@ describe("approveSalesOrder", () => {
     queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-001", planned_movement_ids: ["mv_1"] })], error: null })
     createHardwareMovements.mockResolvedValue([{ id: "mv_1" }])
 
-    await approveSalesOrder("so_1", { actor: "이왕찬", actorUserId: "user-approver", now: NOW })
+    await approveSalesOrder("so_1", { actor: "[담당자 5]", actorUserId: "user-approver", now: NOW })
 
     expect(createHardwareMovements.mock.calls[0][0][0]).toMatchObject({
       owner: "김매니저",
@@ -364,7 +364,7 @@ describe("approveSalesOrder", () => {
     queue.push({ data: [], error: null })
     queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-001", lines: [] })], error: null })
     getDeal.mockResolvedValueOnce({ id: "deal_1", current_stage: "installation" })
-    await approveSalesOrder("so_1", { actor: "이왕찬", now: NOW })
+    await approveSalesOrder("so_1", { actor: "[담당자 5]", now: NOW })
     expect(updateDeal).not.toHaveBeenCalled()
 
     queue.push({ data: [orderRow({ lines: [] })], error: null })
@@ -373,7 +373,7 @@ describe("approveSalesOrder", () => {
     getDeal.mockResolvedValueOnce({ id: "deal_1", current_stage: "contract" })
     updateDeal.mockRejectedValueOnce(new Error("db down"))
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined)
-    await expect(approveSalesOrder("so_1", { actor: "이왕찬", now: NOW })).resolves.toMatchObject({ status: "approved" })
+    await expect(approveSalesOrder("so_1", { actor: "[담당자 5]", now: NOW })).resolves.toMatchObject({ status: "approved" })
     errorLog.mockRestore()
   })
 
@@ -384,7 +384,7 @@ describe("approveSalesOrder", () => {
     queue.push({ data: null, error: null }) // revert
     createHardwareMovements.mockRejectedValue(new Error("같은 CRM 오더와 품목이 이미 있습니다."))
 
-    await expect(approveSalesOrder("so_1", { actor: "이왕찬", now: NOW })).rejects.toMatchObject({ status: 422 })
+    await expect(approveSalesOrder("so_1", { actor: "[담당자 5]", now: NOW })).rejects.toMatchObject({ status: 422 })
 
     const revert = calls.filter((call) => call.op === "update").at(-1)
     expect(revert?.payload).toMatchObject({ status: "pending_approval", order_no: null, decided_by: null })
@@ -398,7 +398,7 @@ describe("approveSalesOrder", () => {
     queue.push({ data: [{ order_no: "ORD-2610-001" }], error: null })
     queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-002", lines: [] })], error: null })
 
-    const order = await approveSalesOrder("so_1", { actor: "이왕찬", now: NOW })
+    const order = await approveSalesOrder("so_1", { actor: "[담당자 5]", now: NOW })
 
     expect(order.orderNo).toBe("ORD-2610-002")
     const updates = calls.filter((call) => call.op === "update").map((call) => (call.payload as { order_no: string }).order_no)
@@ -408,48 +408,48 @@ describe("approveSalesOrder", () => {
 
   it("이미 처리된 오더나 다른 사람이 먼저 승인한 오더는 409", async () => {
     queue.push({ data: [orderRow({ status: "rejected" })], error: null })
-    await expect(approveSalesOrder("so_1", { actor: "이왕찬" })).rejects.toMatchObject({ status: 409 })
+    await expect(approveSalesOrder("so_1", { actor: "[담당자 5]" })).rejects.toMatchObject({ status: 409 })
 
     queue.push({ data: [orderRow()], error: null })
     queue.push({ data: [], error: null })
     queue.push({ data: [], error: null }) // claim 0행 — 동시 승인
-    await expect(approveSalesOrder("so_1", { actor: "이왕찬" })).rejects.toMatchObject({ status: 409 })
+    await expect(approveSalesOrder("so_1", { actor: "[담당자 5]" })).rejects.toMatchObject({ status: 409 })
     expect(createHardwareMovements).not.toHaveBeenCalled()
   })
 
   it("없는 오더는 404", async () => {
     queue.push({ data: [], error: null })
-    await expect(approveSalesOrder("nope", { actor: "이왕찬" })).rejects.toBeInstanceOf(SalesOrderError)
+    await expect(approveSalesOrder("nope", { actor: "[담당자 5]" })).rejects.toBeInstanceOf(SalesOrderError)
   })
 })
 
 describe("rejectSalesOrder", () => {
   it("사유가 없으면 400, 있으면 반려로 닫는다", async () => {
-    await expect(rejectSalesOrder("so_1", { actor: "이왕찬", reason: "  " })).rejects.toMatchObject({ status: 400 })
+    await expect(rejectSalesOrder("so_1", { actor: "[담당자 5]", reason: "  " })).rejects.toMatchObject({ status: 400 })
 
     queue.push({ data: [orderRow()], error: null })
     queue.push({ data: [orderRow({ status: "rejected", decision_reason: "재고 부족" })], error: null })
-    const order = await rejectSalesOrder("so_1", { actor: "이왕찬", reason: " 재고 부족 " })
+    const order = await rejectSalesOrder("so_1", { actor: "[담당자 5]", reason: " 재고 부족 " })
 
     expect(order.status).toBe("rejected")
     const update = calls.find((call) => call.op === "update")
-    expect(update?.payload).toMatchObject({ status: "rejected", decision_reason: "재고 부족", decided_by: "이왕찬" })
+    expect(update?.payload).toMatchObject({ status: "rejected", decision_reason: "재고 부족", decided_by: "[담당자 5]" })
     expect(update?.filters).toContainEqual(["eq", "status", "pending_approval"])
   })
 
   it("반려하면 영업 쪽에 바로 알린다 — 사유와 다시 올리는 법을 싣는다(2026-10-27 결정)", async () => {
     emitNotificationEvent.mockResolvedValue({ id: "evt" })
     queue.push({ data: [orderRow()], error: null })
-    queue.push({ data: [orderRow({ status: "rejected", decided_by: "이왕찬", decision_reason: "재고 부족" })], error: null })
+    queue.push({ data: [orderRow({ status: "rejected", decided_by: "[담당자 5]", decision_reason: "재고 부족" })], error: null })
 
-    await rejectSalesOrder("so_1", { actor: "이왕찬", reason: "재고 부족" })
+    await rejectSalesOrder("so_1", { actor: "[담당자 5]", reason: "재고 부족" })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(emitNotificationEvent).toHaveBeenCalledTimes(1)
     const call = emitNotificationEvent.mock.calls[0][0]
     expect(call).toMatchObject({ eventType: "hardware.order.rejected", routeUrl: "/admin/quotes/qd_1/view" })
     expect(call.title).not.toContain("다시 알림")
-    expect(call.message).toContain("이왕찬 반려")
+    expect(call.message).toContain("[담당자 5] 반려")
     expect(call.message).toContain("사유: 재고 부족")
     expect(call.message).not.toContain("다시 알린 사람")
   })
@@ -460,7 +460,7 @@ describe("rejectSalesOrder", () => {
     queue.push({ data: [orderRow()], error: null })
     queue.push({ data: [orderRow({ status: "rejected", decision_reason: "재고 부족" })], error: null })
 
-    await expect(rejectSalesOrder("so_1", { actor: "이왕찬", reason: "재고 부족" })).resolves.toMatchObject({ status: "rejected" })
+    await expect(rejectSalesOrder("so_1", { actor: "[담당자 5]", reason: "재고 부족" })).resolves.toMatchObject({ status: "rejected" })
     await new Promise((resolve) => setTimeout(resolve, 0))
     errorLog.mockRestore()
   })
@@ -468,7 +468,7 @@ describe("rejectSalesOrder", () => {
   it("이미 처리된 오더는 409 — 알림을 보내지 않는다", async () => {
     queue.push({ data: [orderRow({ status: "rejected" })], error: null })
 
-    await expect(rejectSalesOrder("so_1", { actor: "이왕찬", reason: "재고 부족" })).rejects.toMatchObject({ status: 409 })
+    await expect(rejectSalesOrder("so_1", { actor: "[담당자 5]", reason: "재고 부족" })).rejects.toMatchObject({ status: 409 })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(emitNotificationEvent).not.toHaveBeenCalled()
   })
@@ -482,7 +482,7 @@ describe("cancelApprovedSalesOrder", () => {
     queue.push({ data: [{ id: "mv_1", status: "배송 예정" }], error: null }) // 오더번호가 실린 줄 — 아직 예정뿐
     queue.push({ data: [{ id: "mv_actual" }], error: null })
 
-    await expect(cancelApprovedSalesOrder("so_1", { actor: "이왕찬", reason: "고객 취소" })).rejects.toMatchObject({ status: 409 })
+    await expect(cancelApprovedSalesOrder("so_1", { actor: "[담당자 5]", reason: "고객 취소" })).rejects.toMatchObject({ status: 409 })
     expect(voidHardwareMovement).not.toHaveBeenCalled()
   })
 
@@ -490,7 +490,7 @@ describe("cancelApprovedSalesOrder", () => {
     queue.push({ data: [approved()], error: null })
     queue.push({ data: [{ id: "sheet_1", status: "설치 완료" }], error: null })
 
-    await expect(cancelApprovedSalesOrder("so_1", { actor: "이왕찬", reason: "고객 취소" })).rejects.toMatchObject({ status: 409 })
+    await expect(cancelApprovedSalesOrder("so_1", { actor: "[담당자 5]", reason: "고객 취소" })).rejects.toMatchObject({ status: 409 })
     const carried = calls[1]
     expect(carried.filters).toContainEqual(["eq", "raw->>order_no", "ORD-2610-002"])
     expect(voidHardwareMovement).not.toHaveBeenCalled()
@@ -503,11 +503,11 @@ describe("cancelApprovedSalesOrder", () => {
     queue.push({ data: [{ id: "mv_1", voided_at: null }, { id: "mv_2", voided_at: "2026-10-21T00:00:00Z" }], error: null })
     queue.push({ data: [approved()].map((row) => ({ ...row, status: "cancelled" })), error: null })
 
-    const order = await cancelApprovedSalesOrder("so_1", { actor: "이왕찬", reason: "고객 취소" })
+    const order = await cancelApprovedSalesOrder("so_1", { actor: "[담당자 5]", reason: "고객 취소" })
 
     expect(order).toMatchObject({ status: "cancelled", orderNo: "ORD-2610-002" })
     expect(voidHardwareMovement).toHaveBeenCalledTimes(1)
-    expect(voidHardwareMovement).toHaveBeenCalledWith("mv_1", { reason: "오더 ORD-2610-002 취소: 고객 취소", actor: "이왕찬" })
+    expect(voidHardwareMovement).toHaveBeenCalledWith("mv_1", { reason: "오더 ORD-2610-002 취소: 고객 취소", actor: "[담당자 5]" })
     const update = calls.filter((call) => call.op === "update").at(-1)
     expect(update?.payload).toMatchObject({ status: "cancelled", decision_reason: "취소(ORD-2610-002): 고객 취소" })
     expect(update?.payload).not.toHaveProperty("order_no")
@@ -515,7 +515,7 @@ describe("cancelApprovedSalesOrder", () => {
 
   it("승인 대기 오더는 취소가 아니라 반려 대상이다", async () => {
     queue.push({ data: [orderRow()], error: null })
-    await expect(cancelApprovedSalesOrder("so_1", { actor: "이왕찬", reason: "x" })).rejects.toMatchObject({ status: 409 })
+    await expect(cancelApprovedSalesOrder("so_1", { actor: "[담당자 5]", reason: "x" })).rejects.toMatchObject({ status: 409 })
   })
 })
 
@@ -642,9 +642,9 @@ describe("listSheetOrderChecks — 고칠 번호 후보", () => {
 describe("remindRejectedSalesOrder", () => {
   it("반려된 오더를 영업 쪽에 다시 알린다 — 사유와 다시 올리는 법을 싣는다", async () => {
     emitNotificationEvent.mockResolvedValue({ id: "evt" })
-    queue.push({ data: [orderRow({ status: "rejected", decided_by: "이왕찬", decision_reason: "단가 확인 필요" })], error: null })
+    queue.push({ data: [orderRow({ status: "rejected", decided_by: "[담당자 5]", decision_reason: "단가 확인 필요" })], error: null })
 
-    const order = await remindRejectedSalesOrder("so_1", { actor: "이왕찬" })
+    const order = await remindRejectedSalesOrder("so_1", { actor: "[담당자 5]" })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(order.status).toBe("rejected")
@@ -658,13 +658,13 @@ describe("remindRejectedSalesOrder", () => {
     expect(call.message).toContain("사유: 단가 확인 필요")
     expect(call.message).toContain("새 버전")
     expect(call.title).toContain("다시 알림")
-    expect(call.message).toContain("다시 알린 사람: 이왕찬")
+    expect(call.message).toContain("다시 알린 사람: [담당자 5]")
   })
 
   it("반려 상태가 아니면 409 — 알림을 보내지 않는다", async () => {
     queue.push({ data: [orderRow({ status: "approved", order_no: "ORD-2610-002" })], error: null })
 
-    await expect(remindRejectedSalesOrder("so_1", { actor: "이왕찬" })).rejects.toMatchObject({ status: 409 })
+    await expect(remindRejectedSalesOrder("so_1", { actor: "[담당자 5]" })).rejects.toMatchObject({ status: 409 })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(emitNotificationEvent).not.toHaveBeenCalled()
   })

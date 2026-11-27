@@ -275,7 +275,7 @@ describe("recordSampleUnitEvents — 샘플 전시·사무실 보관", () => {
   })
 
   it("허용되지 않는 전이는 현재 상태를 밝혀 409 로 거절한다", async () => {
-    queue = [{ data: [unit({ id: "01", status: "loaned", current_customer: "탑텐영어" })], error: null }]
+    queue = [{ data: [unit({ id: "01", status: "loaned", current_customer: "[기관 B]" })], error: null }]
 
     await expectRuleError(
       recordSampleUnitEvents({ unitIds: ["01"], eventType: "showcase" }),
@@ -421,14 +421,14 @@ describe("recordSampleUnitEvents — 샘플 상태 정정(adjust nextStatus)", (
     queue = [
       { data: [unit({ id: "01", status: "loaned", current_customer: "고객 미상" })], error: null },
       { data: [], error: null },
-      { data: [unit({ id: "01", status: "loaned", current_customer: "탑텐영어" })], error: null },
+      { data: [unit({ id: "01", status: "loaned", current_customer: "[기관 B]" })], error: null },
     ]
 
-    await recordSampleUnitEvents({ unitIds: ["01"], eventType: "adjust", customer: "탑텐영어" })
+    await recordSampleUnitEvents({ unitIds: ["01"], eventType: "adjust", customer: "[기관 B]" })
 
-    expect(callsOf("update")[0].payload).toEqual({ current_customer: "탑텐영어" })
+    expect(callsOf("update")[0].payload).toEqual({ current_customer: "[기관 B]" })
     expect(callsOf("insert")[0].payload).toEqual([
-      expect.objectContaining({ event_type: "adjust", customer: "탑텐영어", from_location: null, to_location: null }),
+      expect.objectContaining({ event_type: "adjust", customer: "[기관 B]", from_location: null, to_location: null }),
     ])
   })
 })
