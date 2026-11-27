@@ -79,7 +79,7 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 - [active/admin-lead-visitor-glance-plan-2026-11-04.md](./active/admin-lead-visitor-glance-plan-2026-11-04.md)
   - **어드민 첫 화면 방문·문의 바로 보기 기획(결정 대기).** Overview 리드 숫자가 "내 담당·확인됨"만 세어 새 문의가 0으로 보이는 원인, 최상단 "지금" 띠·전사 범위·사이드바 문의 배지(P0), 방문·문의 추이·화면 안 알림(P1), 담당 원천(P2), 결정 D1~D8
 - [active/admin-compass-audit-2026-11-25.md](./active/admin-compass-audit-2026-11-25.md)
-  - **어드민 · Compass 점검과 브랜치 통합 기록(2026-11-25).** 브랜치 71개 분류(병합 15 · 이미 반영 33 · 보류 23)와 PR #112, 운영 DB 읽기 전용 실측, 고친 것(시트 동기화 0행 가드 · 1000행 절단 · 오류 은폐 · 직렬 읽기 · 하이드레이션), 남은 위험(발송 중복 · 결제 복구 · 접근 정책 · 미등록 크론), 색인 마이그레이션 2개(미적용), 사람이 정할 일 14건. Compass 저장소 코드는 접근 권한이 없어 미점검
+  - **어드민 · Compass 점검과 브랜치 통합 기록(2026-11-25).** 브랜치 71개 분류(병합 15 · 이미 반영 33 · 보류 23)와 PR #112, 운영 DB 읽기 전용 실측, 고친 것(시트 동기화 0행 가드 · 1000행 절단 · 오류 은폐 · 직렬 읽기 · 하이드레이션), 남은 위험(발송 중복 · 결제 복구 · 접근 정책 · 미등록 크론), 색인 마이그레이션 2개(미적용), 사람이 정할 일 14건, Compass 저장소 코드 점검과 브랜치 표(§4), 결정 뒤 후속 진행 기록(§6 — 적용한 마이그레이션 · 확인 대기 · 후속 수정)
 - [active/admin-sidebar-reorder-fold-plan-2026-11-09.md](./active/admin-sidebar-reorder-fold-plan-2026-11-09.md)
   - **어드민 사이드바 순서 재배치·접기 — D안(상시 고정 + 범주별 접기) 구현, CS 콘솔은 콘텐츠 밑.** 지금 배열의 문제(한 소제목 아래 7개, CRM·CS 콘솔 5·8번째, 마케팅·분석 소제목 중복, 이름 없는 "기타"), 공통 바닥 F1~F6(업무 단위 범주·하루 동선 순서·도달성 불변), 시안 A 순서만 · B 범주 아코디언 · C 상시 최소 · D 상시 고정 + 범주별 접기(권장), 결정 D1~D6. 목업 [mockups/admin-sidebar-reorder-fold-2026-11-09.html](./active/mockups/admin-sidebar-reorder-fold-2026-11-09.html)
 - [active/sales-workspace-simplification-plan-2026-11-20.md](./active/sales-workspace-simplification-plan-2026-11-20.md)

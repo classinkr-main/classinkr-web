@@ -108,8 +108,16 @@ export async function POST(req: NextRequest) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
 
+  // 발송이 실제로 나갔는지 — 나간 뒤의 오류를 "잘못된 요청"으로 답하면 다시 보내게 된다.
+  let delivered: { sent: number; failed: number; provider: string } | null = null
+  let raw: unknown
   try {
-    const raw: unknown = await req.json()
+    raw = await req.json()
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
+  }
+
+  try {
     if (isSegmentSendRequest(raw)) {
       return NextResponse.json(
         { error: SEGMENT_SEND_NOT_ENABLED_MESSAGE, code: SEGMENT_SEND_NOT_ENABLED_CODE, sentCount: 0 },
@@ -339,15 +347,23 @@ export async function POST(req: NextRequest) {
     }))
 
     const result = await sendBatchEmail(emails)
+    delivered = { sent: result.sent, failed: result.failed, provider: result.provider }
     const sendStatus = result.failed > 0 && result.sent === 0 ? "failed" : "sent"
     const sendErrors = (result.errors ?? []).slice(0, 20)
 
-    // 발송 결과로 캠페인 레코드 업데이트
-    await updateCampaign(campaign.id, {
-      status: sendStatus as "sent" | "failed",
-      sentAt: sendStatus === "sent" ? new Date().toISOString() : undefined,
-      recipientCount: result.sent,
-    })
+    // 발송 결과로 캠페인 레코드 업데이트. 메일은 이미 나갔다 — 기록이 실패해도 발송 결과는 그대로 돌려주고
+    // 기록 실패를 따로 알린다(캠페인이 "발송 전"으로 남아 다시 보내는 일을 막는다).
+    let recordWarning: string | null = null
+    try {
+      await updateCampaign(campaign.id, {
+        status: sendStatus as "sent" | "failed",
+        sentAt: sendStatus === "sent" ? new Date().toISOString() : undefined,
+        recipientCount: result.sent,
+      })
+    } catch (recordError) {
+      console.error("[email/send] 발송 뒤 캠페인 상태 기록 실패:", recordError)
+      recordWarning = "메일은 발송됐지만 캠페인 상태 기록에 실패했습니다. 다시 보내지 말고 발송 이력을 확인해 주세요."
+    }
 
     // 부분 실패 기록(2026-08-18) — sent>0 이어도 실패 수·오류를 은폐하지 않는다.
     // 새 컬럼(failed_count·send_errors)이라 마이그레이션 미적용 환경에서도 발송이 죽지 않게
@@ -368,6 +384,7 @@ export async function POST(req: NextRequest) {
       errors: sendErrors.slice(0, 5),
       status: sendStatus,
       ...(excludedUnsubscribed > 0 ? { excludedUnsubscribed } : {}),
+      ...(recordWarning ? { warning: recordWarning, recordFailed: true } : {}),
       ...(deliveryFailed
         ? { error: sendErrors[0] ?? "이메일을 발송하지 못했습니다." }
         : {}),
@@ -376,7 +393,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(responseBody, {
       status: deliveryFailed ? (result.provider === "simulation" ? 503 : 502) : 200,
     })
-  } catch {
-    return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
+  } catch (error) {
+    console.error("[email/send] 처리 중 오류:", error)
+    if (delivered) {
+      // 발송은 끝났다 — 실패로 답해 다시 보내게 하지 않는다.
+      return NextResponse.json(
+        {
+          ok: delivered.sent > 0,
+          provider: delivered.provider,
+          recipientCount: delivered.sent,
+          failedCount: delivered.failed,
+          recordFailed: true,
+          warning: "메일은 발송됐지만 이후 처리에서 오류가 났습니다. 다시 보내지 말고 발송 이력을 확인해 주세요.",
+        },
+        { status: 200 }
+      )
+    }
+    return NextResponse.json({ error: "이메일 발송 요청을 처리하지 못했습니다." }, { status: 500 })
   }
 }

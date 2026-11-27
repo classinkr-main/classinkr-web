@@ -610,12 +610,28 @@ export default function MarketingHub({
   const handleTriggerRule = async (rule: AutomationRule) => {
     setTriggeringId(rule.id)
     try {
-      const res = await adminFetch(`/api/admin/automation/rules/${rule.id}/trigger`, { method: "POST" })
+      const trigger = (force: boolean) =>
+        adminFetch(`/api/admin/automation/rules/${rule.id}/trigger`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force }),
+        })
+      let res = await trigger(false)
       if (res.status === 401) {
         handleUnauthorized()
         return
       }
-      const data = await res.json().catch(() => null)
+      let data = await res.json().catch(() => null)
+      // 방금 실행한 규칙이면 서버가 409(recent_run)로 묻는다 — 같은 대상에게 두 번 나가지 않게 확인받고 다시 보낸다.
+      if (res.status === 409 && data?.code === "recent_run") {
+        if (!window.confirm(`${data.error}\n\n그래도 다시 실행할까요?`)) return
+        res = await trigger(true)
+        if (res.status === 401) {
+          handleUnauthorized()
+          return
+        }
+        data = await res.json().catch(() => null)
+      }
       if (!res.ok || !data?.ok) {
         showToast("error", data?.error ? `발송 실패 — ${data.error}` : "즉시 실행에 실패했습니다.")
       } else {

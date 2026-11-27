@@ -177,6 +177,16 @@ export async function POST(
 
     const { document, version, share, customer_email, customer_name } = result
 
+    // 화면은 응답용(sign) 공유에서만 수락 버튼을 보인다(app/share/quote/[token]/page.tsx). 열람 전용 링크로
+    // 직접 호출해 수락을 남기지 못하게 서버도 같은 조건을 건다.
+    if (share.access_mode !== "sign") {
+      return NextResponse.json({ error: "열람 전용 견적서입니다. 담당자에게 문의해 주세요." }, { status: 403 })
+    }
+    // 보관·만료된 견적은 상태만 건너뛰고 수락 기록·CRM 카드는 남기던 것을 막는다.
+    if (document.status === "archived" || document.status === "expired") {
+      return NextResponse.json({ error: "더 이상 유효하지 않은 견적서입니다. 담당자에게 문의해 주세요." }, { status: 409 })
+    }
+
     // 등록된 고객 이메일이 있을 때만 대조한다. CRM에 이메일이 없는 고객이 많아
     // 무조건 대조하면 응답 버튼이 영구히 403으로 죽는다. 이메일이 없으면
     // 링크 소지 자체를 1차 인증으로 보고, 검증 여부를 로그에 남긴다.

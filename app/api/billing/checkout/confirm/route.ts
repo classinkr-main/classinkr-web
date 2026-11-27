@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { confirmTossPayment } from "@/lib/billing/toss"
+import { confirmTossPayment, fetchTossPayment, type TossConfirmPaymentResponse } from "@/lib/billing/toss"
+import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import {
   getSoftwareCheckoutOrder,
@@ -22,6 +23,10 @@ function parseAmount(value: unknown) {
         : Number.NaN
 
   return Number.isFinite(amount) && amount > 0 ? amount : null
+}
+
+function isAlreadyProcessed(error: unknown) {
+  return Boolean(error && typeof error === "object" && (error as { code?: unknown }).code === "ALREADY_PROCESSED_PAYMENT")
 }
 
 function getPurchaseConversionEventId(orderId: string) {
@@ -136,11 +141,19 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const confirmation = await confirmTossPayment({
-      paymentKey,
-      orderId,
-      amount,
-    })
+    let confirmation: TossConfirmPaymentResponse
+    try {
+      confirmation = await confirmTossPayment({
+        paymentKey,
+        orderId,
+        amount,
+      })
+    } catch (confirmError) {
+      // 앞선 요청에서 승인은 끝났는데 주문 기록이 실패했던 건 — 토스는 재승인을 거절한다.
+      // 승인된 결제를 다시 읽어 같은 검증을 거친 뒤 기록만 이어 간다(재시도가 복구 경로가 된다).
+      if (!isAlreadyProcessed(confirmError)) throw confirmError
+      confirmation = await fetchTossPayment(paymentKey)
+    }
     if (confirmation.orderId !== orderId) {
       return NextResponse.json({ error: "Payment order mismatch." }, { status: 400 })
     }
@@ -151,11 +164,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Payment is not completed." }, { status: 400 })
     }
 
-    const order = await markSoftwareCheckoutOrderPaid(orderId, confirmation)
+    // 여기부터는 돈이 이미 빠져나간 상태다 — 기록 실패를 일반 오류로 흘리지 않는다.
+    let order: SoftwareCheckoutOrder | null = null
+    let recordError: unknown = null
+    for (let attempt = 0; attempt < 2 && !order; attempt += 1) {
+      try {
+        order = await markSoftwareCheckoutOrderPaid(orderId, confirmation)
+        recordError = null
+        if (!order) break
+      } catch (error) {
+        recordError = error
+      }
+    }
+    if (!order && !recordError) {
+      // 다른 요청이 먼저 paid 로 바꿨으면 그 주문을 그대로 돌려준다(멱등).
+      const latest = await getSoftwareCheckoutOrder(orderId).catch(() => null)
+      if (latest?.status === "paid" && latest.paymentKey === paymentKey) {
+        return NextResponse.json({
+          order: { ...latest, conversionEventId: getPurchaseConversionEventId(latest.orderId) },
+        })
+      }
+    }
     if (!order) {
+      console.error("[billing/checkout/confirm] payment captured but order record failed:", recordError ?? "order not in payable state")
+      void emitNotificationEvent({
+        eventType: "billing.checkout.capture_record_failed",
+        notificationType: "incident",
+        categoryTag: "finance",
+        severity: "critical",
+        title: "결제는 승인됐는데 주문 기록에 실패했습니다",
+        message: `주문 ${orderId} — 토스 승인은 끝났지만 주문 상태를 결제 완료로 바꾸지 못했습니다. 고객이 다시 시도하면 자동으로 복구를 시도합니다. 복구되지 않으면 토스 상점관리자의 결제 내역과 대조해 주세요.`,
+        routeUrl: "/admin/overview",
+        source: "billing_checkout_confirm",
+        payload: { orderId, recorded: false, reason: recordError ? "record_error" : "order_not_payable" },
+      }).catch(() => {})
       return NextResponse.json(
-        { error: "Order not found or cannot be marked paid." },
-        { status: 409 }
+        {
+          error: "결제는 승인되었지만 주문 기록에 실패했습니다. 잠시 뒤 다시 시도해 주세요. 이중 결제되지 않습니다.",
+          code: "payment_captured_record_failed",
+        },
+        { status: recordError ? 500 : 409 }
       )
     }
 
