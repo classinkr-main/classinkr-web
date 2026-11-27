@@ -1,9 +1,9 @@
 "use client"
 
-import { ImageIcon, List, MessageSquarePlus, X } from "lucide-react"
+import { ImageIcon, Inbox, List, MessageSquarePlus, Send, X } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { useEffect, useId, useRef, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useId, useRef, useState, type DragEvent, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog"
@@ -29,15 +29,19 @@ export function RequestForm({ context, onSubmit, widget }: {
   const [leaveHref, setLeaveHref] = useState<string | null>(null)
   const formElement = useRef<HTMLFormElement>(null)
   const [capture, setCapture] = useState<{ file: File; url: string } | null>(null)
+  const [draggingCapture, setDraggingCapture] = useState(false)
   const [hasDraftText, setHasDraftText] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
   const [captureError, setCaptureError] = useState("")
+  const captureButton = useRef<HTMLButtonElement>(null)
   const upload = useRef<HTMLInputElement>(null)
   const working = useRef(false)
   const [retry, setRetry] = useState<{ id: string; form: FormData } | null>(null)
   const hasDraft = hasDraftText || capture !== null
   const captureUrl = capture?.url
+  const canAttach = !pending && !retry && !leaveHref
+  const showDropTarget = draggingCapture && canAttach
 
   useEffect(() => {
     if (captureUrl) return () => URL.revokeObjectURL(captureUrl)
@@ -69,7 +73,7 @@ export function RequestForm({ context, onSubmit, widget }: {
     }
   }, [hasDraft, compact])
 
-  function chooseCapture(file: File | null) {
+  const chooseCapture = useCallback((file: File | null) => {
     if (file && (!REQUEST_CAPTURE_TYPES.some((type) => type === file.type) || file.size === 0 || file.size > REQUEST_CAPTURE_BYTES)) {
       setCapture(null)
       setCaptureError("캡처는 2MB 이하의 PNG, JPG 또는 WebP 이미지로 올려 주세요.")
@@ -78,6 +82,50 @@ export function RequestForm({ context, onSubmit, widget }: {
     }
     setCaptureError("")
     setCapture(file ? { file, url: URL.createObjectURL(file) } : null)
+  }, [])
+
+  useEffect(() => {
+    const form = formElement.current
+    if (!form || !canAttach) return
+
+    function pasteCapture(event: Event) {
+      if (!(event instanceof ClipboardEvent) || event.defaultPrevented || working.current) return
+      const target = event.target
+      const pageHasNoFocus = target === document.body || target === document.documentElement || target === document
+      if (!pageHasNoFocus && !(target instanceof Node && form?.contains(target))) return
+
+      const clipboard = event.clipboardData
+      if (!clipboard) return
+      const file = Array.from(clipboard.files).find((item) => item.type.startsWith("image/"))
+        ?? Array.from(clipboard.items).find((item) => item.kind === "file" && item.type.startsWith("image/"))?.getAsFile()
+      if (!file) return
+
+      event.preventDefault()
+      if (upload.current) upload.current.value = ""
+      chooseCapture(file)
+    }
+
+    const pasteTarget = compact ? document : form
+    pasteTarget.addEventListener("paste", pasteCapture)
+    return () => pasteTarget.removeEventListener("paste", pasteCapture)
+  }, [canAttach, chooseCapture, compact])
+
+  function dragOverCapture(event: DragEvent<HTMLFormElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = canAttach ? "copy" : "none"
+    setDraggingCapture(canAttach)
+  }
+
+  function dropCapture(event: DragEvent<HTMLFormElement>) {
+    const files = Array.from(event.dataTransfer.files)
+    if (files.length === 0) return
+    event.preventDefault()
+    setDraggingCapture(false)
+    if (!canAttach || working.current) return
+
+    if (upload.current) upload.current.value = ""
+    chooseCapture(files.find((file) => file.type.startsWith("image/")) ?? files[0])
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -159,14 +207,13 @@ export function RequestForm({ context, onSubmit, widget }: {
           (name) => String(form.get(name) ?? "").trim() !== "",
         ))
       }}
-      onPaste={(event) => {
-        if (pending || retry) return
-        const file = Array.from(event.clipboardData.files).find((item) => item.type.startsWith("image/"))
-        if (!file) return
-        event.preventDefault()
-        if (upload.current) upload.current.value = ""
-        chooseCapture(file)
+      onDragOver={dragOverCapture}
+      onDragLeave={(event) => {
+        if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) {
+          setDraggingCapture(false)
+        }
       }}
+      onDrop={dropCapture}
     >
       {widget && (
         <header className="flex shrink-0 items-center justify-between gap-2 px-4 pt-2">
@@ -204,12 +251,20 @@ export function RequestForm({ context, onSubmit, widget }: {
         </label>
         <label className="grid gap-1.5 text-sm font-semibold">
           내용
-          <textarea className={field} name="description" rows={compact ? 2 : 4} maxLength={4000} required placeholder="어떤 화면에서 어떤 동작을 했는지 알려주세요." />
+          <textarea
+            className={`${field}${showDropTarget ? " border-fg-accent bg-surface-sunken" : ""}`}
+            name="description" rows={compact ? 2 : 4} maxLength={4000} required
+            placeholder="어떤 화면에서 어떤 동작을 했는지 알려주세요."
+          />
         </label>
         {compact ? (
           <>
             <div className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="outline" size="sm" className="min-h-10" onClick={() => upload.current?.click()}>
+              <Button
+                type="button" variant="outline" size="sm"
+                className={showDropTarget ? "min-h-10 border-fg-accent bg-surface-sunken" : "min-h-10"}
+                ref={captureButton} aria-describedby={helpId + "-capture"} onClick={() => upload.current?.click()}
+              >
                 <ImageIcon aria-hidden="true" /> 캡처 붙이기
               </Button>
               <Button
@@ -248,7 +303,9 @@ export function RequestForm({ context, onSubmit, widget }: {
             />
           </label>
           <p id={helpId + "-capture"} className={compact ? "text-xs text-fg-muted" : "text-sm text-fg-muted"}>
-            {compact ? "캡처는 담당자 확인 7일 후 삭제됩니다." : "이미지를 선택하거나 이 양식에 붙여넣으세요. PNG, JPG, WebP 1장 · 최대 2MB. 담당자 확인 7일 후 삭제됩니다."}
+            {compact ? (
+              <>사진 드래그 또는 Ctrl+V(⌘V)<br />캡처는 담당자 확인 7일 후 삭제됩니다.</>
+            ) : "사진을 선택하거나 끌어다 놓거나 Ctrl+V(⌘V)로 붙여넣으세요. PNG, JPG, WebP 1장 · 최대 2MB. 담당자 확인 7일 후 삭제됩니다."}
           </p>
           {capture && (
             <Image
@@ -266,7 +323,8 @@ export function RequestForm({ context, onSubmit, widget }: {
               <Button type="button" variant="outline" onClick={() => {
                 chooseCapture(null)
                 if (upload.current) upload.current.value = ""
-                upload.current?.focus()
+                const target = captureButton.current ?? upload.current
+                target?.focus()
               }}>{capture ? "제거" : "첨부 없이 계속"}</Button>
             </div>
           )}
@@ -277,11 +335,13 @@ export function RequestForm({ context, onSubmit, widget }: {
       <footer className={compact ? "flex shrink-0 items-center justify-between gap-2 px-4 pb-3 pt-1.5" : undefined}>
         {widget && (
           <Button type="button" size="sm" variant="link" className="min-h-11 px-0 text-fg-ink" onClick={() => leaveWidget(ADMIN_REQUESTS_HREF)} disabled={pending}>
+            <Inbox aria-hidden="true" />
             내 요청
           </Button>
         )}
         <Button type="submit" size={compact ? "md" : "default"} className="w-fit" disabled={pending || !!captureError}>
-          {pending ? "접수 중…" : retry ? "접수 다시 확인" : "요청 등록"}
+          <Send aria-hidden="true" />
+          {pending ? "접수 중…" : retry ? "접수 다시 확인" : "요청 보내기"}
         </Button>
       </footer>
       <Dialog open={leaveHref !== null} onOpenChange={(open) => { if (!open) setLeaveHref(null) }}>

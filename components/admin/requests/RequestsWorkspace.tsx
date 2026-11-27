@@ -1,5 +1,6 @@
 "use client"
 
+import { Inbox, Send, type LucideIcon } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 
@@ -157,10 +158,10 @@ export function RequestsWorkspace({ testSite, ...context }: RequestContext & { t
     setQueue(null)
     setOpenId(null)
   }
-  const views: { id: View; label: string }[] = [
-    { id: "mine", label: "내 요청" },
+  const views: { id: View; label: string; icon?: LucideIcon }[] = [
+    { id: "mine", label: "내 요청", icon: Inbox },
     ...(canManage ? [{ id: "manage" as const, label: "요청 관리" }] : []),
-    { id: "new", label: "새 요청" },
+    { id: "new", label: "요청 보내기", icon: Send },
   ]
   const data = result?.data ?? (loaded?.key.startsWith(listKey) ? loaded.data : null)
   const counts = loaded?.key.startsWith(listView + ":") ? loaded.data?.queueCounts : null
@@ -182,8 +183,11 @@ export function RequestsWorkspace({ testSite, ...context }: RequestContext & { t
         </a>
       </header>
       <nav aria-label="요청 메뉴" className="flex flex-wrap gap-2 border-b border-line-hair pb-3">
-        {views.map(({ id, label }) => (
-          <Button key={id} type="button" aria-pressed={view === id} variant={view === id ? "default" : "outline"} onClick={() => changeView(id)}>{label}</Button>
+        {views.map(({ id, label, icon: Icon }) => (
+          <Button key={id} type="button" aria-pressed={view === id} variant={view === id ? "default" : "outline"} onClick={() => changeView(id)}>
+            {Icon && <Icon aria-hidden="true" />}
+            {label}
+          </Button>
         ))}
       </nav>
       {notice && <p role="status" className="text-sm font-semibold text-fg-accent">{notice}</p>}
