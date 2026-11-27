@@ -8997,7 +8997,8 @@
         "field:personal-account-paid-by-academy"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:school-after-school-on-academy-account",
