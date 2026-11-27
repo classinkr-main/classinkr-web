@@ -248,7 +248,7 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261102_leads_ga_quality_signals.sql` | `leads` 에 `ga_client_id`·`ga_session_id`(text)·`ga_ad_consent`(boolean)·`ga_qualify_sent_at`·`ga_close_sent_at`(timestamptz)를 더한다. 전부 NULL 허용 추가 컬럼, 백필 없음, 멱등(`IF NOT EXISTS`) | 리드 저장은 그대로 된다(GA 세 컬럼을 덜고 다시 저장 — utm·gclid 는 지킨다). 다만 GA client_id 가 안 남아 그 기간 리드는 품질 신호를 영영 못 보내고, `GA4_*` 변수를 넣으면 선점 UPDATE 가 실패해 신호가 하나도 안 나간다 | `npm run check:db` 의 `leads` GA4 리드 품질 신호 프로브(blocker), 또는 `select count(*) from information_schema.columns where table_name = 'leads' and column_name like 'ga\_%';` → `5` |
 
-### 2026-11-04 메타 리드 단계 신호 — 서울 프로젝트 미적용
+### 2026-11-04 메타 리드 단계 신호 — 서울 프로젝트 적용 완료(2026-11-27)
 
 [메타 리드 단계 신호](./meta-crm-stage-signal-2026-11-04.md) §5. 기능이 꺼져 있는 동안은 급하지 않다 — **`META_CRM_SIGNAL_ENABLED` 를 켜기 전에 적용한다.**
 
@@ -302,7 +302,7 @@ npm run check:db --  --strict
 
 2026-11-25 적용 확인: 서울 프로젝트에 기존 `chatbot_claude_labels` 마이그레이션만 적용했다. 두 테이블의 RLS와 anon 차단, 집계 함수의 service_role 실행 권한과 anon·authenticated 실행 거절, service_role의 두 테이블 INSERT 권한을 카탈로그에서 재확인했다. 제공자·라벨링·답 색인 모델 스위치와 기존 행은 변경하지 않았다.
 
-### 2026-11-23 총판 정산 스냅샷 — 서울 프로젝트 미적용
+### 2026-11-23 총판 정산 스냅샷 — 서울 프로젝트 적용 완료(2026-11-27, 스냅샷 업로드는 아직)
 
 [총판 정산](../hardware-ops/distributor-settlement.md) §7 의 쿼드러닝 계정 보드. 코드보다 먼저든 나중이든 된다(폴백이 있다).
 적용 뒤 스냅샷을 한 번 올린다: `node --env-file=.env.local scripts/upload-partner-settlement-snapshot.mjs <snapshot.json>`(운영 DB에 쓴다).
@@ -311,7 +311,7 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261123_partner_settlement_snapshots.sql` | 총판마다 최신 정산 스냅샷 한 행 `partner_settlement_snapshots`(`partner` PK·`snapshot` jsonb·`generated_at`·`updated_by`·`updated_at` 트리거). RLS deny-all(정책 0, service_role 전용), 멱등 | 총판 미수금 탭 위 보드가 "아직 올라오지 않았다" 한 줄로 바뀌고 Overview 정산 잔액 카드가 그려지지 않는다. 견적별 총판 미수금은 그대로다 | `npm run check:db` 의 `partner_settlement_snapshots` 프로브(warning, 행 0이면 업로드 안내), 또는 `select to_regclass('public.partner_settlement_snapshots') is not null;` → `true` |
 
-### 2026-11-24 총판 견적서 확인 · 발행 후 수정 · 할인 · 문구 — 서울 프로젝트 미적용
+### 2026-11-24 총판 견적서 확인 · 발행 후 수정 · 할인 · 문구 — 서울 프로젝트 적용 완료(2026-11-27)
 
 총판이 공유 링크에서 [견적 확인]을 누른 기록과, 발행 뒤 금액 수정 기록([총판 정산](../hardware-ops/distributor-settlement.md) §4-1·§4-2).
 코드는 미적용 DB 에서도 돈다 — 확인 버튼과 발행 후 수정만 막힌다. **이 기능을 쓰기 전에 적용한다.**
@@ -320,7 +320,7 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261124_distributor_settlement_confirm_revise.sql` | `distributor_settlements` 에 `distributor_confirmed_at`·`distributor_confirmed_name`(60자 CHECK)·`revised_at`·`discount`(JSONB, mode CHECK)·`document_text`(JSONB) 추가. 멱등(`ADD COLUMN IF NOT EXISTS`·`DROP CONSTRAINT IF EXISTS`) | 정산 조회는 새 칸 없이 다시 읽는다(42703 폴백). 총판 링크에 확인 버튼이 나오지 않고, 발행 후 금액 수정과 할인·제목·기타사항을 넣은 저장은 503 "적용 필요". 발행 전 편집·발행·입금·고객 동의 자동 생성은 그대로 된다 | `npm run check:db` 의 `distributor_settlements`(총판 견적서 확인·발행 후 수정) 프로브(warning), 또는 `select count(*) from information_schema.columns where table_name = 'distributor_settlements' and column_name in ('distributor_confirmed_at','distributor_confirmed_name','revised_at','discount','document_text');` → `5` |
 
-### 2026-11-26 REV 엔트리 읽기 색인 · 중복 색인 정리 — 서울 프로젝트 미적용
+### 2026-11-26 REV 엔트리 읽기 색인 · 중복 색인 정리 — 서울 프로젝트 적용 완료(2026-11-27)
 
 [어드민·Compass 점검(2026-11-25)](admin-compass-audit-2026-11-25.md) §3 에서 만든 색인 전용 마이그레이션 두 개다.
 둘 다 코드와 순서가 무관하다(미적용이어도 동작은 같고 성능·경고만 다르다). 표·칼럼·정책은 건드리지 않는다.
@@ -332,6 +332,20 @@ npm run check:db --  --strict
 
 - 색인 생성은 트랜잭션 안에서 돌아 그동안 `branch_rev_period_entries` 쓰기(시트 임포트·주간 마감)가 잠깐 막힌다. 임포트가 돌지 않는 때 적용한다.
 - 롤백 파일은 `supabase/rollbacks/20261126_*.rollback.sql` 이다.
+
+### 2026-11-27 공개 키 직접 INSERT 차단 · `is_active_admin()` 역할 조건 — 서울 프로젝트 적용 완료(2026-11-27)
+
+[어드민·Compass 점검(2026-11-25)](admin-compass-audit-2026-11-25.md) §2-1 C-1 · C-2 의 접근 정책 변경이다(2026-11-26 승인). 코드와 순서가 무관하다 — 이 저장소의 쓰기는 전부 service role 을 거친다.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261127_leads_newsletter_anon_insert_revoke.sql` | `leads` · `newsletter_subscribers` 의 "누구나 INSERT" 정책 2개를 지우고 anon 의 표 권한을 전부 회수한다. authenticated 에서는 TRUNCATE · REFERENCES · TRIGGER 만 걷는다. 멱등 | 공개 키만으로 폼 검증 · 속도 제한 · 동의 처리를 건너뛰고 행을 넣을 수 있다 | `select policyname from pg_policies where tablename in ('leads','newsletter_subscribers') and cmd = 'INSERT'` 가 0행 |
+| `20261127_is_active_admin_role_condition.sql` | `is_active_admin()` 이 관리자 등급(SUPER_ADMIN · ADMIN)만 true 를 돌린다. `search_path` 고정 · STABLE. 멱등(`create or replace`) | EDITOR · VIEWER 계정을 활성화하면 그 계정의 브라우저 토큰으로 관리자 표 64개가 열린다 | `select prosrc from pg_proc where proname = 'is_active_admin'` 에 `role in` |
+
+- **적용 직전에 본다**: `select count(*) from public.admin_profiles where status = 'ACTIVE' and role not in ('SUPER_ADMIN','ADMIN')` — 0 이면 지금과 결과가 같다(2026-11-27 기준 0).
+- 저장소 밖에서 공개 키로 `leads` · `newsletter_subscribers` 에 쓰는 것이 새로 생겼는지 본다(2026-09-14 ~ 11-27 사이 0건).
+- 롤백 파일은 `supabase/rollbacks/20261127_*.rollback.sql` 이다.
+- 이 변경으로 닫히지 않는 것: `admin_profiles` 의 "Admins can update profiles" UPDATE 정책(점검 문서 §6-4 N-1) — 별도 결정.
 
 ## 적용 보류 중인 마이그레이션
 

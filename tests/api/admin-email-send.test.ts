@@ -124,4 +124,35 @@ describe("admin email send route", () => {
       sendErrors: ["이메일 발송 공급자가 설정되지 않았습니다."],
     })
   })
+
+  // 2026-11-25 점검 B-4: 메일이 나간 뒤의 오류를 "잘못된 요청(400)"으로 답하면 운영자가 다시 보낸다.
+  it("메일이 나간 뒤 캠페인 상태 기록이 실패해도 발송 결과를 그대로 돌려주고 기록 실패를 알린다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.sendBatchEmail.mockResolvedValue({ provider: "resend", sent: 1, failed: 0, errors: [] })
+    mocks.updateCampaign.mockRejectedValue(new Error("db down"))
+
+    const response = await POST(
+      sendRequest({ mode: "campaign", directEmails: ["customer@example.com"], subject: "공지", body: "<p>본문</p>" })
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toMatchObject({ ok: true, recipientCount: 1, recordFailed: true })
+    expect(String(body.warning)).toContain("다시 보내지 말고")
+  })
+
+  it("본문이 JSON 이 아니면 400, 발송 전에 난 서버 오류는 500 이다", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const broken = await POST(
+      new NextRequest("https://classin.kr/api/admin/email/send", { method: "POST", body: "{not json" })
+    )
+    expect(broken.status).toBe(400)
+
+    mocks.createCampaign.mockRejectedValue(new Error("db down"))
+    const failed = await POST(
+      sendRequest({ mode: "campaign", directEmails: ["customer@example.com"], subject: "공지", body: "<p>본문</p>" })
+    )
+    expect(failed.status).toBe(500)
+    expect(mocks.sendBatchEmail).not.toHaveBeenCalled()
+  })
 })

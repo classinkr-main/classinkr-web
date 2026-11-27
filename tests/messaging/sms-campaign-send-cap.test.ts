@@ -16,6 +16,8 @@ const db = vi.hoisted(() => ({
   serverMaxRows: Infinity,
   ranges: [] as Array<[number, number]>,
   campaignInserts: [] as Row[],
+  /** 중복 발송 확인이 읽는 최근 발송 이력. */
+  recentCampaigns: [] as Row[],
 }))
 
 const mocks = vi.hoisted(() => ({
@@ -54,7 +56,17 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: () => ({
     from: (table: string) => {
       if (table === "sms_campaigns") {
+        const recent: Record<string, unknown> = {}
+        const recentSelf = () => recent
+        Object.assign(recent, {
+          eq: recentSelf,
+          in: recentSelf,
+          gte: recentSelf,
+          order: recentSelf,
+          limit: async () => ({ data: db.recentCampaigns, error: null }),
+        })
         return {
+          select: () => recent,
           insert: (row: Row) => {
             db.campaignInserts.push(row)
             return { select: () => ({ single: async () => ({ data: { id: "campaign-1", ...row }, error: null }) }) }
@@ -91,6 +103,7 @@ beforeEach(() => {
   db.serverMaxRows = Infinity
   db.ranges = []
   db.campaignInserts = []
+  db.recentCampaigns = []
   mocks.verifyAdmin.mockResolvedValue(undefined)
   mocks.sendSmsMessages.mockImplementation(async ({ messages }: { messages: unknown[] }) => ({
     provider: "solapi",
@@ -174,5 +187,54 @@ describe("POST /api/admin/sms/send — 1회 상한", () => {
     expect(response.status).toBe(200)
     expect(db.ranges).toEqual([])
     expect(mocks.sendSmsMessages.mock.calls[0][0].messages).toEqual([{ to: "010-0000-0000", text: "안내" }])
+  })
+})
+
+describe("POST /api/admin/sms/send — 중복 발송 확인", () => {
+  // 2026-11-25 점검 B-3: 같은 문구·같은 대상이 방금 나갔으면 force 없이는 다시 보내지 않는다.
+  const recent = (tags: string[]) => ({
+    id: "campaign-prev",
+    target_tags: tags,
+    status: "sent",
+    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    sent_count: 3,
+  })
+
+  it("같은 문구·같은 태그의 최근 발송이 있으면 409 이고 한 건도 보내지 않는다", async () => {
+    db.subscribers = subscribers(3)
+    db.recentCampaigns = [recent(["b", "a"])]
+    const response = await POST(sendRequest({ message: "안내 문자", targetTags: ["a", "b"] }))
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.code).toBe("recent_duplicate_send")
+    expect(mocks.sendSmsMessages).not.toHaveBeenCalled()
+    expect(db.campaignInserts).toHaveLength(0)
+  })
+
+  it("대상 태그가 다르면 다른 발송으로 보고 보낸다", async () => {
+    db.subscribers = subscribers(3)
+    db.recentCampaigns = [recent(["a"])]
+    const response = await POST(sendRequest({ message: "안내 문자", targetTags: ["a", "b"] }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.sendSmsMessages).toHaveBeenCalledTimes(1)
+  })
+
+  it("force 를 보내면 최근 발송이 있어도 보낸다", async () => {
+    db.subscribers = subscribers(3)
+    db.recentCampaigns = [recent(["a", "b"])]
+    const response = await POST(sendRequest({ message: "안내 문자", targetTags: ["a", "b"], force: true }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.sendSmsMessages).toHaveBeenCalledTimes(1)
+  })
+
+  it("테스트 발송은 중복 확인을 거치지 않는다", async () => {
+    db.recentCampaigns = [recent([])]
+    const response = await POST(sendRequest({ message: "안내 문자", targetTags: [], testMode: true, testPhone: "010-0000-0000" }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.sendSmsMessages).toHaveBeenCalledTimes(1)
   })
 })

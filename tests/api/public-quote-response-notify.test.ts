@@ -44,7 +44,8 @@ const SHARE = {
   id: "share_1",
   quote_document_version_id: "qv_1",
   token: "tok123",
-  access_mode: "view" as const,
+  // 확인·수락 버튼은 응답용(sign) 공유에서만 보이고, 서버도 같은 조건을 건다.
+  access_mode: "sign" as const,
   expires_at: null,
   created_by: null,
   created_at: "2026-08-01T00:00:00.000Z",

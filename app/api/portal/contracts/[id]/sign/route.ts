@@ -31,6 +31,13 @@ export async function POST(
     if (!doc.current_version_id) {
       return NextResponse.json({ error: "계약 버전 없음" }, { status: 400 });
     }
+    // 취소·완료된 계약에 서명이 들어오면 상태가 서명 단계로 되돌아가고 서명 파일만 쌓인다 — 받지 않는다.
+    if (doc.status === "cancelled" || doc.status === "completed") {
+      return NextResponse.json(
+        { error: doc.status === "cancelled" ? "취소된 계약서입니다." : "이미 서명이 완료된 계약서입니다." },
+        { status: 409 }
+      );
+    }
 
     const deal = await getDeal(doc.deal_id);
     if (!deal) return NextResponse.json({ error: "딜 없음" }, { status: 404 });

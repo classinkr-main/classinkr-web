@@ -96,9 +96,24 @@ describe("POST /api/portal/contracts/[id]/sign — 서명 상태", () => {
     await signAs("partner")
     expect(proposeLedgerDraftForSignedContract).toHaveBeenCalledTimes(1)
 
+    // 두 번째 장면: 파트너만 서명한 계약(완료된 계약에는 더 서명할 수 없으므로 문서 상태도 그 장면으로 되돌린다).
+    state.doc.status = "partner_signed"
     state.version = { id: "cv_1", partner_signed_at: "2026-11-01T00:00:00.000Z", admin_signed_at: null }
     await signAs("admin")
     expect(proposeLedgerDraftForSignedContract).toHaveBeenCalledTimes(2)
     expect(state.doc.status).toBe("completed")
+  })
+})
+
+describe("POST /api/portal/contracts/[id]/sign — 끝난 계약에는 서명을 받지 않는다", () => {
+  // 2026-11-25 점검 B-6: 상태를 보지 않아 취소·완료된 계약이 서명 단계로 되돌아갔다.
+  it.each(["cancelled", "completed"])("%s 계약은 409 이고 상태·서명을 바꾸지 않는다", async (status) => {
+    state.doc.status = status
+    const response = await signAs("admin")
+
+    expect(response.status).toBe(409)
+    expect(state.doc.status).toBe(status)
+    expect(state.version.admin_signed_at).toBeNull()
+    expect(proposeLedgerDraftForSignedContract).not.toHaveBeenCalled()
   })
 })

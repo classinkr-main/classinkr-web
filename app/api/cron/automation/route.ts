@@ -23,10 +23,18 @@ import {
   getAllLogs,
 } from "@/lib/repositories/automation"
 import {
+  claimDelayItem,
   getDueDelayItems,
   updateDelayItemStatus,
 } from "@/lib/repositories/automation-delay"
 import type { AutomationRule } from "@/lib/automation-types"
+
+export const maxDuration = 300
+
+/** 지연 큐에 쓰는 시간 — 넘기면 남은 항목은 pending 으로 두고 다음 실행이 이어 간다. */
+const DELAY_QUEUE_BUDGET_MS = 120_000
+/** 한 번에 동시에 보내는 지연 발송 수. */
+const DELAY_QUEUE_CONCURRENCY = 5
 
 const DAILY_CRON = "0 9 * * *"
 const TWENTY_THREE_HOURS_MS = 23 * 60 * 60 * 1000
@@ -128,29 +136,50 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let delayFailed = 0
   const delayErrors: string[] = []
 
+  let delaySkipped = 0
+  let delayDeferred = 0
   try {
     const dueItems = await getDueDelayItems()
+    const delayStartedAt = Date.now()
 
-    await Promise.allSettled(
-      dueItems.map(async (item) => {
-        try {
-          await executeDelayQueueItem(item.ruleId, item.recipientData)
-          await updateDelayItemStatus(item.id, "sent")
-          delayProcessed++
-          console.log(
-            `[cron/automation] delay 큐 발송 완료 — id=${item.id}, email=${item.recipientEmail}`
-          )
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err)
-          await updateDelayItemStatus(item.id, "failed", message).catch(() => {
-            // 상태 업데이트 실패는 무시하고 오류만 기록
-          })
-          delayFailed++
-          delayErrors.push(`[${item.id}] ${item.recipientEmail}: ${message}`)
-          console.error(`[cron/automation] delay 큐 발송 실패 — id=${item.id}:`, message)
-        }
-      })
-    )
+    for (let index = 0; index < dueItems.length; index += DELAY_QUEUE_CONCURRENCY) {
+      if (Date.now() - delayStartedAt > DELAY_QUEUE_BUDGET_MS) {
+        delayDeferred = dueItems.length - index
+        console.warn(`[cron/automation] delay 큐 시간 예산 초과 — ${delayDeferred}건은 다음 실행으로 넘깁니다`)
+        break
+      }
+      await Promise.allSettled(
+        dueItems.slice(index, index + DELAY_QUEUE_CONCURRENCY).map(async (item) => {
+          // 보내기 전에 선점한다 — 겹친 실행·재전달이 이미 가져간 항목은 건너뛴다.
+          // 선점 자체가 실패하면 상태를 건드리지 않는다(pending 그대로 — 다음 실행이 다시 본다).
+          let claimed = false
+          try {
+            claimed = await claimDelayItem(item.id)
+          } catch (err) {
+            delayErrors.push(`[${item.id}] ${err instanceof Error ? err.message : String(err)}`)
+            return
+          }
+          if (!claimed) {
+            delaySkipped++
+            return
+          }
+          try {
+            await executeDelayQueueItem(item.ruleId, item.recipientData)
+            await updateDelayItemStatus(item.id, "sent")
+            delayProcessed++
+            console.log(`[cron/automation] delay 큐 발송 완료 — id=${item.id}`)
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            await updateDelayItemStatus(item.id, "failed", message).catch(() => {
+              // 상태 업데이트 실패는 무시하고 오류만 기록
+            })
+            delayFailed++
+            delayErrors.push(`[${item.id}] ${message}`)
+            console.error(`[cron/automation] delay 큐 발송 실패 — id=${item.id}:`, message)
+          }
+        })
+      )
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error("[cron/automation] delay 큐 조회 실패:", message)
@@ -165,6 +194,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ran,
     skipped,
     errors,
-    delay: { processed: delayProcessed, failed: delayFailed, errors: delayErrors },
+    delay: { processed: delayProcessed, failed: delayFailed, skipped: delaySkipped, deferred: delayDeferred, errors: delayErrors },
   })
 }

@@ -98,6 +98,14 @@ export async function POST(
 
     const { document, version, share, customer_email, customer_name } = result
 
+    // 수락 경로와 같은 조건 — 화면은 응답용(sign) 공유에서만 확인 버튼을 보인다.
+    if (share.access_mode !== "sign") {
+      return NextResponse.json({ error: "열람 전용 견적서입니다. 담당자에게 문의해 주세요." }, { status: 403 })
+    }
+    if (document.status === "archived" || document.status === "expired") {
+      return NextResponse.json({ error: "더 이상 유효하지 않은 견적서입니다. 담당자에게 문의해 주세요." }, { status: 409 })
+    }
+
     // 등록된 고객 이메일이 있을 때만 대조한다. CRM에 이메일이 없는 고객이 많아
     // 무조건 대조하면 응답 버튼이 영구히 403으로 죽는다. 이메일이 없으면
     // 링크 소지 자체를 1차 인증으로 보고, 검증 여부를 로그에 남긴다.
