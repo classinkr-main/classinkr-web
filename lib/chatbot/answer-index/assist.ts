@@ -246,6 +246,19 @@ export function assistBand(index: CompiledAnswerIndex, env: Env = process.env): 
   return lo < hi ? [lo, hi] : [settings.band[0], settings.band[1]]
 }
 
+/**
+ * CHATBOT_ASSIST_ABSTAIN_BAND_LO: 못 찾은(abstain) 결정에만 쓰는 더 낮은 하한(0~1). 없거나 잘못된 값이면 null(꺼짐, 지금 동작과 같다).
+ * 값이 있어도 대역 하한(assistBand lo)보다 낮을 때만 뜻이 있다(아니면 null). 상한은 assistBand 의 것을 그대로 쓴다.
+ */
+export function assistAbstainBandLo(index: CompiledAnswerIndex, env: Env = process.env): number | null {
+  const raw = env.CHATBOT_ASSIST_ABSTAIN_BAND_LO?.trim()
+  if (!raw) return null
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value < 0 || value > 1) return null
+  const band = assistBand(index, env)
+  return band && value < band[0] ? value : null
+}
+
 /** CHATBOT_ASSIST_TIMEOUT_MS: 모델 호출 시간 예산(ms, 기본 2,500, 200~20,000 으로 자름). */
 export function assistTimeoutMs(env: Env = process.env) {
   const raw = env.CHATBOT_ASSIST_TIMEOUT_MS?.trim()
@@ -589,12 +602,14 @@ export function assistSkipReason(
   const settings = index.assist
   if (!settings?.enabled) return "calibration_disabled"
   const [lo, hi] = assistBand(index, env) ?? settings.band
+  const abstainLo = assistAbstainBandLo(index, env)
+  const floorOf = (kind: string) => (kind === "abstain" && abstainLo !== null ? abstainLo : lo)
   if (segments) {
-    return segments.some((segment) => !segmentDecided(segment) && segment.conf >= lo && segment.conf < hi) ? null : "out_of_band"
+    return segments.some((segment) => !segmentDecided(segment) && segment.conf >= floorOf(segment.kind) && segment.conf < hi) ? null : "out_of_band"
   }
   if (decision.kind === "gap") return "gap"
   if (decision.absentHit) return "absent"
-  if (!(decision.conf >= lo && decision.conf < hi)) return "out_of_band"
+  if (!(decision.conf >= floorOf(decision.kind) && decision.conf < hi)) return "out_of_band"
   return null
 }
 

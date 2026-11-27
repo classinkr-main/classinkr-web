@@ -222,6 +222,7 @@ describe("readAssistPickConfig", () => {
     expect(
       assistPickCacheSuffix(readAssistPickConfig({ CHATBOT_ASSIST_PICK_PROMPT: "v2", CHATBOT_ASSIST_CANDIDATES: "15", CHATBOT_ASSIST_BAND_LO: "0.1" }))
     ).toBe("+picks1+prompt-v2+cand-15+band-0.1-")
+    expect(assistPickCacheSuffix(readAssistPickConfig({ CHATBOT_ASSIST_ABSTAIN_BAND_LO: "0.2" }))).toBe("+picks1+abstain-0.2")
     expect(readAssistPickConfig({ CHATBOT_ASSIST_PICK_PROVIDER: "claude" }).pickModel).toBe("claude-haiku-5-5")
     expect(readAssistPickConfig({ CHATBOT_ASSIST_PICK_MODEL: "gemini-3.5-flash-lite" }).pickModel).toBe("gemini-3.5-flash-lite")
     const on = readAssistPickConfig({

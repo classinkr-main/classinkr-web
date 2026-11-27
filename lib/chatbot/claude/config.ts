@@ -87,6 +87,7 @@ export function readChatbotClaudeConfig(env: Env = process.env): ChatbotClaudeCo
 //   CHATBOT_ASSIST_PICK_PROMPT        v1(기본) | v2 — 단일 질문 고르기 지시문 판
 //   CHATBOT_ASSIST_CANDIDATES         후보 수(기본 10, 1~20)
 //   CHATBOT_ASSIST_BAND_LO·_HI        band 모드 확신도 대역(없으면 calibration.json assist.band)
+//   CHATBOT_ASSIST_ABSTAIN_BAND_LO    못 찾은(abstain) 결정에만 쓰는 더 낮은 하한(없으면 꺼짐)
 
 export type AssistPickProvider = "gemini" | "claude"
 
@@ -107,6 +108,8 @@ export interface AssistPickConfig {
   candidates: number
   /** band 대역 덮어쓰기(CHATBOT_ASSIST_BAND_LO·HI 글 그대로, 없으면 null). */
   band: [string | null, string | null]
+  /** abstain 전용 하한(CHATBOT_ASSIST_ABSTAIN_BAND_LO 글 그대로, 없으면 null). */
+  abstainBandLo: string | null
 }
 
 /**
@@ -137,6 +140,7 @@ export function readAssistPickConfig(env: Env = process.env): AssistPickConfig {
     pickPrompt: assistPickPromptVersion(env),
     candidates: assistCandidateCount(env),
     band: [env.CHATBOT_ASSIST_BAND_LO?.trim() || null, env.CHATBOT_ASSIST_BAND_HI?.trim() || null],
+    abstainBandLo: env.CHATBOT_ASSIST_ABSTAIN_BAND_LO?.trim() || null,
   }
 }
 
@@ -152,6 +156,7 @@ export function assistPickCacheSuffix(config: AssistPickConfig): string {
   if (config.pickPrompt !== "v1") parts.push(`prompt-${config.pickPrompt}`)
   if (config.candidates !== ASSIST_CANDIDATES) parts.push(`cand-${config.candidates}`)
   if (config.band[0] || config.band[1]) parts.push(`band-${config.band[0] ?? ""}-${config.band[1] ?? ""}`)
+  if (config.abstainBandLo) parts.push(`abstain-${config.abstainBandLo}`)
   return `+${parts.join("+")}`
 }
 
