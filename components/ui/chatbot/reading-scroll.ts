@@ -13,11 +13,13 @@ export const CONTINUE_READING_OVERLAP_PX = 72
 
 /**
  * 목록을 움직이는 방식.
- * - follow: 맨 아래를 따라간다. 질문을 보낸 뒤 답 머리가 오기 전, '새 답변' 버튼을 누른 뒤, 답을 받는 중에 사용자가 스스로 맨 아래로 내려온 뒤.
- * - anchor: 새 답을 낳은 질문(긴 질문이면 답 머리)을 목록 위 12px 에 맞춘다. 답이 짧아 맞출 자리가 없으면 그만큼만 올리고, 자리가 생기면 맞춘 뒤 hold 로 넘어간다.
+ * - follow: 맨 아래를 따라간다. 질문을 보낸 뒤 답 머리가 오기 전에만 쓴다(보낸 질문과 기다림 말풍선이 보이게).
+ * - anchor: 새 답을 낳은 질문(긴 질문이면 답 머리)을 목록 위 12px 에 맞춘다. 셸이 목록 아래에 읽을 자리(resolveReadingRoomMinHeight)를
+ *   비워 두므로 답이 짧아도 바로 맞추고 hold 로 넘어간다. 자리가 없으면 그만큼만 올리고, 자리가 생기면 맞춘다.
  * - hold: 목록을 움직이지 않는다. 답이 길어져도 답 머리는 그 자리에 있고, 사용자가 읽으며 스스로 내려간다.
  *
  * 예전에는 맞춤이 끝나면 '맨 아래 근처면 따라가기'가 다시 이겨, 답이 길어질수록 답 머리가 목록 위로 밀려 나갔다.
+ * 사용자가 맨 아래 문턱(45px) 안으로 내려오거나 '새 답변'을 눌러도 따라가기로 바꾸지 않는다 — 흐르는 글 끝을 따라가 답 머리가 밀려 나갔다.
  */
 export type ReadingScrollMode = "follow" | "anchor" | "hold"
 
@@ -76,21 +78,40 @@ export interface UserScrollInput {
 
 /**
  * 사용자가 목록을 직접 움직인 뒤의 방식. 사용자가 움직이면 맞춤(anchor)은 끝나고 그 자리를 존중한다(hold).
- * 답을 받는 중에 스스로 맨 아래까지 내려오면 새 글을 따라 읽겠다는 뜻으로 보고 따라간다(follow).
- * 따라가는 중에 조금이라도 위로 올리면 바로 멈춘다 — 손가락으로 천천히 끌 때 맨 아래 문턱(45px) 안이라고 다시 끌려 내려가지 않게.
+ * 답을 받는 중에 맨 아래 문턱(45px) 안으로 내려와도 따라가기로 바꾸지 않는다 — 예전에는 짧게 한 번 내린 것만으로 흐르는 글 끝을
+ * 따라가 답 머리가 밀려 나갔다. 아래에 더 이어지는 글은 '아래로 이어서 읽기' 표시가 알린다.
+ * 셸이 켠 따라가기(보낸 뒤 답 머리가 오기 전)는 맨 아래에 머무는 동안만 잇고, 조금이라도 위로 올리면 바로 멈춘다 —
+ * 손가락으로 천천히 끌 때 문턱 안이라고 다시 끌려 내려가지 않게.
  */
 export function resolveModeAfterUserScroll(input: UserScrollInput): ReadingScrollMode {
     if (!input.isSending || !input.nearBottom) return "hold"
-    if (input.delta > 0) return "follow"
-    if (input.delta === 0 && input.mode === "follow") return "follow"
-    return "hold"
+    return input.mode === "follow" && input.delta >= 0 ? "follow" : "hold"
+}
+
+export interface ReadingRoomInput {
+    /** 내려갈 수 있어야 하는 scrollTop(맞춘 질문 머리가 목록 위 12px 에 오는 자리). 0 이하면 자리를 두지 않는다. */
+    roomTop: number
+    clientHeight: number
+    /** 목록의 위아래 안쪽 여백 합(scrollHeight 에 들어간다). */
+    paddingY: number
+}
+
+/**
+ * 목록 내용(말풍선 묶음)의 최소 높이. 짧은 답에서도 질문 머리를 목록 위 12px 에 바로 맞출 수 있게 아래에 빈 읽을 자리를 둔다.
+ * 답·출처·칩·상담 카드는 이 자리 안에서 자라므로 끝 meta 가 붙어도 목록이 움직이지 않는다 — 예전에는 짧은 답이 끝날 때
+ * 맞출 자리가 그제야 생겨 목록이 약 200px 미끄러져 올라갔다. 내용이 더 길면 최소 높이는 아무 일도 하지 않는다.
+ * 목록 높이가 바뀌면(키보드·창 크기·입력창) 다시 잰다. null 이면 최소 높이를 지운다.
+ */
+export function resolveReadingRoomMinHeight(input: ReadingRoomInput): number | null {
+    if (!(input.roomTop > 0) || !(input.clientHeight > 0)) return null
+    return Math.max(0, Math.ceil(input.roomTop + input.clientHeight - Math.max(0, input.paddingY)))
 }
 
 export interface ContinueHintInput {
     hasUserMessages: boolean
     /** '새 답변' 버튼이 떠 있는지(둘은 같이 띄우지 않는다). */
     jumpToLatestShown: boolean
-    /** 맨 아래를 따라가는 중인지('새 답변'으로 내려가는 중 포함). 곧 맨 아래에 닿으므로 띄우지 않는다. */
+    /** 맨 아래를 따라가는 중이거나 셸이 부드럽게 옮기는 중인지('새 답변'·맞춤). 자리가 곧 바뀌므로 띄우지 않는다. */
     following: boolean
     /** 보이는 목록 아래로 더 내려갈 수 있는 px. */
     remainingBelow: number

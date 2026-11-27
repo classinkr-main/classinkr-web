@@ -512,7 +512,6 @@ function ThinkingIndicator({
         <motion.div
             initial={m({ opacity: 0, y: 10, scale: 0.96 }, shouldReduceMotion)}
             animate={m({ opacity: 1, y: 0, scale: 1 }, shouldReduceMotion)}
-            exit={m({ opacity: 0, y: -6, scale: 0.98 }, shouldReduceMotion)}
             transition={m(CHATBOT_MOTION.enter, shouldReduceMotion)}
             className="flex justify-start"
         >
@@ -774,11 +773,10 @@ export const MessageList = memo(function MessageList({
                         </motion.div>
                     )
                 })}
-
-                {isSending && !isStreaming ? (
-                    <ThinkingIndicator key="thinking" shouldReduceMotion={shouldReduceMotion} isSlow={isSlow} />
-                ) : null}
             </AnimatePresence>
+            {/* 기다림 말풍선은 AnimatePresence 밖에 둔다: 답 말풍선이 생기는 렌더에서 바로 빠져야 한다. 안에 두면 사라지는 효과가 끝난 뒤에도
+                보이지 않는 채 질문과 새 답 사이에 92px 자리를 잡고 있다가 다음 렌더에 빠져, 막 읽기 시작한 답 머리가 위로 미끄러졌다. */}
+            {isSending && !isStreaming ? <ThinkingIndicator shouldReduceMotion={shouldReduceMotion} isSlow={isSlow} /> : null}
             <div ref={bottomRef} />
         </div>
     )
