@@ -37,6 +37,35 @@ interface SendSmsRequest {
   testMode?: boolean
   /** 테스트 발송 대상 번호(testMode=true 시 필수). */
   testPhone?: string
+  /** 같은 문구·같은 대상을 방금 보냈어도 다시 보낸다(중복 발송 확인을 거친 뒤에만 true). */
+  force?: boolean
+}
+
+/** 같은 문구·같은 대상 태그의 발송이 이 시간 안에 있으면 force 없이는 다시 보내지 않는다. */
+const DUPLICATE_SEND_WINDOW_MS = 10 * 60 * 1000
+
+function sameTags(a: unknown, b: string[]) {
+  const left = Array.isArray(a) ? [...a].map(String).sort() : []
+  const right = [...b].sort()
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+/** 방금 나간 같은 발송을 찾는다 — 두 번 눌러 같은 문자가 전원에게 두 번 나가는 것을 막는다. 조회 실패는 던진다(확인 없이 보내지 않는다). */
+async function findRecentDuplicateSend(message: string, targetTags: string[]) {
+  const sb = createSupabaseAdminClient()
+  const since = new Date(Date.now() - DUPLICATE_SEND_WINDOW_MS).toISOString()
+  const { data, error } = await sb
+    .from("sms_campaigns")
+    .select("id, target_tags, status, created_at, sent_count")
+    .eq("message", message)
+    .in("status", ["sent", "partial"])
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(20)
+  if (error) throw new Error(`최근 발송 이력 조회 실패: ${error.message}`)
+  return ((data ?? []) as Array<{ id: string; target_tags: unknown; status: string; created_at: string; sent_count: number | null }>).find(
+    (row) => sameTags(row.target_tags, targetTags)
+  ) ?? null
 }
 
 /**
@@ -160,6 +189,28 @@ export async function POST(req: NextRequest) {
 
   // ── 실발송(lib/messaging 경유) ──────────────────────────────
   const trimmedMessage = message.trim()
+
+  // ── 중복 발송 확인(테스트 발송 제외) ─────────────────────────
+  if (!testMode && body.force !== true) {
+    let duplicate: Awaited<ReturnType<typeof findRecentDuplicateSend>>
+    try {
+      duplicate = await findRecentDuplicateSend(trimmedMessage, Array.isArray(targetTags) ? targetTags : [])
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : "최근 발송 이력 조회 실패" }, { status: 500 })
+    }
+    if (duplicate) {
+      const minutes = Math.max(1, Math.round((Date.now() - new Date(duplicate.created_at).getTime()) / 60000))
+      return NextResponse.json(
+        {
+          error: `같은 문구를 같은 대상에게 ${minutes}분 전에 보냈습니다(${duplicate.sent_count ?? 0}건). 다시 보내려면 확인 후 다시 요청해 주세요.`,
+          code: "recent_duplicate_send",
+          campaignId: duplicate.id,
+          sentCount: 0,
+        },
+        { status: 409 }
+      )
+    }
+  }
   const result = await sendSmsMessages({
     messages: recipientPhones.map((phone) => ({ to: phone, text: trimmedMessage })),
     context: { source: "sms-campaign", testMode },
