@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment } from "react"
+import { Fragment, type ReactNode } from "react"
 import Link from "next/link"
 import { ArrowUpRight } from "lucide-react"
 
@@ -185,10 +185,20 @@ export function LinkifiedText({
 
 // 복합 답의 번호 머리 줄("1. 주제", 고르는 규칙은 answer-heads.ts). 굵기만 바꾼다 — 색·크기·행간은 본문 그대로라
 // 바로 아래 결론 줄과 한 문단처럼 이어진다. 14px 600 은 라벨 자리에만 쓴다(DESIGN.md 굵기): 이 줄은 물음마다의 라벨이다.
-export function AnswerHeadLine({ text, onNavigate }: { text: string; onNavigate?: (click: ChatLinkClick) => void }) {
+// children 은 줄 끝에 붙는다(흐르는 중 머리 줄만 왔을 때의 커서).
+export function AnswerHeadLine({
+    text,
+    onNavigate,
+    children,
+}: {
+    text: string
+    onNavigate?: (click: ChatLinkClick) => void
+    children?: ReactNode
+}) {
     return (
         <p className="font-semibold" data-chat-answer-head="">
             <LinkifiedText text={text} onNavigate={onNavigate} />
+            {children}
         </p>
     )
 }

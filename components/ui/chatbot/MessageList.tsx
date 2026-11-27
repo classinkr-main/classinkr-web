@@ -214,8 +214,8 @@ const MessageContent = memo(function MessageContent({
 
     if (blocks.length === 0) return null
 
-    // 복합 답의 "1. 주제" 머리 줄(answer-heads.ts). 답 글에서만 찾는다.
-    const headBlocks = new Set(role === "assistant" ? findAnswerHeadBlocks(blocks) : [])
+    // 복합 답의 "1. 주제" 머리 줄(answer-heads.ts). 답 글에서만 찾는다. 흐르는 동안은 머리 줄만 온 끝 덩이도 머리로 본다(굵기가 깜빡이지 않게).
+    const headBlocks = new Set(role === "assistant" ? findAnswerHeadBlocks(blocks, { streaming: isStreaming }) : [])
 
     // 덩이 하나(줄 묶음)를 번호 목록·점 목록·리드 + 점 목록·문단 가운데 하나로 그린다.
     const renderLines = (lines: string[], showCaret: boolean, key?: number) => {
@@ -326,10 +326,14 @@ const MessageContent = memo(function MessageContent({
                 const showCaret = isStreaming && blockIndex === blocks.length - 1
                 if (!headBlocks.has(blockIndex)) return renderLines(lines, showCaret, blockIndex)
                 // 머리 줄 바로 아래 결론 줄·단계는 머리 없이 그릴 때와 같다. 첫 덩이가 아니면 물음 사이를 조금 띄운다.
+                // 흐르는 중 머리 줄만 온 덩이는 커서를 머리 줄 끝에 둔다(빈 문단을 미리 만들지 않는다).
+                const headOnly = lines.length === 1
                 return (
                     <div key={blockIndex} className={blockIndex > 0 ? "pt-1.5" : undefined}>
-                        <AnswerHeadLine text={lines[0]} onNavigate={onNavigate} />
-                        {renderLines(lines.slice(1), showCaret)}
+                        <AnswerHeadLine text={lines[0]} onNavigate={onNavigate}>
+                            {showCaret && headOnly ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
+                        </AnswerHeadLine>
+                        {headOnly ? null : renderLines(lines.slice(1), showCaret)}
                     </div>
                 )
             })}

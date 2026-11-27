@@ -85,6 +85,61 @@ describe("복합 답 번호 머리 고르기", () => {
     expect(heads("1) 녹화 켜기\n설정에서 켜요.\n\n2) 출석 확인\n기록에서 봐요.")).toEqual([])
   })
 
+  it("FAQ 제목을 주제로 둔 카드처럼 손님 물음 꼴(부정·바람·물음·고장 상태)로 끝나는 이름은 요체여도 머리다", () => {
+    for (const label of [
+      "로그인이 안 되거나 인증번호가 오지 않아요",
+      "교사 비활성화가 안 돼요",
+      "PC·태블릿 카메라가 수업에서 안 보여요",
+      "나중에 들어온 학생이 지난 수업 다시보기를 못 봐요",
+      "수업 녹화가 안 됐어요 / 녹화 파일이 없어요",
+      "닉네임을 바꾸고 싶어요",
+      "원격 지원을 받으려면 어떻게 하나요",
+      "전자칠판 터치·화면이 이상해요",
+      "수업 중 끊기거나 튕기거나 화면이 멈춰요",
+    ]) {
+      expect(isAnswerHeadLabel(label), label).toBe(true)
+    }
+    // 단계 줄의 요체 끝은 여전히 머리가 아니다('들어가요'·'안내해요'는 단계에도 온다).
+    for (const label of ["[설정]으로 들어가요", "학부모님께 안내해요", "[저장]을 눌러요", "받은 번호로 로그인해요", "녹화가 시작돼요"]) {
+      expect(isAnswerHeadLabel(label), label).toBe(false)
+    }
+    expect(
+      heads(
+        [
+          "1. 로그인이 안 되거나 인증번호가 오지 않아요\n휴대폰 번호는 맨 앞 0을 빼고 넣어 주세요.\n- 나라 번호 +82를 골라요.",
+          "2. 전자칠판 유선 인터넷이 연결되지 않아요\n랜선이 꽂힌 단자부터 봐요.",
+          CLOSING,
+        ].join("\n\n")
+      )
+    ).toEqual([0, 1])
+  })
+
+  it("흐르는 동안: 머리 줄만 온 끝 덩이도 머리로 세어, 앞 머리 굵기가 꺼졌다 켜지지 않는다", () => {
+    const full = "1. 카메라 연결\n전원을 확인해 주세요.\n- 랜선을 봐요\n\n2. 출석부 내려받기\n출석 화면에서 받아요.\n\n3. 요금 안내\n요금제 화면을 봐요.\n\n" + CLOSING
+    const series: number[][] = []
+    for (let at = 1; at <= full.length; at += 1) series.push(findAnswerHeadBlocks(splitAnswerBlocks(full.slice(0, at)), { streaming: at < full.length }))
+    // 한 번 머리로 센 덩이는 끝까지 머리다.
+    series.forEach((now, at) => {
+      if (at > 0) for (const block of series[at - 1]) expect(now, full.slice(0, at + 1)).toContain(block)
+    })
+    expect(series.at(-1)).toEqual([0, 1, 2])
+    // 둘째 머리 줄 첫 글자부터 앞 머리와 함께 센다. 셋째 머리가 '3. 요'까지만 와도 앞 머리는 그대로다.
+    const upTo = (tail: string) => full.slice(0, full.indexOf(tail) + tail.length)
+    expect(findAnswerHeadBlocks(splitAnswerBlocks(upTo("2. 출")), { streaming: true })).toEqual([0, 1])
+    expect(findAnswerHeadBlocks(splitAnswerBlocks(upTo("3. 요")), { streaming: true })).toEqual([0, 1, 2])
+    // 다 온 글에서는 머리 줄만 있는 덩이가 머리가 아니다(규칙 1).
+    expect(findAnswerHeadBlocks(splitAnswerBlocks(upTo("3. 요")))).toEqual([])
+    // 흐르는 동안에도 끝 덩이만 너그럽다: 머리 하나뿐·경로 기호·번호 건너뜀·앞 덩이가 단계면 세지 않는다.
+    expect(findAnswerHeadBlocks(splitAnswerBlocks("1. 카메라 연결\n전원을 봐요.\n\n2. 출"), { streaming: true })).toEqual([0, 1])
+    expect(findAnswerHeadBlocks(splitAnswerBlocks("1. 카메라 연결"), { streaming: true })).toEqual([])
+    expect(findAnswerHeadBlocks(splitAnswerBlocks("1. 카메라 연결\n전원을 봐요.\n\n2. [설정] → [수"), { streaming: true })).toEqual([])
+    expect(findAnswerHeadBlocks(splitAnswerBlocks("1. 카메라 연결\n전원을 봐요.\n\n3. 출"), { streaming: true })).toEqual([])
+    const steps = "앱부터 설치해요.\n\n1. 학생 앱을 설치해요\n앱스토어에서 찾아요.\n\n2. 로그인해요\n번호로 들어와요."
+    for (let at = 1; at <= steps.length; at += 1) {
+      expect(findAnswerHeadBlocks(splitAnswerBlocks(steps.slice(0, at)), { streaming: at < steps.length }), steps.slice(0, at)).toEqual([])
+    }
+  })
+
   it("이름 규칙: 짧은 명사구만 머리 이름이다", () => {
     for (const label of ["수업 중 학생 채팅 막기", "인증코드 안 올 때", "[학생 대리 등록] 옵션이 안 보일 때", "교실마다 다 볼 필요", "AI 카메라가 하는 일 개요", "첫 번째 질문", '"출석부를 엑셀로 받을 수 있나요"', "아이디가 맞는데도 수업이 안 보일 때:"]) {
       expect(isAnswerHeadLabel(label), label).toBe(true)
@@ -104,7 +159,7 @@ describe("복합 답 번호 머리 고르기", () => {
 })
 
 describe("복합 답 머리 그리기", () => {
-  const render = (content: string, role: ChatMessage["role"] = "assistant") =>
+  const render = (content: string, role: ChatMessage["role"] = "assistant", isStreaming = false) =>
     renderToStaticMarkup(
       <MessageList
         messages={[
@@ -112,8 +167,8 @@ describe("복합 답 머리 그리기", () => {
           { id: "a1", role, content, answerEventId: "e1", sessionId: "s1" },
         ]}
         sessionId="s1"
-        isSending={false}
-        isStreaming={false}
+        isSending={isStreaming}
+        isStreaming={isStreaming}
         isSlow={false}
         cooldownSeconds={0}
         shouldReduceMotion
@@ -140,6 +195,16 @@ describe("복합 답 머리 그리기", () => {
     expect(html).toMatch(/data-chat-answer-head="">2\. 녹화 파일 내려받기<\/p><div class="space-y-2"><p>녹화 파일은 수업 기록에서 내려받아요\.<\/p><ul/)
     // 굵기 말고 색·크기 클래스를 머리 줄에 더하지 않는다.
     expect(html).not.toMatch(/data-chat-answer-head=""[^>]*class=|class="[^"]*(?:text-|font-bold)[^"]*" data-chat-answer-head/)
+  })
+
+  it("흐르는 중 머리 줄만 온 끝 덩이는 굵게, 커서는 그 줄 끝에 둔다(빈 문단 없음)", () => {
+    const partial = "1. 수업 녹화 켜기\n녹화는 설정에서 켜요.\n\n2. 학생 출"
+    const html = render(partial, "assistant", true)
+    expect(html).toContain('<div><p class="font-semibold" data-chat-answer-head="">1. 수업 녹화 켜기</p>')
+    expect(html).toMatch(/<div class="pt-1\.5"><p class="font-semibold" data-chat-answer-head="">2\. 학생 출<span[^>]*aria-hidden="true"[^>]*><\/span><\/p><\/div>/)
+    expect(html).not.toContain("<p></p>")
+    // 다 온 글이면 머리 줄만 있는 덩이는 머리가 아니어서 굵게가 없다.
+    expect(render(partial)).not.toContain("data-chat-answer-head")
   })
 
   it("번호 단계 답·사용자 글에는 머리 굵게가 없다", () => {
