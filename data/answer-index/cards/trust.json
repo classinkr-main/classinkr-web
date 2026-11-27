@@ -174,7 +174,8 @@
       "휴대폰 번호 입력 형식(+82, 맨 앞 0 빼기) → doc:/docs/start/signup#2/phone-number-format",
       "가입 뒤 아이디를 이메일↔휴대폰 번호로 바꾸기 → doc:/docs/start/signup#2/id-type",
       "인증코드가 오지 않거나 가입이 막힐 때 → howto:signup-fail",
-      "가입한 개인정보를 어떤 기준으로 처리하는지 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis"
+      "가입한 개인정보를 어떤 기준으로 처리하는지 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis",
+      "학생 정보를 몇 년 보관하는지·삭제 → fixed:basics-student-data-retention"
     ],
     "negatives": [
       {
@@ -364,7 +365,8 @@
     "notCovers": [
       "녹화본 보관 기간·자동 삭제 → fixed:basics-recording-retention-period",
       "녹화 동의서 양식·동의 책임 → policy:recording-consent-form-liability",
-      "서버 위치 → policy:basics-data-server-location"
+      "서버 위치 → policy:basics-data-server-location",
+      "학생 정보를 몇 년 보관하는지·삭제 → fixed:basics-student-data-retention"
     ],
     "negatives": [
       {
@@ -558,7 +560,8 @@
     "notCovers": [
       "학부모가 따로 가입해야 하는지 → fixed:basics-parent-signup",
       "학생 개인정보 처리 기준 일반 → doc:/docs/start/pre-adoption-faq-22-questions#4/privacy-handling-basis",
-      "녹화 동의서·동의 책임 → policy:recording-consent-form-liability"
+      "녹화 동의서·동의 책임 → policy:recording-consent-form-liability",
+      "학생 정보를 몇 년 보관하는지·삭제 → fixed:basics-student-data-retention"
     ],
     "negatives": [
       {
@@ -621,7 +624,8 @@
     "notCovers": [
       "보안 인증 보유 현황 → fixed:security-certifications",
       "기관 보안 설정(2단계 인증·비밀번호) → fixed:security-policy-controls",
-      "SBOM·CVE 대응 → fixed:sbom-cve-policy"
+      "SBOM·CVE 대응 → fixed:sbom-cve-policy",
+      "학생 정보를 몇 년 보관하는지·삭제 → fixed:basics-student-data-retention"
     ],
     "negatives": [
       {
