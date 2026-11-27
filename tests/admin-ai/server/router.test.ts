@@ -1,9 +1,23 @@
 import { describe, expect, it } from "vitest"
 
-import { detectForm, routeMessage, routeSegment, splitSegments } from "@/lib/admin-ai/server/router"
+import { detectForm, isConsultationAsk, routeMessage, routeSegment, splitSegments } from "@/lib/admin-ai/server/router"
 
-import { INTENT_ASKS, INTENT_COMMANDS } from "../fixtures/intent-table"
-import { COMPOUND_QUESTIONS, DECOY_QUESTIONS, INFO_QUESTIONS } from "../fixtures/server-questions"
+import {
+  CONSULTATION_ASKS,
+  CONSULTATION_COMPOUND,
+  CONSULTATION_CRM_KEEP,
+  CONSULTATION_NOT,
+  INTENT_ASKS,
+  INTENT_COMMANDS,
+} from "../fixtures/intent-table"
+import {
+  COMPOUND_NO_COMMA,
+  COMPOUND_QUESTIONS,
+  DECOY_MORE,
+  DECOY_QUESTIONS,
+  INFO_QUESTIONS,
+  READ_RECALL,
+} from "../fixtures/server-questions"
 
 const DEMO_TO_WRITE: Record<string, string> = { sms: "send", amount: "amount", pay: "pay", ship: "ship", lead: "lead", task: "task" }
 
@@ -84,5 +98,95 @@ describe("정보 질문·복합 질문·미끼 낱말", () => {
     expect(splitSegments("입금 들어왔어. 결제 확정해 줘.")).toEqual(["입금 들어왔어 결제 확정해 줘"])
     expect(detectForm("결제 확정 취소할 수 있어")).toBe("question")
     expect(detectForm("견적 초안 만들어줘")).toBe("command")
+  })
+})
+
+describe("상담 내역 갈래 — 판정 표(새 문장 30개)", () => {
+  it("상담 내역을 찾는 말 20개는 한 조각, 상담 내역 갈래다(되묻기 없음)", () => {
+    expect(CONSULTATION_ASKS).toHaveLength(20)
+    for (const text of CONSULTATION_ASKS) {
+      const decisions = routeMessage(text)
+      expect(decisions, text).toHaveLength(1)
+      expect(decisions[0].branch, text).toBe("consultations")
+      expect(decisions[0].clarify, text).toBeUndefined()
+    }
+  })
+
+  it("상담 낱말이 있어도 정보·담당자·화면 질문 10개는 이 갈래가 아니다", () => {
+    expect(CONSULTATION_NOT).toHaveLength(10)
+    expect(CONSULTATION_ASKS.length + CONSULTATION_NOT.length).toBe(30)
+    for (const [text, branch] of CONSULTATION_NOT) {
+      expect(isConsultationAsk(text), text).toBe(false)
+      const decisions = routeMessage(text)
+      expect(decisions.map((d) => d.branch), text).toEqual([branch])
+    }
+  })
+
+  it("기존 판정 표의 어느 문장도 상담 내역 점수를 받지 않는다 — 기존 갈래·되묻기가 그대로다", () => {
+    const existing = [
+      ...INTENT_ASKS,
+      ...INTENT_COMMANDS.map(([text]) => text),
+      ...INFO_QUESTIONS,
+      ...COMPOUND_QUESTIONS.map(([text]) => text),
+      ...DECOY_QUESTIONS.map(([text]) => text),
+      ...COMPOUND_NO_COMMA.map(([text]) => text),
+      ...READ_RECALL.map(([text]) => text),
+      ...DECOY_MORE.map(([text]) => text),
+    ]
+    expect(existing.length).toBeGreaterThan(100)
+    for (const text of existing) {
+      for (const decision of routeMessage(text)) {
+        expect(decision.scores.consultations, `${text} / ${decision.text}`).toBe(0)
+        expect(decision.branch, text).not.toBe("consultations")
+      }
+    }
+  })
+
+  const branchOf = (decision: ReturnType<typeof routeSegment>) =>
+    decision.branch === "read" && decision.read
+      ? `read:${decision.read.kind === "tool" ? decision.read.tool : decision.read.topic}`
+      : decision.branch
+
+  it("CRM 상담 단계·일정 문장 — 상담이 다른 대상의 이름이면 옛 판정 그대로다", () => {
+    for (const [text, expected] of CONSULTATION_CRM_KEEP) {
+      expect(isConsultationAsk(text), text).toBe(false)
+      expect(routeMessage(text).map(branchOf), text).toEqual(expected)
+    }
+  })
+
+  it("복합 문장은 상담 내역 조각과 다른 조각을 둘 다 답한다", () => {
+    for (const [text, expected] of CONSULTATION_COMPOUND) {
+      expect(routeMessage(text).map(branchOf), text).toEqual(expected)
+    }
+  })
+
+  it("시키는 말은 상담 낱말이 있어도 쓰기다", () => {
+    expect(routeSegment("가나학원 상담 기록 남겨 줘").branch).toBe("write")
+  })
+})
+
+describe("묻는 어미 + 쉼표 끊기 — 뒤 조각이 제 대상을 가진 질문일 때만(반박 검토)", () => {
+  it("뒤에 대상 없는 청하는 말만 붙으면 한 조각이다", () => {
+    for (const text of ["환불 규정이 뭐야, 알려줘", "환불 규정 뭐야, 설명해줘", "재고 있어, 알려줘", "환불 정책이 뭐였지, 알려줘"]) {
+      expect(splitSegments(text), text).toHaveLength(1)
+      expect(routeMessage(text), text).toHaveLength(1)
+    }
+  })
+
+  it("뒤가 청하는 말이면 끊지 않는다 — 옛 판정 그대로 담당자 찾기 하나", () => {
+    const decisions = routeMessage("이거 뭐야, 담당자 알려줘")
+    expect(decisions.map((decision) => decision.branch)).toEqual(["contact"])
+  })
+
+  it("뒤가 서술이면 끊지 않는다 — 꼴이 서술로 남는다", () => {
+    const decisions = routeMessage("라이선스 있어, 연결이 안 돼요")
+    expect(splitSegments("라이선스 있어, 연결이 안 돼요")).toHaveLength(1)
+    expect(decisions).toHaveLength(1)
+    expect(decisions[0].form).toBe("statement")
+    expect(decisions[0].text).toContain("있어,")
+  })
+
+  it("뒤도 묻는 질문이면 끊는다", () => {
+    expect(splitSegments("가나학원 지난달 문의 뭐였지, 재고는 몇 대 남았어?")).toHaveLength(2)
   })
 })

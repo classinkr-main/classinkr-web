@@ -1984,5 +1984,62 @@
         "checked": "관련 문장 없음 확인"
       }
     ]
+  },
+  {
+    "id": "gap:pricing/cash-receipt",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "pricing",
+    "topic": "현금영수증 발급",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": "demo",
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [],
+    "anchors": [
+      "현금영수증",
+      "현금 영수증",
+      "현금영수증 발급"
+    ],
+    "covers": "결제 뒤 현금영수증을 발급받을 수 있는지와 받는 방법",
+    "notCovers": [
+      "세금계산서·영수증 처리는 결제 전에 상담 → doc:/docs/admin/billing-upgrade#1/invoice-before-pay",
+      "결제 증빙 일반 → policy:receipt-payment-proof"
+    ],
+    "negatives": [],
+    "handoff": "demo",
+    "status": "disabled",
+    "provenance": {
+      "unit": "R3-b",
+      "writer": "agent:r3-b",
+      "at": "2026-11-27",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "현금영수증",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "현금 영수증",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "현영",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
   }
 ]

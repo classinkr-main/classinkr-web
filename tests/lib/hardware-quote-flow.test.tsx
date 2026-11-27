@@ -1,11 +1,11 @@
-// 하드웨어 견적서 생성 흐름 검증 — 공급자 퀴드러닝(대표 조혜리 · 담당 배철웅, 내부 호칭 '배 대표님').
+// 하드웨어 견적서 생성 흐름 검증 — 공급자 퀴드러닝([대표] · 담당 [담당자 1], 내부 호칭 '배 대표님').
 //
 // 한 건의 HW 견적이 지나가는 길을 순서대로 확인한다.
 //  1. 템플릿·프리셋 → 품목 줄과 금액(정가 정본: 86" 630 · 75" 540 · T1 120 · 벽걸이/스탠드 50 · 녹화 세트 830/740만원)
 //  2. 공급자 블록(퀴드러닝 등록 정보) — 담당자만 바꿀 수 있다
 //  3. 저장 → 다시 읽기(공유 링크·내부 보기·PDF 경로)에서 금액·공급자가 그대로인지
 //  4. 고객 동의 후 오더(재고 품목) 변환
-//  5. C방식 총판용 견적서 — 공급자 = 회사, 수신 = 퀴드러닝(배철웅), 금액 = 원가
+//  5. C방식 총판용 견적서 — 공급자 = 회사, 수신 = 퀴드러닝([담당자 1]), 금액 = 원가
 // 정본 설명: docs/hardware-ops/distributor-settlement.md, docs/hardware-ops/quote-document-spec.md
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -49,10 +49,10 @@ const HW_TEMPLATE_IDS = STANDARD_QUOTE_TEMPLATES.map((template) => template.id).
 const QUIDLEARNING = {
   supplierBusinessName: "퀴드러닝",
   supplierBusinessRegistrationNumber: "170-07-03305",
-  supplierRepresentativeName: "조혜리",
+  supplierRepresentativeName: STANDARD_QUOTE_SUPPLIER.representativeName,
   supplierAddress: "경기도 오산시 독산성로 425, 1008호",
-  supplierContactName: "배철웅",
-  supplierContactPhone: "010-9238-5874",
+  supplierContactName: STANDARD_QUOTE_SUPPLIER.contactName,
+  supplierContactPhone: STANDARD_QUOTE_SUPPLIER.contactPhone,
 }
 
 /** 작성기가 하는 일과 같은 순서 — 프리셋으로 장을 짜고, 공급자·수신·조건을 합쳐 finalize 한다. */
@@ -195,10 +195,10 @@ describe("1. HW 템플릿·프리셋 → 품목과 금액", () => {
 })
 
 describe("2. 공급자 블록 — 퀴드러닝 등록 정보", () => {
-  it.each(HW_TEMPLATE_IDS)("%s 견적의 공급자는 퀴드러닝(대표 조혜리 · 담당 배철웅)이다", (templateId) => {
+  it.each(HW_TEMPLATE_IDS)("%s 견적의 공급자는 퀴드러닝([대표] · 담당 [담당자 1])이다", (templateId) => {
     const quote = composeHardwareQuote(templateId)
     expect(quote).toMatchObject(QUIDLEARNING)
-    expect(quote.footerContactText).toBe("배철웅/010-9238-5874")
+    expect(quote.footerContactText).toBe(`${STANDARD_QUOTE_SUPPLIER.contactName}/${STANDARD_QUOTE_SUPPLIER.contactPhone}`)
     expect(resolveQuoteProductLine({ templateId })).toBe("hardware")
   })
 
@@ -218,14 +218,14 @@ describe("2. 공급자 블록 — 퀴드러닝 등록 정보", () => {
     expect(quote).toMatchObject({
       supplierBusinessName: "퀴드러닝",
       supplierBusinessRegistrationNumber: "170-07-03305",
-      supplierRepresentativeName: "조혜리",
+      supplierRepresentativeName: STANDARD_QUOTE_SUPPLIER.representativeName,
       supplierContactName: "김영업",
       supplierContactPhone: "010-1111-2222",
       footerContactText: "김영업/010-1111-2222",
     })
   })
 
-  it("작성기는 하단 담당 문구를 실제 공급자·담당자로 다시 만든다(SW 견적에 배철웅이 남지 않게)", () => {
+  it("작성기는 하단 담당 문구를 실제 공급자·담당자로 다시 만든다(SW 견적에 [담당자 1]이 남지 않게)", () => {
     const composer = readFileSync(join(process.cwd(), "components/portal/quotes/QuickQuoteComposer.tsx"), "utf8")
     const compose = composer.split("function composeSheetQuote")[1].split("\n  }\n")[0]
     expect(compose).toContain("footerContactText: undefined")
@@ -234,15 +234,15 @@ describe("2. 공급자 블록 — 퀴드러닝 등록 정보", () => {
 
   it("고객 문서에 퀴드러닝 정보가 찍히고 클래스인 법인은 섞이지 않는다", () => {
     const html = renderToStaticMarkup(<QuoteDocumentPreview quote={composeHardwareQuote("recording_studio")} />)
-    for (const text of ["퀴드러닝", "170-07-03305", "조혜리", "배철웅", "010-9238-5874", "하드웨어 공급"]) {
+    for (const text of ["퀴드러닝", "170-07-03305", STANDARD_QUOTE_SUPPLIER.representativeName, STANDARD_QUOTE_SUPPLIER.contactName, STANDARD_QUOTE_SUPPLIER.contactPhone, "하드웨어 공급"]) {
       expect(html).toContain(text)
     }
     expect(html).not.toContain("이이오클래스인코리아")
   })
 
   it("견적 제목은 '고객명 + 템플릿 이름 + 견적서'다", () => {
-    expect(buildStandardQuoteTitle(composeHardwareQuote("recording_studio_75", { customer: "성남여고" }))).toBe(
-      '성남여고 올인원 녹화수업 세트 75" 견적서'
+    expect(buildStandardQuoteTitle(composeHardwareQuote("recording_studio_75", { customer: "[기관 A]" }))).toBe(
+      '[기관 A] 올인원 녹화수업 세트 75" 견적서'
     )
   })
 })
@@ -297,7 +297,7 @@ describe("5. C방식 총판용 견적서(배 대표님 · 퀴드러닝 앞)", ()
   const customer = composeHardwareQuote("recording_studio", {
     presetId: "recording_studio_installment",
     quantity: 2,
-    customer: "성남여고",
+    customer: "[기관 A]",
     vatIncluded: false,
     quoteDiscount: { mode: "rate", value: 10, label: "교육기관 할인" },
   })
@@ -320,32 +320,32 @@ describe("5. C방식 총판용 견적서(배 대표님 · 퀴드러닝 앞)", ()
     expect(getDistributorIssueBlocker({ lines, vatIncluded: true, distributorName: DEFAULT_HARDWARE_DISTRIBUTOR.distributorName })).toBeNull()
   })
 
-  it("총판 기본값은 퀴드러닝 · 배철웅이다", () => {
+  it("총판 기본값은 퀴드러닝 · [담당자 1]이다", () => {
     expect(DEFAULT_HARDWARE_DISTRIBUTOR).toMatchObject({
       distributorName: "퀴드러닝",
-      distributorContactName: "배철웅",
-      distributorPhone: "010-9238-5874",
+      distributorContactName: STANDARD_QUOTE_SUPPLIER.contactName,
+      distributorPhone: STANDARD_QUOTE_SUPPLIER.contactPhone,
     })
   })
 
-  it("공급자 = 회사(클래스인), 수신 = 퀴드러닝(대표 조혜리), 참조 = 배철웅, 고객사는 본문 첫 문장", () => {
-    // 2026-11-20 결정: 총판 견적서 수신 담당 칸은 대표 조혜리, 참조는 배철웅.
-    const details = buildDistributorQuoteDetails(customer, settlementFor(customer, lines), { customerName: "성남여고" })
+  it("공급자 = 회사(클래스인), 수신 = 퀴드러닝([대표]), 참조 = [담당자 1], 고객사는 본문 첫 문장", () => {
+    // 2026-11-20 결정: 총판 견적서 수신 담당 칸은 [대표], 참조는 [담당자 1].
+    const details = buildDistributorQuoteDetails(customer, settlementFor(customer, lines), { customerName: "[기관 A]" })
     expect(details).toMatchObject({
       supplierBusinessName: "이이오클래스인코리아 유한회사",
       recipientCompanyName: "퀴드러닝",
-      recipientContactName: "조혜리",
-      recipientPhone: "010-9238-5874",
-      referenceName: "배철웅",
-      subjectText: "고객사 성남여고 건으로 아래와 같이 견적서를 제출합니다.",
+      recipientContactName: STANDARD_QUOTE_SUPPLIER.representativeName,
+      recipientPhone: STANDARD_QUOTE_SUPPLIER.contactPhone,
+      referenceName: STANDARD_QUOTE_SUPPLIER.contactName,
+      subjectText: "고객사 [기관 A] 건으로 아래와 같이 견적서를 제출합니다.",
     })
     const html = renderToStaticMarkup(<QuoteDocumentPreview quote={details} />)
-    expect(html).toContain("고객사 성남여고 건으로")
+    expect(html).toContain("고객사 [기관 A] 건으로")
   })
 
   it("문서 총액 = 정산 합계(입금 요청 금액) — 고객 할인·할부 조건·고객 단가가 섞이지 않는다", () => {
     const settlement = settlementFor(customer, lines)
-    const details = buildDistributorQuoteDetails(customer, settlement, { customerName: "성남여고" })
+    const details = buildDistributorQuoteDetails(customer, settlement, { customerName: "[기관 A]" })
     const totals = computeDistributorTotals(lines, settlement.vatIncluded)
 
     expect(details.discountAmount).toBe(0)

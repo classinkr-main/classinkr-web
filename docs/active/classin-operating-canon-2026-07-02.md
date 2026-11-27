@@ -330,7 +330,7 @@ Notion 구조 × Apple 공백 × Classin Green.
 
 1. 검증 게이트 통과. 2. **어드민 API = `verifyAdmin()` 가드 + `createSupabaseAdminClient()`(service-role, RLS 우회)** — server 클라이언트를 어드민 경로에 쓰면 `auth.uid()=null` → RLS false → 빈 배열 무음 반환. 3. 마이그레이션 규율: 컬럼 추가 시 `supabase/migrations/YYYYMMDD_*.sql`(`ADD COLUMN IF NOT EXISTS`) 동반+적용, 누락 시 INSERT 무음 실패. 4. 동의·PII: 마케팅 픽셀은 `consent.marketing` 없이 발화 금지, 내부 이벤트는 allowlist+PII redaction, raw IP는 sha256만. 5. 노션 캘린더=라이브 읽기전용. 6. 포지셔닝 SSOT(`lib/classin-positioning.ts`), 가격·기관수 단정 금지→상담. 7. UI는 DESIGN.md 팔레트만.
 
-**어드민 인증:** 3중(dev bypass / 레거시 HMAC 쿠키 / Supabase `admin_profiles.status=ACTIVE`) → `verifyAdmin()` → admin Supabase 클라이언트 → `lib/repositories`. bypass는 dev+non-Vercel 한정. 권한 캐시 60초 TTL. 계정=`ADMIN_USERS`/`ADMIN_PASSWORD` 환경변수(`/admin/users`는 읽기전용). 2026-07-02 감사: 178개 라우트 전수 가드 존재(무가드는 의도적 공개 auth 2개). 단 심층방어 부재로 라우트 1개 실수=전체 노출 리스크.
+**어드민 인증:** 3중(dev bypass / 레거시 HMAC 쿠키 / Supabase `admin_profiles.status=ACTIVE`) → `verifyAdmin()` → admin Supabase 클라이언트 → `lib/repositories`. bypass는 dev+non-Vercel 한정. 권한 캐시 TTL: 어드민 API 컨텍스트 15초(`lib/admin-auth.ts`, 2026-11-25 60초에서 줄임), 페이지 진입(`proxy.ts`)·셸 세션 60초. 계정=`ADMIN_USERS`/`ADMIN_PASSWORD` 환경변수(`/admin/users`는 읽기전용). 2026-07-02 감사: 178개 라우트 전수 가드 존재(무가드는 의도적 공개 auth 2개). 단 심층방어 부재로 라우트 1개 실수=전체 노출 리스크.
 
 ### 반복 함정 (gotchas)
 

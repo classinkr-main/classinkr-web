@@ -11,6 +11,7 @@ import { createHash } from "crypto"
 
 import {
   CRM_STAFF_ADMIN_API_ROLES,
+  CS_COPILOT_API_ROLES,
   HARDWARE_EDITOR_ADMIN_API_ROLES,
   STAFF_ADMIN_API_ROLES,
   hasAdminApiRole,
@@ -51,6 +52,11 @@ export function staffScopes(admin: Pick<VerifiedAdminContext, "role">): OpsScope
 
 export function staffActor(admin: StaffIdentity): OpsActor {
   return { name: `galmae-${staffKey(admin)}`, scopes: staffScopes(admin), legacy: false }
+}
+
+/** 상담 내역 찾기에서 상담 글(누가·요지)을 볼 수 있는 역할 — 내부 CS 코파일럿 API 와 같은 역할 상수. 아니면 건수만. */
+export function canReadConsultationContent(admin: Pick<VerifiedAdminContext, "role">): boolean {
+  return hasAdminApiRole(admin.role, CS_COPILOT_API_ROLES)
 }
 
 export function canUseWriteTool(admin: Pick<VerifiedAdminContext, "role">, mcpName: string): boolean {

@@ -106,7 +106,7 @@ describe("조율기 — 정보 질문", () => {
     if (answer.kind !== "answer") return
     const consultation = answer.card.sources.filter((s) => s.kind === "consultation")
     expect(consultation).toHaveLength(1)
-    expect(consultation[0].title).toBe("비슷한 상담 사례 3건")
+    expect(consultation[0].title).toBe("관련 상담 3건")
     expect(consultation[0].externalUse).toBe(false)
   })
 

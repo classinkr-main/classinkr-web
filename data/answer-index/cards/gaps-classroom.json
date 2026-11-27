@@ -100,8 +100,7 @@
     ],
     "covers": "태블릿으로 수업할 때 전용 펜이 꼭 필요한지는 공개 문서에 없다는 것(전자칠판 펜은 장비 설명에 있음)",
     "notCovers": [
-      "전자칠판에서 펜·손가락 필기 → hardware/board-writing-touch",
-      "태블릿·전자칠판에서 AI 칠판 풀이 쓰기 → updates/classin-ai-blackboard-609#2/tablet-pen",
+      "전자칠판에서 펜·손가락 필기 → doc:/docs/hardware/board-writing-touch#1/multi-user-writing",
       "AI 칠판 문항 풀이를 태블릿·전자칠판에서 펜으로 쓰기 → doc:/docs/updates/classin-ai-blackboard-609#2/tablet-pen"
     ],
     "negatives": [
@@ -1596,5 +1595,166 @@
       "at": "2026-11-20",
       "legacyIds": []
     }
+  },
+  {
+    "id": "gap:classroom/onstage-one-to-one-camera",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "classroom",
+    "topic": "온스테이지 1:1 수업에서 카메라가 보이는 방식",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto",
+      "symptom"
+    ],
+    "concepts": [
+      "C_onstage",
+      "C_camera",
+      "C_one_to_one_camera"
+    ],
+    "anchors": [
+      "1대1 수업",
+      "일대일 수업",
+      "1대1 카메라",
+      "상대 카메라",
+      "온스테이지 1대1",
+      "카메라 한 명만"
+    ],
+    "covers": "온스테이지로 1:1 수업을 할 때 두 사람의 카메라가 서로 어떻게 보이는지, 한쪽 카메라만 켜질 때의 원인은 공개 안내에 없다는 것",
+    "notCovers": [
+      "학생을 스테이지에 올리는 방법 → doc:/docs/software/classroom-tools#5/onstage-basics",
+      "온스테이지 인원 설정 → doc:/docs/teacher/course-units#4/onstage-count",
+      "학생 목소리만 안 들릴 때 → doc:/docs/start/camera-mic-troubleshooting#5/cam-student-voice"
+    ],
+    "negatives": [
+      {
+        "q": "학생을 스테이지에 올리는 방법이 뭐예요",
+        "route": "doc:/docs/software/classroom-tools#5/onstage-basics"
+      },
+      {
+        "q": "온스테이지 인원수는 어디서 설정하나요",
+        "route": "doc:/docs/teacher/course-units#4/onstage-count"
+      },
+      {
+        "q": "원격 수강생 쪽 소리 문제를 강사가 점검하는 순서가 궁금해요",
+        "route": "doc:/docs/start/camera-mic-troubleshooting#5/cam-student-voice"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "1대1",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "일대일",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "상대 카메라",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "카메라 한 명",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
+  },
+  {
+    "id": "gap:classroom/sgf-multiple-open",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "classroom",
+    "topic": "수업자료 sgf 파일을 두 개 동시에 열기",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "yesno",
+      "howto"
+    ],
+    "concepts": [
+      "C_sgf_file"
+    ],
+    "anchors": [
+      "sgf 파일",
+      "sgf 두 개",
+      "바둑 기보 파일",
+      "기보 동시에",
+      "수업자료 파일 두 개",
+      "파일 동시에 열기"
+    ],
+    "covers": "sgf 같은 수업자료 파일을 한 화면에 두 개 이상 동시에 여는 방법과 가능 여부는 공개 안내에 없다는 것",
+    "notCovers": [
+      "드라이브에 올릴 수 있는 파일 형식 → doc:/docs/teacher/drive-materials#1/file-types",
+      "저장해 둔 판서·내 컴퓨터 파일을 칠판에 불러오기 → doc:/docs/teacher/drive-materials#2/open-board",
+      "칠판 확대·축소와 화면 이동 → gap:classroom/board-zoom"
+    ],
+    "negatives": [
+      {
+        "q": "드라이브에 올릴 수 있는 파일 형식이 뭐예요",
+        "route": "doc:/docs/teacher/drive-materials#1/file-types"
+      },
+      {
+        "q": "저장해 둔 판서를 칠판에 불러오는 방법",
+        "route": "doc:/docs/teacher/drive-materials#2/open-board"
+      },
+      {
+        "q": "칠판을 확대하고 화면을 옮기고 싶어요",
+        "route": "gap:classroom/board-zoom"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "sgf",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "기보",
+        "units": 12,
+        "site": 0,
+        "checked": "해당 방법 설명 없음 확인(관련 문장은 다른 주제)"
+      },
+      {
+        "query": "동시에 열",
+        "units": 2,
+        "site": 0,
+        "checked": "해당 방법 설명 없음 확인(관련 문장은 다른 주제)"
+      }
+    ]
   }
 ]

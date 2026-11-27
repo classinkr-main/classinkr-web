@@ -4,20 +4,26 @@
  * bodyHtml 이미지 보강). 이렇게 들어온 문서는 챗봇 RAG와 관리자 가이드가 함께 참조한다.
  *
  * 기본 동작(전수 크롤):
- *   - 내용이 있는 모든 문서를 받는다(채널 draft 포함). 빈 "작성중" 스텁과 테스트/샘플 페이지는 제외.
+ *   - 채널에서 published 인 글만 받는다. 빈 "작성중" 스텁과 테스트/샘플 페이지는 제외.
+ *   - 초안·비공개 글은 --include-drafts 를 줄 때만 받고, 그때도 visibility internal + noindex true 로 넣는다
+ *     (공개 챗봇 검색은 public·unlisted 를 읽으므로 unlisted 도 공개와 같다).
+ *   - 본문의 내부 블록("게시 전 확인(내부용)" 같은 머리)은 published 글이라도 빼고 경고한다
+ *     (규칙: scripts/lib/channel-documents-sync-policy.ts).
  *   - 채널톡 Documents 자체 메타글과 짧은 중복 스텁은 제외한다.
  *   - 원문 URL은 metadata에만 보존하고 본문 청크에는 넣지 않아 자체 운영 자료처럼 검색되게 한다.
- *   - 채널에서 published 인 글만 visibility 를 --public 으로 공개 승격할 수 있고, draft 는 항상 unlisted.
+ *   - 채널 published 글만 --public 으로 공개 승격할 수 있다(기본 unlisted).
  *   - 전수 크롤 시, 이번 세트에 없는 과거 자동 동기화 문서는 archived 로 reconcile(수기 편집본 제외).
+ *     기본 실행에서 고르지 않은 초안의 기존 행은 건드리지 않는다(--include-drafts 로 다시 넣으면 internal 로 바뀐다).
  *
  * Usage:
  *   npx tsx scripts/sync-channel-documents.ts --dry-run            # 미리보기(쓰기 없음)
  *   npx tsx scripts/sync-channel-documents.ts --dry-run --dump     # 추출 마크다운 전문 출력
- *   npx tsx scripts/sync-channel-documents.ts                      # 전수 크롤 + reconcile
- *   npx tsx scripts/sync-channel-documents.ts --published-only     # 채널 published 상태만
+ *   npx tsx scripts/sync-channel-documents.ts                      # published 전수 크롤 + reconcile
+ *   npx tsx scripts/sync-channel-documents.ts --include-drafts     # 초안까지(초안은 internal·noindex)
  *   npx tsx scripts/sync-channel-documents.ts --public             # published 글을 공개 문서로
- *   npx tsx scripts/sync-channel-documents.ts --ids 44553,701155   # 특정 문서만(reconcile 안 함)
+ *   npx tsx scripts/sync-channel-documents.ts --ids 44553,701155   # 특정 문서만(reconcile 안 함, 초안은 --include-drafts 때만)
  *   npx tsx scripts/sync-channel-documents.ts --strict             # fetch 실패 시 중단
+ *   (--published-only 는 기본값이라 받아만 둔다)
  *
  * 채널의 desk.channel.io knowledge URL 숫자 ID 는 Desk 내부 ID 라 Documents Open API ID 와
  * 다를 수 있다. --ids 는 Documents Open API 가 돌려준 ID 로만 사용한다.
@@ -36,6 +42,20 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
 import { createClient } from "@supabase/supabase-js"
+
+import {
+  channelDocumentSlug,
+  hasInternalTerm,
+  isInternalLabelLine,
+  isPublishedState,
+  parseSyncSelectionArgs,
+  planStaleArchive,
+  resolveDocVisibility,
+  selectArticlesForSync,
+  stripInternalBlocks,
+  type DocsVisibility,
+  type SyncSelectionOptions,
+} from "./lib/channel-documents-sync-policy"
 
 const DOCUMENT_API_BASE = "https://document-api.channel.io/open/v1"
 const DEFAULT_LANGUAGE = "ko"
@@ -58,7 +78,6 @@ const EXCLUDED_ARTICLE_IDS = new Map([
 ])
 
 type DocsStatus = "draft" | "review" | "published" | "archived"
-type DocsVisibility = "public" | "unlisted" | "internal"
 
 interface ChannelArticle {
   id?: string
@@ -101,6 +120,10 @@ interface NormalizedChannelDocument {
   channelState: string | null
   updatedAt: string
   publishedAt: string | null
+  visibility: DocsVisibility
+  noindex: boolean
+  /** 본문에서 뺀 내부 블록 수(경고용). */
+  internalBlocksRemoved: number
 }
 
 interface ArticleIdentity {
@@ -163,8 +186,16 @@ const args = process.argv.slice(2)
 const dryRun = args.includes("--dry-run")
 const skipChunks = args.includes("--skip-chunks")
 const strictFetch = args.includes("--strict")
-// 기본은 unlisted(챗봇 RAG + 관리자 가이드에서 사용, 공개 색인 제외). --public 으로 공개 문서로 승격.
-const DOC_VISIBILITY: DocsVisibility = args.includes("--public") ? "public" : "unlisted"
+// published 글은 기본 unlisted(챗봇 RAG + 관리자 가이드에서 사용, 공개 색인 제외), --public 으로 공개 문서로 승격.
+// 초안·비공개 글은 --include-drafts 때만 받고 늘 internal + noindex.
+const selection: SyncSelectionOptions = (() => {
+  try {
+    return parseSyncSelectionArgs(args)
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error)
+    process.exit(1)
+  }
+})()
 
 function argValue(name: string): string | undefined {
   const index = args.indexOf(name)
@@ -547,7 +578,22 @@ function mediaKey(src: string): string {
   return match ? match[1].toLowerCase() : src.trim()
 }
 
-function getArticleBodyMarkdown(article: ChannelArticle) {
+interface ArticleBody {
+  markdown: string
+  /** 뺀 내부 블록 수. */
+  internalBlocksRemoved: number
+  /** 머리 꼴이 아니라 빼지 않았지만 내부 표시 낱말이 남은 줄 수. */
+  internalResidualMentions: number
+}
+
+/** 요약·부제 — 내부 표시 낱말이 든 값은 쓰지 않는다(설명·빈 본문 대체에 실리지 않게). */
+function publicSummaryParts(article: ChannelArticle) {
+  return [article.summary, article.subtitle].filter(
+    (value): value is string => typeof value === "string" && Boolean(value.trim()) && !hasInternalTerm(value)
+  )
+}
+
+function getArticleBody(article: ChannelArticle): ArticleBody {
   // 구조화된 body 블록을 우선 사용한다(이미지 alt·표·파일·콜아웃을 정확히 보존).
   let body = blocksToMarkdown(article.body).trim()
 
@@ -555,8 +601,13 @@ function getArticleBodyMarkdown(article: ChannelArticle) {
     body = htmlToMarkdown(article.bodyHtml)
   }
 
+  // 내부 블록("게시 전 확인(내부용)" 같은 머리)을 published 글이라도 뺀다.
+  const scan = stripInternalBlocks(body)
+  body = scan.markdown
+
   // 블록에서 누락된 bodyHtml '콘텐츠' 이미지를 보강 — 이모지/아이콘 자산은 제외(노이즈).
-  if (typeof article.bodyHtml === "string" && article.bodyHtml.includes("<img")) {
+  // 내부 블록을 뺀 글은 그 이미지가 어느 절에 있었는지 알 수 없어 보강하지 않는다.
+  if (scan.removedBlocks === 0 && typeof article.bodyHtml === "string" && article.bodyHtml.includes("<img")) {
     const present = new Set([...body.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map((m) => mediaKey(m[1])))
     const missing: string[] = []
     for (const match of article.bodyHtml.matchAll(/<img\b[^>]*?\bsrc=["']([^"']+)["']/gi)) {
@@ -575,8 +626,9 @@ function getArticleBodyMarkdown(article: ChannelArticle) {
   // 인접한 굵게 런이 만든 빈 강조(****)를 정리한다.
   body = body.replace(/\*\*\*\*/g, "").trim()
 
-  if (body) return body
-  return [article.summary, article.subtitle].filter(Boolean).join("\n\n").trim()
+  const result = { internalBlocksRemoved: scan.removedBlocks, internalResidualMentions: scan.residualMentions }
+  if (body) return { markdown: body, ...result }
+  return { markdown: publicSummaryParts(article).join("\n\n").trim(), ...result }
 }
 
 function markdownToSections(markdown: string) {
@@ -634,17 +686,28 @@ function deriveTitle(rawTitle: string, bodyMarkdown: string): string {
   return title
 }
 
-function normalizeChannelArticle(articleId: string, article: ChannelArticle): NormalizedChannelDocument {
-  const bodyMarkdown = getArticleBodyMarkdown(article)
+function normalizeChannelArticle(
+  articleId: string,
+  article: ChannelArticle,
+  body: ArticleBody = getArticleBody(article)
+): NormalizedChannelDocument {
+  const bodyMarkdown = body.markdown
   const rawTitle = article.title?.trim() || article.name?.trim() || `Channel Talk 지식 문서 ${articleId}`
   const title = deriveTitle(rawTitle, bodyMarkdown)
-  const description = compactText(article.summary || article.subtitle || bodyMarkdown || title)
+  // 제목 자체가 내부 표시("[내부용] …")면 글 전체가 내부 자료다 — published 라도 internal 로 넣는다.
+  const internalOnly = isInternalLabelLine(rawTitle) || isInternalLabelLine(title)
+  const { visibility, noindex } = resolveDocVisibility({
+    channelState: article.state ?? null,
+    publicRequested: selection.publicRequested,
+    internalOnly,
+  })
+  const description = compactText(publicSummaryParts(article)[0] || bodyMarkdown || title)
   const updatedAt = toIso(article.updatedAt)
   const publishedAt = typeof article.publishedAt === "number" ? toIso(article.publishedAt) : null
   const sourceUrl =
     article.website?.url ||
     `https://desk.channel.io/#/channels/103209/alf-customer/knowledge/document/${articleId}`
-  const slug = `channel-talk-document-${articleId}`
+  const slug = channelDocumentSlug(articleId)
   // 제목 토큰을 키워드로 풀어 키워드 폴백 검색이 제품 용어(수업/코스/성적 등)에 걸리게 한다.
   const titleTokens = title
     .split(/[\s&·,/()[\]]+/)
@@ -698,6 +761,7 @@ function normalizeChannelArticle(articleId: string, article: ChannelArticle): No
       fetchedAt: new Date().toISOString(),
       updatedAt,
       publishedAt,
+      internalBlocksRemoved: body.internalBlocksRemoved,
       sections,
     },
     tags,
@@ -705,6 +769,9 @@ function normalizeChannelArticle(articleId: string, article: ChannelArticle): No
     channelState: article.state ?? null,
     updatedAt,
     publishedAt,
+    visibility,
+    noindex,
+    internalBlocksRemoved: body.internalBlocksRemoved,
   }
 }
 
@@ -719,9 +786,9 @@ function buildArticleRow(doc: NormalizedChannelDocument, index: number): Article
     doc_type: "guide",
     difficulty: "intermediate",
     status: "published",
-    // 채널에서 published 인 글만 --public 으로 공개 승격 가능. draft/unpublished 는 항상 unlisted.
-    visibility: doc.channelState === "published" ? DOC_VISIBILITY : "unlisted",
-    noindex: false,
+    // 채널 published 글만 unlisted(--public 이면 public). 초안·비공개·내부 표시 글은 internal + noindex(policy).
+    visibility: doc.visibility,
+    noindex: doc.noindex,
     featured: false,
     order_index: 3500 + index,
     tags: doc.tags,
@@ -795,6 +862,9 @@ function buildChunkRows(
       tags: doc.tags,
       keywords: doc.keywords,
       chunkType: index === 0 ? "summary" : "section",
+      channelDocumentState: doc.channelState,
+      // 검색 RPC 는 문서 visibility 를 돌려주지 않아 청크 metadata 로 내부 문서를 가린다(lib/chatbot/service.ts resolveMatchChunkVisibility).
+      ...(doc.visibility === "internal" ? { visibility: "internal" } : {}),
     },
     embedding_model: null,
     embedding: null,
@@ -826,7 +896,23 @@ async function fetchTargetDocuments(articleIds: string[], language: string) {
     try {
       const article = await fetchChannelArticle(articleId, language)
       const title = article.title?.trim() || article.name?.trim() || articleId
-      const bodyMarkdown = getArticleBodyMarkdown(article).trim()
+      // 받은 글의 상태로 한 번 더 거른다(--ids 지정·목록 뒤 상태 변경). 초안은 --include-drafts 때만.
+      if (!selection.includeDrafts && !isPublishedState(article.state)) {
+        console.warn(`[channel-docs] skipped ${articleId} (채널 상태 ${article.state ?? "없음"} — 초안은 --include-drafts 때만 internal 로 넣는다)`)
+        continue
+      }
+      const body = getArticleBody(article)
+      if (body.internalBlocksRemoved > 0) {
+        console.warn(
+          `[channel-docs] warning ${articleId}: 내부 블록 ${body.internalBlocksRemoved}개를 본문에서 뺐다("${title}") — 채널 글에서 내부 블록을 지워 주세요.`
+        )
+      }
+      if (body.internalResidualMentions > 0) {
+        console.warn(
+          `[channel-docs] warning ${articleId}: 머리 꼴이 아닌 내부 표시 낱말 ${body.internalResidualMentions}줄이 남았다("${title}") — --dry-run --dump 로 확인하세요.`
+        )
+      }
+      const bodyMarkdown = body.markdown.trim()
       if (bodyMarkdown.length < MIN_BODY_CHARS) {
         console.warn(`[channel-docs] skipped ${articleId} (작성중/빈 본문: "${title}")`)
         continue
@@ -836,7 +922,7 @@ async function fetchTargetDocuments(articleIds: string[], language: string) {
         console.warn(`[channel-docs] skipped ${articleId} (테스트/샘플 페이지: "${title}")`)
         continue
       }
-      documents.push(normalizeChannelArticle(articleId, article))
+      documents.push(normalizeChannelArticle(articleId, article, body))
     } catch (error) {
       if (strictFetch) throw error
       fetchFailures += 1
@@ -849,7 +935,11 @@ async function fetchTargetDocuments(articleIds: string[], language: string) {
   return { documents, fetchFailures }
 }
 
-async function syncToSupabase(documents: NormalizedChannelDocument[], reconcile: boolean) {
+async function syncToSupabase(
+  documents: NormalizedChannelDocument[],
+  reconcile: boolean,
+  protectedSlugs: ReadonlySet<string>
+) {
   const { url, serviceRoleKey } = getSupabaseEnv()
   const supabase = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -964,7 +1054,9 @@ async function syncToSupabase(documents: NormalizedChannelDocument[], reconcile:
 
   // 정합성 reconcile — 전수 크롤 시, 이번 세트에 없는 과거 자동 동기화 문서(삭제·비공개·빈 스텁 등)를
   // archived 로 내려 챗봇 RAG/문서센터에서 제외하고 그 청크를 정리한다. 관리자 수기 편집본은 건드리지 않는다.
+  // 기본(published 만) 실행에서 고르지 않은 초안의 기존 행(protectedSlugs)은 그대로 둔다.
   let archivedStale = 0
+  let keptUnselected = 0
   if (reconcile) {
     const currentSlugs = new Set(rows.map((row) => row.slug))
     const { data: managedRows, error: managedError } = await supabase
@@ -976,9 +1068,13 @@ async function syncToSupabase(documents: NormalizedChannelDocument[], reconcile:
       .neq("status", "archived")
     if (managedError) throw managedError
 
-    const staleIds = ((managedRows ?? []) as Array<{ id: string; slug: string }>)
-      .filter((row) => !currentSlugs.has(row.slug))
-      .map((row) => row.id)
+    const plan = planStaleArchive({
+      managed: (managedRows ?? []) as Array<{ id: string; slug: string }>,
+      currentSlugs,
+      protectedSlugs,
+    })
+    const staleIds = plan.archiveIds
+    keptUnselected = plan.keptUnselected
 
     if (staleIds.length > 0) {
       const { error: deleteStaleChunksError } = await supabase
@@ -1007,6 +1103,7 @@ async function syncToSupabase(documents: NormalizedChannelDocument[], reconcile:
     insertedVersions,
     chunkCount,
     archivedStale,
+    keptUnselected,
   }
 }
 
@@ -1015,9 +1112,8 @@ async function main() {
 
   const language = argValue("--language") ?? DEFAULT_LANGUAGE
   const idsArg = argValue("--ids")
-  // 기본은 내용이 있는 모든 문서(초안 포함)를 크롤 — 빈 스텁/테스트는 fetch 단계에서 제외.
-  // --published-only 로 채널에서 published 상태인 글만 좁힐 수 있다.
-  const publishedOnly = args.includes("--published-only")
+  // 기본은 채널 published 글만. --include-drafts 면 초안·비공개 글까지(그 글은 internal + noindex).
+  // 빈 스텁/테스트는 fetch 단계에서 제외.
 
   let ids = (idsArg ?? "")
     .split(",")
@@ -1027,16 +1123,28 @@ async function main() {
   // 특정 id 지정이 없을 때만 전수 크롤 + 정합성 reconcile 을 수행한다.
   const fullCrawl = ids.length === 0
 
+  // 기본 실행에서 고르지 않은 초안 — reconcile 이 기존 행을 archive 하지 않게 지킨다.
+  let protectedSlugs = new Set<string>()
+
   if (fullCrawl) {
     // Documents Open API의 state 쿼리 파라미터는 신뢰할 수 없어(draft까지 반환) 전체를 받아 클라이언트에서 거른다.
     const articles = await listChannelArticles(language, undefined)
-    const selected = publishedOnly
-      ? articles.filter((article) => (article.state ?? "") === "published")
-      : articles
+    const { selected, notSelected } = selectArticlesForSync(articles, selection)
     ids = unique(selected.map((article) => article.id ?? ""))
-    console.log(
-      `[channel-docs] listed ${articles.length} article(s); selected ${ids.length} (${publishedOnly ? "published only" : "all states, content-bearing"})`
+    const selectedIds = new Set(ids)
+    protectedSlugs = new Set(
+      unique(notSelected.map((article) => article.id ?? ""))
+        .filter((id) => !selectedIds.has(id))
+        .map(channelDocumentSlug)
     )
+    console.log(
+      `[channel-docs] listed ${articles.length} article(s); selected ${ids.length} (${selection.includeDrafts ? "drafts included as internal" : "published only"})`
+    )
+    if (notSelected.length > 0) {
+      console.log(
+        `[channel-docs] published 가 아닌 글 ${notSelected.length}건은 고르지 않았다 — 이미 들어간 행은 그대로 둔다(--include-drafts 로 다시 넣으면 internal·noindex 로 바뀐다).`
+      )
+    }
   }
 
   if (ids.length === 0) throw new Error("No article IDs provided.")
@@ -1044,7 +1152,7 @@ async function main() {
   const { documents, fetchFailures } = await fetchTargetDocuments(ids, language)
   console.log(`[channel-docs] fetched ${documents.length} document(s)`)
   for (const doc of documents) {
-    console.log(`- ${doc.articleId}: ${doc.title} (${doc.contentMarkdown.length} chars)`)
+    console.log(`- ${doc.articleId}: ${doc.title} (${doc.contentMarkdown.length} chars, ${doc.visibility}${doc.noindex ? ", noindex" : ""})`)
   }
 
   if (dryRun) {
@@ -1068,12 +1176,13 @@ async function main() {
     )
   }
 
-  const result = await syncToSupabase(documents, reconcile)
+  const result = await syncToSupabase(documents, reconcile, protectedSlugs)
   console.log("[channel-docs] sync complete")
   console.log(`- articles: ${result.articleCount}`)
   console.log(`- versions: ${result.insertedVersions}`)
   console.log(`- chunks: ${result.chunkCount}`)
   console.log(`- archived stale: ${result.archivedStale}`)
+  if (result.keptUnselected > 0) console.log(`- kept (not selected, untouched): ${result.keptUnselected}`)
   console.log("[channel-docs] next: run scripts/embed-docs-chunks.ts to backfill embeddings.")
 }
 

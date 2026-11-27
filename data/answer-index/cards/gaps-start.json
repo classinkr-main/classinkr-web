@@ -2006,5 +2006,89 @@
       "at": "2026-11-20",
       "legacyIds": []
     }
+  },
+  {
+    "id": "gap:start/tablet-landscape-cutoff",
+    "kind": "gap",
+    "tier": "standard",
+    "area": "start",
+    "topic": "태블릿 가로 화면에서 화면이 잘리거나 버튼이 안 보일 때",
+    "textHash": "",
+    "answer": {
+      "template": "gap_default",
+      "handoff": null,
+      "related": []
+    },
+    "asks": [
+      "symptom",
+      "howto"
+    ],
+    "concepts": [
+      "C_mobile",
+      "C_screen_rotation",
+      "C_tablet_landscape"
+    ],
+    "anchors": [
+      "태블릿 가로",
+      "가로 화면 잘림",
+      "화면 오른쪽 잘림",
+      "버튼이 안 보임",
+      "태블릿 화면 비율",
+      "가로 모드"
+    ],
+    "covers": "태블릿을 가로로 쓸 때 화면 오른쪽이 잘리거나 버튼이 안 보이는 증상의 원인과 해결 방법은 공개 안내에 없다는 것",
+    "notCovers": [
+      "PC에서 하던 버튼이 휴대폰·태블릿에서 안 보일 때 → doc:/docs/start/mobile-install#4/button-missing",
+      "휴대폰·태블릿과 PC 기능 차이 → doc:/docs/start/mobile-install#4/mobile-vs-pc-features",
+      "화면 가로·세로 회전 → gap:start/screen-rotation"
+    ],
+    "negatives": [
+      {
+        "q": "PC에서 쓰던 버튼이 태블릿에는 없어요",
+        "route": "doc:/docs/start/mobile-install#4/button-missing"
+      },
+      {
+        "q": "태블릿과 PC에서 되는 기능이 다른가요",
+        "route": "doc:/docs/start/mobile-install#4/mobile-vs-pc-features"
+      },
+      {
+        "q": "태블릿 화면을 세로로 돌릴 수 있나요",
+        "route": "gap:start/screen-rotation"
+      }
+    ],
+    "handoff": null,
+    "status": "active",
+    "provenance": {
+      "unit": "R2-B6",
+      "writer": "agent:fable#B6",
+      "at": "2026-11-25",
+      "legacyIds": []
+    },
+    "searchLog": [
+      {
+        "query": "가로 화면",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "화면 잘림",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "가로 모드",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      },
+      {
+        "query": "우측이 잘려",
+        "units": 0,
+        "site": 0,
+        "checked": "관련 문장 없음 확인"
+      }
+    ]
   }
 ]

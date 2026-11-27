@@ -614,7 +614,7 @@
     "area": "company",
     "topic": "오프라인(현장) 출석 체크 기능 여부와 현장 출결 처리",
     "answer": {
-      "lead": "none",
+      "lead": "not_supported",
       "sentences": [
         {
           "unit": "doc:/docs/start/pre-adoption-faq-22-questions#6",
@@ -627,7 +627,12 @@
             "883b289997218c59"
           ]
         }
-      ]
+      ],
+      "leadBasis": {
+        "unit": "doc:/docs/start/pre-adoption-faq-22-questions#6",
+        "i": 12,
+        "hash": "ef8ce92e2d4d948a"
+      }
     },
     "sources": [
       {
@@ -645,10 +650,8 @@
     ],
     "anchors": [
       "오프라인 출석",
-      "출석 체크",
       "현장 출결",
       "등원 체크",
-      "출결 시스템",
       "API 연결",
       "출석기",
       "지문 출석",
@@ -661,7 +664,8 @@
       "결제·오프라인 출결 정산 엑셀 → doc:/docs/admin/course-management#6/settlement-excel",
       "클래스인만으로 안 되는 일 전반 → doc:/docs/start/academy-system-os-positioning#5/not-covered-overview",
       "학생 닉네임과 출석 확인 → doc:/docs/student/student-profile#0/nickname-why",
-      "연동 비용 → doc:/docs/start/value-and-cost-framing#4/integration-cost-scope"
+      "연동 비용 → doc:/docs/start/value-and-cost-framing#4/integration-cost-scope",
+      "온라인 수업 출석 확인 → doc:/docs/admin/storage-management#3/attendance-log"
     ],
     "negatives": [
       {
@@ -1363,7 +1367,17 @@
             "398c7def23bf6008"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "수업 전에는 강사가 EDB 교안이나 PDF를 드라이브에 올려요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/academy-system-os-positioning#0",
+            "i": 2,
+            "hash": "430274ac040b553e"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -1495,7 +1509,8 @@
       "일반 전자칠판과 차이 → doc:/docs/start/academy-system-os-positioning#1/vs-other-board",
       "Zoom에서 옮길 때 데이터 이전 → gap:company/zoom-migration",
       "타사 무료판 수업 시간 제한 비교 → gap:classroom/session-time-limit",
-      "구루미·구글 미트·팀즈·웨일온 등 다른 화상 서비스 비교 → fixed:basics-vs-other-video-tools"
+      "구루미·구글 미트·팀즈·웨일온 등 다른 화상 서비스 비교 → fixed:basics-vs-other-video-tools",
+      "줌과 팀즈 등 여러 화상 서비스를 함께 묻는 비교 → fixed:basics-vs-other-video-tools"
     ],
     "negatives": [
       {
@@ -1760,7 +1775,12 @@
             "dc322d8c89da5f2c"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/start/academy-system-os-positioning#2",
+        "i": 1,
+        "hash": "e013ad837cb2abef"
+      }
     },
     "sources": [
       {
@@ -2271,7 +2291,17 @@
             "01a93e2424db0fa0"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "끝난 수업은 저장된 수업 화면과 입장·퇴장 기록으로 확인해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/academy-system-os-positioning#4",
+            "i": 3,
+            "hash": "c7067603012c29d1"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2487,7 +2517,17 @@
             "96cfe0488a0f63ac"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "수강료 결제와 정산은 지금 쓰는 결제·관리 프로그램과 역할을 나눠요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/academy-system-os-positioning#5",
+            "i": 1,
+            "hash": "209db20cc60b76c0"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2592,7 +2632,17 @@
             "2a380d9dd7158a62"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "자체 CRM 연계는 공식 API, 데이터 구독 범위로 따로 검토해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/academy-system-os-positioning#5",
+            "i": 3,
+            "hash": "c857bfe85a7cac65"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -2816,7 +2866,8 @@
       "하이브리드",
       "레퍼런스",
       "후기",
-      "목동 쇼룸"
+      "목동 쇼룸",
+      "어떤 학원용"
     ],
     "covers": "국어·영어·과학·입시 학원부터 온라인·하이브리드 학원까지 클래스인을 쓰고, 비슷한 과목·운영 형태의 사례와 후기는 도입 상담이나 목동 쇼룸에서 더 자세히 보여 준다는 것",
     "notCovers": [
@@ -2824,7 +2875,9 @@
       "과목별 사례(국어) → doc:/docs/start/customer-stories#1/korean-academy-case",
       "국내 도입 기관 수 → gap:company/domestic-adoption-count",
       "미술 등 업종별 적합성 → gap:company/subject-fit",
-      "학원 말고 대학·학교·1:1 튜터링에서도 쓰는지 → doc:/docs/start/company-overview#7/where-used"
+      "학원 말고 대학·학교·1:1 튜터링에서도 쓰는지 → doc:/docs/start/company-overview#7/where-used",
+      "클래스인이 어떤 서비스인지 한 줄 소개 → doc:/docs/start/company-overview#0/one-line-intro",
+      "대학 간 공개 강의·K-12 학교 등 학원 밖 사용처 → doc:/docs/start/company-overview#7/where-used"
     ],
     "negatives": [
       {
@@ -5247,7 +5300,17 @@
             "374a3c06a65a1894"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "클래스인은 학생 단위로 수업·판서·녹화·과제 기록을 이어 둬요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/why-classin-needs#3",
+            "i": 2,
+            "hash": "374a3c06a65a1894"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -5887,7 +5950,12 @@
             "bcf38647affb37d6"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/start/why-classin-needs#9",
+        "i": 1,
+        "hash": "9a491beea3737b9d"
+      }
     },
     "sources": [
       {
@@ -6737,7 +6805,17 @@
             "bd32a0ff82c7d649"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "가장 흔한 기본 도입은 판서, 녹화, 다시보기 복습, LMS 숙제·시험이에요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/adoption-journey-90days#4",
+            "i": 0,
+            "hash": "f4cd3bccda4783df"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -7171,7 +7249,17 @@
             "f439d69838a907d8"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "정착 단계에서는 반별 수업이 판서·녹화·복습·LMS 흐름으로 맞춰져요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/adoption-journey-90days#6",
+            "i": 5,
+            "hash": "a7e67ec7c43e2ec2"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -7755,9 +7843,7 @@
     ],
     "anchors": [
       "한 줄 소개",
-      "오프라인 수업",
       "하이브리드 수업",
-      "온라인 수업",
       "한 플랫폼",
       "대면 수업",
       "현장 수업",
@@ -7769,7 +7855,10 @@
       "만든 회사 EEO → doc:/docs/start/company-overview#summary/what-is-classin",
       "기능 묶음 상세 → doc:/docs/start/company-overview#3/main-features",
       "줌과의 차이 → doc:/docs/start/why-classin-needs#7/just-zoom",
-      "비대면 중심 온라인 학원에서도 쓰는지 → fixed:basics-fit-online-academy"
+      "비대면 중심 온라인 학원에서도 쓰는지 → fixed:basics-fit-online-academy",
+      "대학·학교·1:1 튜터링 등 어디에서 쓰는지 → doc:/docs/start/company-overview#7/where-used",
+      "도입한 학원 종류·사례 → doc:/docs/start/customer-stories#summary/which-academies-use",
+      "줌·팀즈 등 다른 화상 서비스와 차이 → fixed:basics-vs-other-video-tools"
     ],
     "negatives": [
       {
@@ -7817,7 +7906,8 @@
       "actions": [
         "표본 통과, 수정 없음"
       ]
-    }
+    },
+    "role": "hub"
   },
   {
     "id": "doc:/docs/start/company-overview#1/eeo-company",
@@ -8146,7 +8236,12 @@
             "1c4c1eaea9c425df"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/start/company-overview#2",
+        "i": 2,
+        "hash": "1cbb4b0f50f46a4a"
+      }
     },
     "sources": [
       {
@@ -8336,7 +8431,17 @@
             "3833d8454c90bb62"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "한국 학원은 보통 판서, 자동 녹화, 다시보기, LMS 순서로 써요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/company-overview#3",
+            "i": 1,
+            "hash": "0e690d7f449ee93d"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -8511,7 +8616,7 @@
     "category": "classroom",
     "intent": "docs_lookup",
     "suggestedQuestions": [],
-    "status": "active",
+    "status": "review",
     "provenance": {
       "unit": "D1-19",
       "writer": "agent:opus#D1",
@@ -8747,7 +8852,17 @@
             "071fa90cc4ca5322"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "한국에서는 학원 원장, 관리자, 운영 책임자와 도입을 준비해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/start/company-overview#4",
+            "i": 1,
+            "hash": "071fa90cc4ca5322"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -9384,15 +9499,11 @@
       "C_consult_request"
     ],
     "anchors": [
-      "도입 문의",
       "도입 상담",
-      "상담 신청",
       "회사 소개 요청",
       "제품 소개",
       "구성 상담",
-      "일정 상담",
-      "연락",
-      "문의하기"
+      "일정 상담"
     ],
     "covers": "회사·제품 소개나 도입 상담이 필요할 때 도입 문의로 연락하면 학원 상황에 맞는 구성과 일정을 상담한다는 점",
     "notCovers": [
@@ -9400,7 +9511,8 @@
       "상담 전 준비할 정보 → doc:/docs/software/software-pricing-quote-bundle-faq#4/prep-before-consult",
       "무료 체험 신청 → doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
       "상담 전화 번호·운영 시간 → none",
-      "계약 뒤 배정되는 담당 매니저와 관리자·강사 교육 → doc:/docs/start/company-overview#6/manager-training"
+      "계약 뒤 배정되는 담당 매니저와 관리자·강사 교육 → doc:/docs/start/company-overview#6/manager-training",
+      "무료 체험·견적 신청 순서 → doc:/docs/software/software-pricing-quote-bundle-faq#2/trial-quote-request-how"
     ],
     "negatives": [
       {
@@ -9448,7 +9560,8 @@
       "actions": [
         "leadBasis 채움(how_to 근거 문장)"
       ]
-    }
+    },
+    "role": "hub"
   },
   {
     "id": "doc:/docs/software/app-capabilities-map#summary/what-app-can-do",
@@ -9896,7 +10009,8 @@
       "모든 과목 적용 여부 → doc:/docs/software/app-capabilities-map#summary/ai-not-always",
       "수업 중 AI 칠판 채점 → doc:/docs/software/app-capabilities-map#3/ai-board-summary",
       "AI 채점 결과 검토·게시 → doc:/docs/software/classin-ai-feature-guide#1/ai-grading-review",
-      "LMS 기본 자동 채점·성적표 자동 생성 → doc:/docs/start/company-overview#3/lms-admin-dashboard"
+      "LMS 기본 자동 채점·성적표 자동 생성 → doc:/docs/start/company-overview#3/lms-admin-dashboard",
+      "숙제 채점 기준·답안 추가 → doc:/docs/teacher/course-activities#4/homework-settings"
     ],
     "negatives": [
       {
@@ -10070,7 +10184,17 @@
             "55263b6996995056"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "AI 칠판은 기본으로 꺼져 있어 담당 매니저에게 활성화를 요청해야 해요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/app-capabilities-map#3",
+            "i": 9,
+            "hash": "55263b6996995056"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -11171,7 +11295,12 @@
             "3f63a37996983a59"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/software/classin-ai-feature-guide#0",
+        "i": 5,
+        "hash": "3f63a37996983a59"
+      }
     },
     "sources": [
       {
@@ -11871,7 +12000,17 @@
             "31e6d9bfa9eb643e"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "수업 전·중·후 과정이 한 앱 안에서 이어져요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/software-overview#0",
+            "i": 1,
+            "hash": "e78f24f01e0b6cd4"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -11990,12 +12129,9 @@
     ],
     "anchors": [
       "PC 앱",
-      "모바일 앱",
       "웹 대시보드",
       "관리자 대시보드",
       "관리자 웹",
-      "강사 앱",
-      "학생 앱",
       "계정 관리",
       "수업 기록",
       "관리 콘솔"
@@ -12007,7 +12143,8 @@
       "AI 기능 보이는 범위 → doc:/docs/software/software-overview#0/ai-helpers",
       "앱 설치 방법 → none",
       "수업을 전자칠판·PC·모바일 어디서 열어도 녹화되는지 → doc:/docs/teacher/course-units#3/any-device",
-      "웹사이트 로그인으로는 수업에 못 들어가고 앱을 설치해야 하는지 → doc:/docs/start/login-troubleshooting#1/homepage-login-admin"
+      "웹사이트 로그인으로는 수업에 못 들어가고 앱을 설치해야 하는지 → doc:/docs/start/login-troubleshooting#1/homepage-login-admin",
+      "학생이 휴대폰·태블릿으로 수업 참여 → doc:/docs/start/mobile-install#summary/mobile-class-on-phone"
     ],
     "negatives": [
       {
@@ -12064,7 +12201,8 @@
         "anchors 좁힘(출결·스토리지·웹 라이브·통계 뺌)",
         "반례 행선 고침 2(비밀번호 → 비밀번호 새로 정하기, 설치 → 설치 파일 고르기)"
       ]
-    }
+    },
+    "role": "hub"
   },
   {
     "id": "doc:/docs/software/software-overview#0/ai-helpers",
@@ -12719,7 +12857,17 @@
             "443b12bb6d60be06"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "LMS 쪽에는 코스, 단원, 출결, 과제, 성적, 보고서, 드라이브가 있어요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/software-overview#2",
+            "i": 6,
+            "hash": "2612eb3e168629f8"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -13035,7 +13183,17 @@
             "499788031b4a8f72"
           ]
         }
-      ]
+      ],
+      "headline": {
+        "text": "강사는 프로필, 드라이브, 코스와 수업 만들기 순서로 익혀요.",
+        "basis": [
+          {
+            "unit": "doc:/docs/software/software-overview#3",
+            "i": 4,
+            "hash": "cf192936a76789a3"
+          }
+        ]
+      }
     },
     "sources": [
       {
@@ -13562,7 +13720,12 @@
             "3769e1be58a38a6e"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/updates/classin-ai-feature-guide-published#summary",
+        "i": 1,
+        "hash": "bc26e16c880b3931"
+      }
     },
     "sources": [
       {
@@ -13922,7 +14085,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#field:ad-event-promotion",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:customer-names",
@@ -13986,7 +14150,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#field:customer-names",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:logo-usage",
@@ -13995,8 +14160,8 @@
     "area": "company",
     "topic": "ClassIn 로고·상표를 학원 홍보물에 써도 되는지(공개 안내에 없음)",
     "answer": {
-      "text": "ClassIn 로고·상표를 학원 홍보물에 써도 되는지와 절차는 공개 안내에 없어요.\n\n아래 [도입 상담 남기기]나 문의 페이지(/contact)로 쓰려는 곳과 문구를 남겨 회사 담당자의 확인을 받아 주세요.",
-      "textHash": "78709672908dc17c"
+      "text": "ClassIn 로고·상표를 학원 홍보물에 써도 되는지와 절차는 공개 안내에서 확인되지 않았어요.\n아래 [도입 상담 남기기]나 문의 페이지로 쓰려는 곳과 문구를 남겨 회사 담당자의 확인을 받아 주세요.",
+      "textHash": "a3f84af40e338806"
     },
     "asks": [
       "yesno"
@@ -14116,7 +14281,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#field:overseas-card",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:overseas-students",
@@ -14125,8 +14291,8 @@
     "area": "company",
     "topic": "해외에 있는 학생이 로그인·수업 입장을 할 수 있는지와 앱 설치",
     "answer": {
-      "text": "공개 FAQ 기준으로 해외에서도 VPN 없이 로그인, 학습 활동, 수업 입장이 대부분 돼요(중국·필리핀·싱가포르 등). 다만 외부 프로그램을 막는 보안 내부망이나 앱의 카메라·마이크 접근을 막아 둔 기기에서는 제한될 수 있어요.\n\n끊김이나 지연이 전혀 없다고 보장할 수는 없어요.\n\n앱은 App Store와 Google Play에서 받는데, 미국 스토어에 올라가 있는지는 공개 안내에 따로 없어요. 안드로이드는 플레이 스토어, 아이폰·아이패드는 앱 스토어에서 '클래스인(Classin)'을 검색하면 됩니다.",
-      "textHash": "f5354fca6eca7b60"
+      "text": "네, 공개 FAQ 기준으로 해외에서도 VPN 없이 로그인, 학습 활동, 수업 입장이 대부분 돼요.\n중국·필리핀·싱가포르 등이 예로 나와 있어요.\n다만 외부 프로그램을 막는 보안 내부망이나 앱의 카메라·마이크 접근을 막아 둔 기기에서는 제한될 수 있어요.\n끊김이나 지연이 전혀 없다고 보장할 수는 없어요.\n\n앱은 안드로이드는 플레이 스토어, 아이폰·아이패드는 앱 스토어에서 '클래스인(Classin)'을 검색해 받아요.\n미국 스토어에 올라가 있는지는 공개 안내에 따로 없어요.",
+      "textHash": "b481ed4e3d7170b0"
     },
     "asks": [
       "yesno",
@@ -14245,7 +14411,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#field:architecture-onprem",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:sla-availability",
@@ -14310,7 +14477,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#field:sla-availability",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:breach-liability",
@@ -14375,7 +14543,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#field:breach-liability",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:formal-complaint-channel",
@@ -14450,7 +14619,8 @@
       "actions": [
         "review 카드 점검 2026-11-20: active 로 되돌림. 한국 법인 이메일·전화·주소 문장(site-only, HQ-10·HQ-02 구절, HQ-1205)을 지움. 남은 글은 주장 1·3(문서)과 상담 안내·식별 정보 안 받음(policy)뿐. evidenceScope docs. 연락처·전화·이메일 변형 13개 빼고 항의·공식 창구 변형 12개 더함. 표본 yes8/partial2/no0"
       ]
-    }
+    },
+    "toneLocked": true
   },
   {
     "id": "fixed:web-accessibility-screen-reader",
@@ -14585,7 +14755,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#field:video-resolution-fps-tiles-zoom",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:api-versioning-deprecation-policy",
@@ -14658,7 +14829,8 @@
       "actions": [
         "review 카드 점검 2026-11-20: 그대로 review: 사양 §7.4 — 고친 글의 '계약서·SLA 명시는 계약 협의 사항'(주장 4, policy)이 계약 정책 주제(HQ-0804)에 닿음. 틀린 주장은 없음"
       ]
-    }
+    },
+    "toneLocked": true
   },
   {
     "id": "fixed:lti-moodle-integration",
@@ -14732,7 +14904,8 @@
       "actions": [
         "review 카드 점검 2026-11-20: 그대로 review: 답 글에 HQ-1204 결정 전 구절 'LTI·SDK·API'(site-only 인용)가 있고, 인용을 지우면 'LTI 지원 여부' 부재 읽기가 남아 HQ-1204 가 정할 틀린 부재 주장 문제로 돌아감"
       ]
-    }
+    },
+    "toneLocked": true
   },
   {
     "id": "fixed:find-tutor-marketplace",
@@ -14741,8 +14914,8 @@
     "area": "company",
     "topic": "앱에서 과외 선생님을 찾아 신청하는 기능(공개 안내에 없음)",
     "answer": {
-      "text": "클래스인 앱에서 과외 선생님을 찾아 고르고 신청하는 기능은 공개 안내에 없어요.\n\n클래스인은 학원이나 선생님이 수업을 여는 수업 도구예요. 선생님이 클래스인을 쓰시면 선생님이 보내 준 코스 초대로 들어가 수업을 들으면 돼요.",
-      "textHash": "2bf6738eabbf4717"
+      "text": "클래스인 앱에서 과외 선생님을 찾아 고르고 신청하는 기능은 공개 안내에서 확인되지 않았어요.\n클래스인은 학원이나 선생님이 수업을 여는 수업 도구예요.\n선생님이 클래스인을 쓰시면 선생님이 보내 준 코스 초대로 들어가 수업을 들으면 돼요.",
+      "textHash": "f676de26196a3505"
     },
     "asks": [
       "yesno"
@@ -14877,7 +15050,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#field:school-procurement-narajangteo-gs",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:competitor-comparison-criteria",
@@ -14945,7 +15119,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#field:competitor-weakness-list-refusal",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:iphone-widget-next-class",
@@ -15021,8 +15196,8 @@
     "area": "company",
     "topic": "학원 관리 프로그램을 대체할 수 있는지(원비 수납·출결 문자·상담 기록·연동)",
     "answer": {
-      "text": "기능별로 확인된 것만 된다·안 된다로 말씀드릴게요.\n\n1) 원비 수납: 공개 안내에는 학생 원비 수납이나 학원 결제를 클래스인이 자동으로 처리하지는 않는다고 나와 있어요. 안 된다고 보시는 게 맞아요.\n2) 출결 문자: 공개 안내로 확인되는 건 온라인 수업 출결 기록, 앱 알림(수업 10분 전 알림, 미제출 학생에게 보내는 [알림 전달]), 그리고 학생과 교사에게 수업 알림 문자를 자동으로 보내는 유료 부가 서비스 '스마트 담임 교사'예요. 스마트 담임 교사 요금은 기관별 계약에 따라 다르고, 문자를 받을 수 있는 휴대폰 번호 국가가 제한돼 있어 국내 번호로 받을 수 있는지도 담당 매니저에게 확인해야 해요. 학부모에게 출결 결과를 문자로 보내는 기능은 공개 안내에 없어요. 클래스인은 오프라인 출석 체크도 지원하지 않는다고 나와 있어요.\n3) 상담 기록: 학부모 상담 기록을 남기는 기능은 공개 안내에 없어요.\n4) 연동: 공개 안내에는 결제, 오프라인 출석, 고급 리포트는 기존 시스템과 역할을 나누고, 보통 공식 API로 데이터를 가져오거나 외부 도구와 연결한다고 나와 있어요.\n\n연동 비용까지 넣은 견적은 아래 [도입 상담 남기기]로 요청하시면 돼요.",
-      "textHash": "020fd00380252d1c"
+      "text": "원비 수납과 학원 결제는 클래스인이 자동으로 처리하지 않아요.\n학부모 상담 기록을 남기는 기능과 학부모 출결 문자도 공개 안내에 없어요.\n\n공개 안내로 확인되는 건 이래요.\n- 온라인 수업 출결 기록과 앱 알림(수업 10분 전 알림, 미제출 학생 [알림 전달])\n- 학생과 교사에게 수업 알림 문자를 자동으로 보내는 유료 부가 서비스 '스마트 담임 교사'\n- 결제, 오프라인 출석, 고급 리포트는 기존 시스템과 역할을 나누고 공식 API나 외부 도구로 연결\n\n스마트 담임 교사 요금은 기관별 계약에 따라 다르고, 국내 번호로 문자를 받을 수 있는지는 담당 매니저에게 확인해야 해요.\n클래스인은 오프라인 출석 체크를 지원하지 않아요.\n연동 비용까지 넣은 견적은 아래 [도입 상담 남기기]로 요청해 주세요.",
+      "textHash": "57173798642d4a27"
     },
     "asks": [
       "yesno",
@@ -15147,7 +15322,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#field:prepay-three-years-students-drop-tier",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:overseas-entities",
@@ -15181,7 +15357,8 @@
     "notCovers": [
       "한국 법인 주소 → policy:korea-entity-address",
       "EEO 설립 연도 → fixed:basics-company-founded",
-      "서버 위치·국외 이전 → policy:china-company-data"
+      "서버 위치·국외 이전 → policy:china-company-data",
+      "클래스인을 만든 회사 → policy:basics-company-origin"
     ],
     "negatives": [
       {
@@ -15214,7 +15391,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#basics:basics-overseas-entities",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:korea-entity-address",
@@ -15246,7 +15424,8 @@
     "notCovers": [
       "한국 법인 대표자 → fixed:basics-company-ceo",
       "해외 법인·본사 → policy:overseas-entities",
-      "쇼룸 예약과 체험 → doc:/docs/start/customer-stories#9/showroom-visit"
+      "쇼룸 예약과 체험 → doc:/docs/start/customer-stories#9/showroom-visit",
+      "클래스인을 만든 회사 → policy:basics-company-origin"
     ],
     "negatives": [
       {
@@ -15279,7 +15458,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#basics:basics-korea-entity-address",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:basics-company-ceo",
@@ -15488,7 +15668,8 @@
       ]
     },
     "auditRef": "audit/C-12.jsonl#basics:basics-china-company-data",
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:basics-data-server-location",
@@ -15558,7 +15739,8 @@
         "basics:basics-data-server-location"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:basics-company-investors-listing",
@@ -15640,8 +15822,8 @@
     "area": "company",
     "topic": "회사가 오래 갈지(안정성)와 전 세계 규모·한국 법인 소개",
     "answer": {
-      "text": "재무제표 같은 세부 수치는 공개 안내에 없어서, 앞으로의 안정성을 제가 보장하거나 단정할 수는 없어요.\n\n공개된 건 EEO 공식 소개 기준의 전 세계 규모예요. 160개가 넘는 국가에서 쓰고, 6만 곳이 넘는 교육기관이 도입했고, 교육자와 학습자는 5,000만 명이 넘어요. 한국이 아니라 전 세계 누적 수치예요.\n\n한국 법인 이이오클래스인코리아는 2022년 10월 서울 목동에 설립됐어요. 한국 도입 현황은 도입 상담(/contact)에서 확인해 드려요.",
-      "textHash": "880506413598f976"
+      "text": "재무제표 같은 세부 수치는 공개 안내에 없어서 앞으로의 안정성을 보장하거나 단정할 수는 없어요.\n\n공개된 건 EEO 공식 소개 기준의 전 세계 누적 규모예요.\n160개가 넘는 국가에서 쓰고, 6만 곳이 넘는 교육기관이 도입했고, 교육자와 학습자는 5,000만 명이 넘어요.\n한국 법인 이이오클래스인코리아는 2022년 10월 서울 목동에 설립됐어요.\n한국 도입 현황은 도입 상담에서 확인해 드려요.",
+      "textHash": "c209b4a0c9a0aa36"
     },
     "auditRef": "audit/C-13.jsonl#basics:basics-company-size-stability",
     "asks": [
@@ -15993,16 +16175,17 @@
     ],
     "anchors": [
       "어느 나라 회사",
-      "본사 소재지",
       "중국 회사인가",
-      "EEO",
-      "제조국",
-      "한국 법인"
+      "EEO"
     ],
     "covers": "EEO가 만든 제품이며 글로벌 HQ는 싱가포르, 본사·R&D는 베이징, 한국 법인은 서울 목동이고 전자칠판 제조국은 공개 안내에 없다는 안내",
     "notCovers": [
       "투자·상장 → fixed:basics-company-investors-listing",
-      "서버 위치 → policy:basics-data-server-location"
+      "서버 위치 → policy:basics-data-server-location",
+      "글로벌 HQ·EEO 본사 위치 → policy:overseas-entities",
+      "한국 법인 주소·쇼룸 → policy:korea-entity-address",
+      "한국 법인 설립 시기 → doc:/docs/start/company-overview#1/korea-entity",
+      "전자칠판 제조국·제조 주체 → policy:basics-sells-hardware"
     ],
     "negatives": [
       {
@@ -16034,7 +16217,8 @@
         "basics:basics-company-origin"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:basics-named-academy",
@@ -16099,7 +16283,8 @@
         "basics:basics-named-academy"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:basics-famous-regional-reference",
@@ -16164,7 +16349,8 @@
         "basics:basics-famous-regional-reference"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:basics-schools-universities-companies",
@@ -16173,8 +16359,8 @@
     "area": "company",
     "topic": "학교·대학·기업 등 클래스인을 쓰는 곳",
     "answer": {
-      "text": "한국의 고등학교와 대학에서 쓰는 사례가 서비스 소개서의 도입 사례(/introduction/cases)에 공개돼 있어요. 전 세계 유수의 대학교·출판사·교육기업이 클래스인으로 수업합니다.\n\n그 밖에 공개 안내에는 대학 간 글로벌 공개 강의, 글로벌 1:1 튜터링, K-12 학교, 국내 학원에서 쓰인다고 나와 있어요.\n\n학교나 기관 도입을 검토 중이시면 아래 [도입 상담 남기기]에 기관 유형과 인원을 남겨 주세요. 담당자가 확인해 드려요.",
-      "textHash": "0d9e0f71c623d9bc"
+      "text": "네, 한국의 고등학교와 대학에서 쓰는 사례가 서비스 소개서의 도입 사례에 공개돼 있어요.\n전 세계 유수의 대학교·출판사·교육기업이 클래스인으로 수업해요.\n공개 안내에는 대학 간 글로벌 공개 강의, 글로벌 1:1 튜터링, K-12 학교, 국내 학원에서 쓰인다고 나와 있어요.\n\n학교나 기관 도입을 검토 중이면 아래 [도입 상담 남기기]에 기관 유형과 인원을 남겨 주세요.",
+      "textHash": "0f9e1485192d67d8"
     },
     "auditRef": "audit/C-13.jsonl#basics:basics-schools-universities-companies",
     "asks": [
@@ -16245,8 +16431,8 @@
     "area": "company",
     "topic": "수업 녹화 때 학부모 동의가 필요한지와 녹화 보관·열람 기간 설정",
     "answer": {
-      "text": "녹화할 때 학부모 동의가 꼭 필요한지는 법적 판단이라 제가 단정할 수 없어요.\n\n공개 안내도 개인정보는 클래스인 개인정보처리방침과 함께 학원 내부 동의 절차를 확인하라고 해요. 클래스인이 녹화 동의서 양식을 제공하는지는 공개 안내에 없어요. 보관 기간은 [일반 설정] > [저장 설정]의 자동 삭제로, 볼 수 있는 기간은 코스의 다시보기 유효 기간으로 맞출 수 있어요.\n\n동의서 양식이나 공식 답변이 필요하시면 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 요청해 주세요.",
-      "textHash": "ee80870bfd41b94c"
+      "text": "녹화할 때 학부모 동의가 꼭 필요한지는 법적 판단이라 단정할 수 없어요.\n공개 안내도 개인정보는 클래스인 개인정보처리방침과 함께 학원 내부 동의 절차를 확인하라고 해요.\n\n클래스인이 녹화 동의서 양식을 제공하는지는 공개 안내에 없어요.\n보관 기간은 [일반 설정] → [저장 설정]의 자동 삭제로, 볼 수 있는 기간은 코스의 다시보기 유효 기간으로 맞출 수 있어요.\n동의서 양식이나 공식 답변이 필요하면 상담 채널(홈페이지 하단 채팅)이나 담당 매니저에게 요청해 주세요.",
+      "textHash": "b270e77a84377ef2"
     },
     "auditRef": "audit/C-13.jsonl#basics:basics-recording-parental-consent",
     "asks": [
@@ -16509,7 +16695,8 @@
         "basics:basics-price-vs-zoom"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:basics-vs-other-board",
@@ -16638,7 +16825,8 @@
         "basics:basics-zoom-time-limit"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:basics-contract-cancel-where",
@@ -16703,7 +16891,8 @@
         "basics:basics-contract-cancel-where"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:basics-contract-end-data",
@@ -16767,7 +16956,8 @@
         "basics:basics-contract-end-data"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:basics-student-data-retention",
@@ -16904,7 +17094,8 @@
         "basics:basics-corporate-training"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:basics-main-features",
@@ -17174,7 +17365,8 @@
         "basics:basics-fit-adult"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:basics-fit-school",
@@ -17247,8 +17439,8 @@
     "area": "company",
     "topic": "온라인과 오프라인을 함께 하는 하이브리드 수업을 할 수 있는지와 하이브리드 토글",
     "answer": {
-      "text": "네, 온라인과 오프라인을 같이 하는 하이브리드 수업을 할 수 있어요. 클래스인은 온라인·오프라인·하이브리드 수업을 한 플랫폼에서 운영하는 서비스예요.\n\n운영에서 하이브리드 수업이라고 하면 교실 학생과 원격 학생이 같은 수업을 듣는 방식 전체를 말합니다. 수업 생성 화면의 [하이브리드 수업] 토글은 그중 한 기능입니다. 켜면 학생이 수업에 들어와서 칠판 화면과 현장 카메라 화면을 골라 가며 봅니다. 그래서 토글을 켰다고 병행 수업 준비가 끝나지는 않습니다. 현장 화면은 교실에 연결한 카메라가 찍는 화면이니 카메라 연결과 현장 녹화 설정을 함께 확인합니다.\n\n녹화하면 그대로 복습 영상이 돼요. 구성은 교실 크기에 따라 달라서 도입 상담에서 맞춰 드려요.",
-      "textHash": "e96bcacbc016bfda"
+      "text": "네, 온라인과 오프라인을 같이 하는 하이브리드 수업을 할 수 있어요.\n클래스인은 온라인·오프라인·하이브리드 수업을 한 플랫폼에서 운영하는 서비스예요.\n\n수업 생성 화면의 [하이브리드 수업] 토글을 켜면 학생이 칠판 화면과 현장 카메라 화면을 골라 가며 봐요.\n토글만 켰다고 병행 수업 준비가 끝나지는 않으니 교실 카메라 연결과 현장 녹화 설정을 함께 확인해 주세요.\n\n녹화하면 그대로 복습 영상이 돼요. 구성은 교실 크기에 따라 달라서 도입 상담에서 맞춰 드려요.",
+      "textHash": "d8d19f5732ed6cfe"
     },
     "auditRef": "audit/C-13.jsonl#basics:basics-hybrid",
     "asks": [
@@ -17364,7 +17556,8 @@
         "basics:basics-zoom-enough-free"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:basics-switch-from-zoom",
@@ -17597,7 +17790,10 @@
       "팀즈",
       "웨일온",
       "다른 화상 서비스랑 비교",
-      "어느 쪽이 더 나은지"
+      "어느 쪽이 더 나은지",
+      "줌 팀즈 차이",
+      "줌이랑 팀즈",
+      "화상 서비스 차이"
     ],
     "covers": "수업 준비부터 판서·녹화·LMS·관리자 데이터까지 수업 운영 전체를 잇는다는 설명과 줌은 화상회의 중심이라는 구분, 다른 서비스의 기능·요금·우열은 말하지 않고 상담으로 이어지는 안내",
     "notCovers": [
@@ -17717,8 +17913,8 @@
     "area": "company",
     "topic": "구글 클래스룸과 연동·병행해서 쓸 수 있는지",
     "answer": {
-      "text": "구글 클래스룸과 연동하는 기능은 공개 안내에 없어서 연동된다고는 말씀드리지 않을게요.\n\n공개 안내 기준으로 클래스인은 실시간 화상 수업·판서·수업 녹화·다시보기·퀴즈·학습 데이터를 한곳에서 운영해요.\n\n함께 쓰는 구성이 맞는지는 도입 상담(/contact)에서 지금 쓰는 방식을 기준으로 같이 봐 드려요.",
-      "textHash": "563ab0850175d3ba"
+      "text": "구글 클래스룸과 연동하는 기능은 공개 안내에서 확인되지 않았어요.\n공개 안내 기준으로 클래스인은 실시간 화상 수업·판서·수업 녹화·다시보기·퀴즈·학습 데이터를 한곳에서 운영해요.\n함께 쓰는 구성이 맞는지는 도입 상담에서 지금 쓰는 방식을 기준으로 같이 봐 드려요.",
+      "textHash": "78cb687a46d31058"
     },
     "auditRef": "audit/C-13.jsonl#basics:basics-google-classroom-coexist",
     "asks": [
@@ -17778,8 +17974,8 @@
     "area": "company",
     "topic": "줌 같은 서비스 대비 클래스인의 약점과 도입 전에 따져 볼 점",
     "answer": {
-      "text": "솔직하게 말씀드릴게요. 다른 서비스와 우열을 단정하기보다, 도입 전에 따져 보셔야 할 점을 공개 안내 기준으로 정리하면 이래요.\n\n- 시스템 설정과 온보딩 단계에서 기관별 환경을 세팅하고, 관리자와 강사 대상 교육을 기본 2회 합니다.\n- 앱을 설치해서 쓰고, 최소 사양은 Windows 7 또는 macOS 10.13 이상, 인터넷 속도 2Mbps 이상입니다. 수업을 녹화하는 강사는 인텔 Core i5 8세대(AMD Ryzen 5 1세대) 이상, 윈도우 메모리 16GB 이상, 인터넷 속도 4Mbps 이상이 필요합니다.\n- 녹화와 웹 라이브는 유료 요금제와 계정 인증을 마쳐야 열려요.\n- 결제, 오프라인 출석, 고급 리포트는 별도 시스템이나 API 연동으로 나눠 설계하는 편이에요.\n\n반대로 판서·녹화·과제·관리자 데이터를 한 흐름으로 묶어 학원 운영에 쓰려는 목적이라면 그 부분이 강점이에요. 수업 방식에 맞는지는 데모로 직접 보시길 권해요.",
-      "textHash": "04aa471a42e8834b"
+      "text": "도입 전에 따져 볼 점은 설정·교육 기간, 기기 사양, 유료 기능 조건, 다른 시스템 연동이에요.\n\n- 시스템 설정과 온보딩 단계에서 기관별 환경을 세팅하고, 관리자와 강사 대상 교육을 기본 2회 해요.\n- 앱을 설치해서 쓰고, 최소 사양은 Windows 7 또는 macOS 10.13 이상, 인터넷 속도 2Mbps 이상이에요.\n- 녹화하는 강사는 인텔 Core i5 8세대(AMD Ryzen 5 1세대) 이상, 윈도우 메모리 16GB 이상, 인터넷 4Mbps 이상이 필요해요.\n- 녹화와 웹 라이브는 유료 요금제와 계정 인증을 마쳐야 열려요.\n- 결제, 오프라인 출석, 고급 리포트는 별도 시스템이나 API 연동으로 나눠 설계하는 편이에요.\n\n판서·녹화·과제·관리자 데이터를 한 흐름으로 묶어 학원 운영에 쓰려는 목적이라면 그 부분이 강점이에요.\n수업 방식에 맞는지는 데모로 직접 보시길 권해요.",
+      "textHash": "a136a5657e7f3eeb"
     },
     "auditRef": "audit/C-13.jsonl#svc:zoom-weakness",
     "asks": [
@@ -17902,6 +18098,7 @@
         "svc:showroom"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   }
 ]

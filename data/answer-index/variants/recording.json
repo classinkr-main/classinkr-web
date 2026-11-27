@@ -8091,6 +8091,36 @@
       "p": "staff",
       "g": "B",
       "m": "haiku"
+    },
+    {
+      "q": "다시보기 기간 지났는데 연장되나요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화본 다시 보는 기간이 끝났다고 나와요",
+      "p": "parent",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "1년 지난 수업 다시보기가 막혔어요",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "다시보기 기간 늘려서 다시 열어 주기",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "기간 지난 녹화본 다시 보게 하려면",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "doc:/docs/admin/replay-troubleshooting#2/left-course-access": [
@@ -26427,6 +26457,42 @@
       "p": "staff",
       "g": "B",
       "m": "haiku"
+    },
+    {
+      "q": "녹화본은 1년 지나면 지워지나요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화 영상 며칠 뒤에 자동으로 삭제돼요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화본 보관 기간이 정해져 있나요",
+      "p": "parent",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "수업 녹화 몇 년까지 남아 있어요",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화본 보관 기간 연장할 수 있어요?",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "코스 끝난 지 1년 된 녹화도 남아 있나요",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "doc:/docs/student/class-report#0/attendance-activity": [
@@ -43813,6 +43879,48 @@
       "p": "운영직원",
       "g": "B",
       "m": "S"
+    },
+    {
+      "q": "녹화본 다시 보려면 어디로 들어가요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화된 수업 다시 보는 방법",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화 영상 다시보기 하는 법",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "끝난 수업 녹화본 어디서 봐요",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "수업 녹화한 거 복습으로 다시 보기",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화본 다시 보기 메뉴 위치",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "학생이 녹화본 다시 보는 길",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "fixed:replay-board-text-zoom": [
@@ -53025,6 +53133,54 @@
       "p": "1인과외",
       "g": "B",
       "m": "S"
+    },
+    {
+      "q": "수업 끝나고 며칠 뒤까지 다시보기 되나요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "다시보기 기간을 1년으로 늘릴 수 있나요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화본 다시 보는 기간 연장하려면",
+      "p": "parent",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "다시보기 기간 며칠로 정해요",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "수업 종료 후 며칠까지 볼 수 있게 하기",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "다시보기 기간 연장 설정 위치",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화본 다시 볼 수 있는 기간 늘리기",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "1년 뒤에도 다시보기 열어 둘 수 있나요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "howto:guide:field-recording-camera-setup": [
@@ -56565,6 +56721,24 @@
       "p": "doubt",
       "g": "B",
       "m": "opus"
+    },
+    {
+      "q": "몇 달 전 수업 녹화가 사라졌어요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "보관 기간이 지나서 녹화가 지워졌나요",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화본 다시 보려는데 지워졌다고 나와요",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "howto:recording-option-missing": [
@@ -57237,6 +57411,36 @@
       "p": "it",
       "g": "B",
       "m": "opus"
+    },
+    {
+      "q": "녹화본 다시 보기가 안 열려요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "지난 수업 녹화본이 학생 화면에 안 보여요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화본 다시 보려는데 아무것도 안 떠요",
+      "p": "parent",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "다시 보기 눌러도 영상이 없어요",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "학생이 녹화한 수업을 다시 못 봐요",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "howto:stats-export": [
@@ -58333,6 +58537,36 @@
       "p": "대학생",
       "g": "B",
       "m": "S"
+    },
+    {
+      "q": "녹화본 보관 기간은 어디서 정해요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화본을 1년 넘게 보관하려면",
+      "p": "parent",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "녹화본 자동 삭제 며칠로 설정해요",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "보관 기간 연장하면 용량이 더 드나요",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "오래된 녹화 보관 기간 설정",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "policy:recording-storage-region-cdn": [

@@ -7,7 +7,9 @@
  *   정확한 한도가 아니다.
  * - idempotency_key 도 같은 인스턴스·보관 시간(IDEMPOTENCY_TTL_MS) 안에서만 확실하다. HW 배송 예정은 도메인 행
  *   (hardware_movements.raw.mcp)에 키 해시와 인자 지문을 실어 인스턴스가 달라도 DB 에서 다시 찾고, 지문이 다르면
- *   거절한다(lookup). 견적 초안은 실을 칸이 없어(마이그레이션 금지) 메모리만 쓴다 — docs/active/home-mcp-operations.md.
+ *   거절한다(lookup). 같은 키 동시 두 번은 유니크 색인(마이그레이션 적용 뒤)이 막고 23505 를 처음 결과로 돌려준다.
+ *   견적 초안은 실을 칸이 없어 공용 저장소(Upstash, lib/ops-tools/idempotency-store.ts)에서 판정하고, 저장소가 없으면
+ *   메모리만 쓴다(그때는 응답·로그에 표시) — docs/active/home-mcp-operations.md.
  */
 import { createHash } from "crypto"
 
@@ -93,7 +95,7 @@ function sweep(now: number) {
 /** 도메인 표에서 찾은 기존 결과 — fingerprint 는 그 행에 실린 인자 지문(없으면 null → 같은지 알 수 없어 거절) */
 export type IdempotentLookupHit<T> = { result: T; fingerprint: string | null }
 
-const conflict = () => new OpsToolError("같은 idempotency_key 를 다른 내용에 썼다. 새 작업이면 새 키를 쓴다.", "idempotency_conflict")
+export const idempotencyConflict = () => new OpsToolError("같은 idempotency_key 를 다른 내용에 썼다. 새 작업이면 새 키를 쓴다.", "idempotency_conflict")
 
 /**
  * 키가 있으면 (호출자, 도구, 키)마다 실행을 한 번만 한다. 같은 키로 다시 오면 처음 결과를 replayed=true 로 돌려준다.
@@ -113,7 +115,7 @@ export async function runIdempotent<T>(
   sweep(now())
   const existing = idemStore.get(storeKey)
   if (existing) {
-    if (existing.fingerprint !== scope.fingerprint) throw conflict()
+    if (existing.fingerprint !== scope.fingerprint) throw idempotencyConflict()
     if (existing.done) return { result: existing.result as T, replayed: true }
     if (existing.pending) return { result: (await existing.pending) as T, replayed: true }
   }
@@ -125,7 +127,7 @@ export async function runIdempotent<T>(
   const pending = (async () => {
     const found = lookup ? await lookup() : null
     if (found != null) {
-      if (found.fingerprint !== scope.fingerprint) throw conflict()
+      if (found.fingerprint !== scope.fingerprint) throw idempotencyConflict()
       return { value: found.result, replayed: true }
     }
     return { value: await execute(), replayed: false }

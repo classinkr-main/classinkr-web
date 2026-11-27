@@ -46,7 +46,7 @@ export const DISTRIBUTOR_MODE_LABELS: Record<DistributorFulfillmentMode, { title
 
 /**
  * 하드웨어 총판 기본값 — 퀴드러닝. 하드웨어 고객 견적의 표준 공급자(STANDARD_QUOTE_SUPPLIER)와 같은 회사이고,
- * 견적서에 찍히는 이름은 등록 정보 그대로 쓴다(대표 조혜리 · 담당자 배철웅 — 호칭을 붙이거나 바꾸지 않는다).
+ * 견적서에 찍히는 이름은 등록 정보 그대로 쓴다(대표·담당자 이름은 표준 공급자 상수 참조 — 호칭을 붙이거나 바꾸지 않는다).
  * 내부에서 '배 대표님'이라고 부르면 이 총판(퀴드러닝)을 뜻한다.
  * 처음 정산을 만들 때만 채우고, 이후에는 마지막에 저장한 총판 정보를 쓴다.
  */
@@ -411,7 +411,7 @@ export function resolveDistributorDocumentTitle(
 /* ─── 총판용 견적서 ───────────────────────────────────────── */
 
 /**
- * 고객 견적서와 같은 양식(성남여고 승인 디자인, QuoteDocumentPreview)의 총판용 견적서.
+ * 고객 견적서와 같은 양식(승인된 디자인, QuoteDocumentPreview)의 총판용 견적서.
  * C방식에서는 회사가 총판에게 하드웨어를 공급하므로 공급자 = 회사(클래스인), 수신처 = 총판이다
  * (고객 견적의 공급자는 총판이라 그대로 두면 '총판 → 총판' 문서가 된다). 포함 품목을 원가로 다시 계산하고,
  * 참조란에 고객사를 적어 어느 고객 건인지 알 수 있게 한다.
@@ -442,7 +442,7 @@ export function buildDistributorQuoteDetails(
       vatIncluded: settlement.vatIncluded,
     }))
   const customerName = options.customerName?.trim() || customer.recipientCompanyName?.trim()
-  // 수신 = 총판 대표(담당자 칸), 참조 = 총판 실무 담당자(2026-11-20 결정: 퀴드러닝 대표 조혜리 · 참조 배철웅).
+  // 수신 = 총판 대표(담당자 칸), 참조 = 총판 실무 담당자(2026-11-20 결정: 퀴드러닝 대표, 참조 담당자).
   // 대표 이름은 정산 표에 칸이 없어 등록된 총판(퀴드러닝)일 때만 표준 공급자 정보에서 가져온다.
   const representativeName =
     settlement.distributorName.trim() === STANDARD_QUOTE_SUPPLIER.businessName

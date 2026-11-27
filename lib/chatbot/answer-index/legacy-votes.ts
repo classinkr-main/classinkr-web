@@ -71,3 +71,24 @@ export function collectLegacyVotes(
   }
   return votes
 }
+
+/**
+ * 표 카드마다 그 표를 낸 옛 판별식 이름(inventory id 꼴, 판별 순서). collectLegacyVotes 와 같은 대응을 쓴다.
+ * 정해 둔 답 승격의 증상 판별 가드(decide.ts)가 '증상 판별에서만 나온 표'를 가린다.
+ */
+export function legacyVoteSources(
+  question: string,
+  quick: LegacyVoteSignal | readonly LegacyVoteSignal[] | null,
+  alias: LegacyAliasFile
+): Map<string, string[]> {
+  const sources = new Map<string, string[]>()
+  if (Object.keys(alias).length === 0) return sources
+  for (const id of legacyAnswerIds(question, quick)) {
+    const card = alias[id]
+    if (typeof card !== "string" || !card) continue
+    const list = sources.get(card) ?? []
+    if (!list.includes(id)) list.push(id)
+    sources.set(card, list)
+  }
+  return sources
+}

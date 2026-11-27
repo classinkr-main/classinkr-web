@@ -20,10 +20,12 @@ import {
   Globe,
   UserCog,
   KeyRound,
+  Contact,
 } from "lucide-react"
 
 import { MembersPanel } from "@/components/admin/settings/MembersPanel"
 import { SecurityPanel } from "@/components/admin/settings/SecurityPanel"
+import { TeamContactsPanel } from "@/components/admin/settings/TeamContactsPanel"
 import { NotificationIcon } from "@/components/notifications/NotificationIcon"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import {
@@ -660,6 +662,7 @@ type SettingsTab =
   | "notifications"
   | "security"
   | "members"
+  | "contacts"
 
 type SettingsKey = keyof SiteSettings
 
@@ -724,6 +727,13 @@ const NAV_ITEMS: Array<{
     label: "회원",
     desc: "지사장·매니저 계정",
     icon: <UserCog className="w-4 h-4" />,
+  },
+  {
+    // 갈매봇·위컴 담당자 안내가 읽는 한국팀·본사 담당자 표(2026-11-26, internal_team_contacts). 편집은 SUPER_ADMIN 만.
+    key: "contacts",
+    label: "담당자 표",
+    desc: "갈매봇 담당자 안내",
+    icon: <Contact className="w-4 h-4" />,
   },
 ]
 
@@ -987,6 +997,7 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
   ],
   security: [],
   members: [], // 읽기 전용 계정 디렉터리 — 편집 필드 없음(dirty 계산 제외)
+  contacts: [], // 담당자 표는 자체 API 로 저장한다 — 사이트 설정 필드 없음
 }
 
 function isSettingsDirty(current: SiteSettings, baseline: SiteSettings) {
@@ -2128,6 +2139,8 @@ export default function SettingsPage() {
           {activeTab === "security" && <SecurityPanel />}
 
           {activeTab === "members" && <MembersPanel />}
+
+          {activeTab === "contacts" && <TeamContactsPanel />}
         </main>
       </div>
 

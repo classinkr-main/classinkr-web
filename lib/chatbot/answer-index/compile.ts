@@ -56,8 +56,11 @@ import {
 /**
  * 계산 규칙을 바꾸면 올린다(답 캐시 열쇠 ANSWER_INDEX_VERSION 에 들어간다).
  * 2: 확신도 특징 knnCount1, 조각 답 문턱 여유(SEGMENT_CONF_MARGIN), 정해 둔 답 승격(진단 R02·R15·R07).
+ * 3: 허브·공백 양보(score.ts), 조각 덮임 점검과 다시 고르기(decide.ts), 렌더 표기·요체·복합 머리(respond.ts·shape.ts)(R3).
+ * 4: 원문 카드를 조각 확신도로 붙이기·같은 카드 조각 가르기(decide.ts), 머리 명사 '과·와' 나누기(normalize.ts), 복합 조각 다듬기·옮겨 답하기·
+ *    예/아니오 극성(respond.ts), 콜론 앞말 요체(yo-tone.ts)(R3 반박 검토).
  */
-export const ANSWER_INDEX_COMPILER_VERSION = 2
+export const ANSWER_INDEX_COMPILER_VERSION = 4
 
 /** 카드 중심 벡터는 가중치가 큰 특징만 남기고 다시 정규화한다(메모리 §3.10). */
 export const CENTROID_MAX_FEATURES = 256

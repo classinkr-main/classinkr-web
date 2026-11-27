@@ -66,6 +66,7 @@ export interface RecordingQueryBuilder extends PromiseLike<NormalizedQueryResult
   in(column: string, value: unknown): RecordingQueryBuilder
   is(column: string, value: unknown): RecordingQueryBuilder
   ilike(column: string, value: unknown): RecordingQueryBuilder
+  overlaps(column: string, value: unknown): RecordingQueryBuilder
   or(expression: string): RecordingQueryBuilder
   order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }): RecordingQueryBuilder
   limit(count: number): RecordingQueryBuilder
@@ -119,6 +120,7 @@ function createBuilder(query: RecordedQuery, resolve: RecordedQueryResolver): Re
     in: filter("in"),
     is: filter("is"),
     ilike: filter("ilike"),
+    overlaps: filter("overlaps"),
     or(expression) {
       query.filters.push({ op: "or", column: "", value: expression })
       return builder

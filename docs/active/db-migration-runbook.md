@@ -320,6 +320,23 @@ npm run check:db --  --strict
 | --- | --- | --- | --- |
 | `20261124_distributor_settlement_confirm_revise.sql` | `distributor_settlements` 에 `distributor_confirmed_at`·`distributor_confirmed_name`(60자 CHECK)·`revised_at`·`discount`(JSONB, mode CHECK)·`document_text`(JSONB) 추가. 멱등(`ADD COLUMN IF NOT EXISTS`·`DROP CONSTRAINT IF EXISTS`) | 정산 조회는 새 칸 없이 다시 읽는다(42703 폴백). 총판 링크에 확인 버튼이 나오지 않고, 발행 후 금액 수정과 할인·제목·기타사항을 넣은 저장은 503 "적용 필요". 발행 전 편집·발행·입금·고객 동의 자동 생성은 그대로 된다 | `npm run check:db` 의 `distributor_settlements`(총판 견적서 확인·발행 후 수정) 프로브(warning), 또는 `select count(*) from information_schema.columns where table_name = 'distributor_settlements' and column_name in ('distributor_confirmed_at','distributor_confirmed_name','revised_at','discount','document_text');` → `5` |
 
+### 2026-11-26 한국팀·본사 담당자 표 — 서울 프로젝트 적용 완료(2026-11-27)
+
+[담당자 표 연결](./internal-team-contacts-2026-11-26.md). 2026-11-27 서울 프로젝트에 적용했다(빈 표, RLS 켬, 정책 0, `anon`·`authenticated` 권한 없음 확인). 코드보다 먼저든 나중이든 된다(폴백이 있다).
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261126_internal_team_contacts.sql` | `internal_team_contacts`(org KR/HQ·업무 영역·역할·1차·대리·연락 방법 종류·준비물·어드민 링크·비고·확인일·확인자·활성·정렬) + 조직·영역별 활성 행 부분 유니크 + `updated_at` 트리거. RLS 켜고 정책 없음, `anon`·`authenticated` 권한 회수(service_role 전용). 전화·이메일 값 칸 없음. 멱등(`IF NOT EXISTS`·`DROP ... IF EXISTS` 뒤 제약 다시 걸기) | 갈매봇·위컴 1:1 의 한국 지사 업무 담당 안내가 지금처럼 역할·계정 권한으로만 답하고, 카드 메모에 "한국 담당자 표가 아직 적용되지 않아 …"가 붙는다. 담당자 표 화면은 적용 안내만, 쓰기·CSV 넣기는 503 | `npm run check:db` 의 `internal_team_contacts` 프로브(warning), 또는 `select to_regclass('public.internal_team_contacts') is not null;` → `true` |
+
+적용 뒤 확인(읽기 전용):
+
+- `select relrowsecurity from pg_class where oid = 'public.internal_team_contacts'::regclass;` → `true`
+- `select count(*) from pg_policies where schemaname = 'public' and tablename = 'internal_team_contacts';` → `0`
+- `select has_table_privilege('anon', 'public.internal_team_contacts', 'select'), has_table_privilege('authenticated', 'public.internal_team_contacts', 'select');` → `false, false`
+- `select indexname from pg_indexes where tablename = 'internal_team_contacts';` 에 `internal_team_contacts_active_area_uniq` 가 있다
+
+롤백(비상용): `supabase/rollbacks/20261126_internal_team_contacts.rollback.sql` — 표와 행이 모두 사라진다. 지우기 전에 파일 머리 주석의 조회로 행을 내려받는다.
+
 ### 2026-11-26 REV 엔트리 읽기 색인 · 중복 색인 정리 — 서울 프로젝트 적용 완료(2026-11-27)
 
 [어드민·Compass 점검(2026-11-25)](admin-compass-audit-2026-11-25.md) §3 에서 만든 색인 전용 마이그레이션 두 개다.

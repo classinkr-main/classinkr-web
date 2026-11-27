@@ -997,6 +997,54 @@ async function listCrmNeoCustomerSnapshotsFromExternalRecords(
   return buildSnapshotListResult(rows.slice(offset, offset + limit), rows.length)
 }
 
+/** 갈매봇 "고객 이력"의 담당 영업 — 스냅숏 한 줄에서 담당·UID·신선도만. */
+export interface CrmNeoCustomerSnapshotOwner {
+  accountId: string
+  accountName: string
+  ownerId: string | null
+  /** 스냅숏 칸 그대로 — 담당이 없으면 기본값 '담당 미지정'이 들어 있다(20260629 마이그레이션). */
+  ownerName: string
+  uid: string | null
+  isStale: boolean
+  sourceSyncedAt: string | null
+}
+
+/**
+ * NEO 계정 하나의 담당(owner_name)·UID — 기본키(source_system, account_id) 한 줄. 없으면 null.
+ * 표가 없거나 읽지 못하면 던진다("담당 미지정"으로 보이지 않게 — 호출자가 "담당 영업을 읽지 못했습니다"로 말한다).
+ */
+export async function getCrmNeoCustomerSnapshotOwner(
+  accountId: string,
+  options: { sourceSystem?: string } = {}
+): Promise<CrmNeoCustomerSnapshotOwner | null> {
+  const id = accountId.trim()
+  if (!id) return null
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("crm_neo_customer_snapshots")
+    .select("account_id, account_name, owner_id, owner_name, uid, is_stale, source_synced_at")
+    .eq("source_system", options.sourceSystem ?? SOURCE_SYSTEM)
+    .eq("account_id", id)
+    .limit(1)
+  if (error) {
+    if (isMissingSnapshotsTableError(error)) throw new Error(CRM_NEO_CUSTOMER_SNAPSHOTS_NOT_READY_MESSAGE)
+    throw new Error(`[crm-neo-customer-snapshots] 담당 조회 실패: ${error.message}`)
+  }
+  const row = (data ?? [])[0] as
+    | Pick<CrmNeoCustomerSnapshot, "account_id" | "account_name" | "owner_id" | "owner_name" | "uid" | "is_stale" | "source_synced_at">
+    | undefined
+  if (!row) return null
+  return {
+    accountId: row.account_id,
+    accountName: row.account_name,
+    ownerId: row.owner_id,
+    ownerName: row.owner_name,
+    uid: row.uid,
+    isStale: row.is_stale,
+    sourceSyncedAt: row.source_synced_at,
+  }
+}
+
 export async function listCrmNeoCustomerSnapshots(
   options: ListCrmNeoCustomerSnapshotsOptions = {}
 ): Promise<ListCrmNeoCustomerSnapshotsResult> {

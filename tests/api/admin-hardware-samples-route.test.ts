@@ -158,7 +158,7 @@ describe("POST /api/admin/hardware/samples — 샘플 이벤트 검증", () => {
     recordSampleUnitEvents.mockResolvedValue([sampleUnit("01", "loaned")])
 
     const response = await POST(
-      samplesRequest({ action: "event", eventType: "adjust", unitIds: ["01"], nextStatus: "", customer: "탑텐영어" })
+      samplesRequest({ action: "event", eventType: "adjust", unitIds: ["01"], nextStatus: "", customer: "[기관 B]" })
     )
 
     expect(response.status).toBe(201)

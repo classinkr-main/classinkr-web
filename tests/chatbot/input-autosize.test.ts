@@ -132,12 +132,18 @@ describe("FloatingChatbot 입력창 높이 맞춤 연결", () => {
     expect(body).toContain("heightChanged: height !== prev")
   })
 
+  // 셸이 답 머리를 맞춰 둔 채 받는 중이면 맨 아래 근처여도 목록을 맨 아래에 붙이지 않는다(붙이면 맞춰 둔 질문 머리가 밀린다).
+  it("맨 아래 붙이기는 셸의 shouldStickListToBottom 을 함께 본다", () => {
+    const body = source.match(/const resize = \(\) => \{([\s\S]*?)\n {8}\}/)?.[1] ?? ""
+    expect(body).toContain("isNearBottom(container) && (shouldStickListToBottom?.() ?? true)")
+  })
+
   // 확인 결과(B5 묶음과 부딪침): 휴대폰에서 쿠키 배너가 창을 가린 채 열림이 예약되면 입력 폼이 display:none 안에서 마운트돼
   // scrollHeight 0 으로 재고 44px·overflow hidden 으로 굳었다. 배너가 닫혀도 다시 재지 않아 문서 CTA 가 미리 채운 둘째 줄이 잘렸다.
   it("창이 보이지 않는 동안은 재지 않고, 보이게 되면(isVisible) 다시 잰다", () => {
     const effect = source.slice(source.indexOf("useLayoutEffect(() => {"), source.indexOf("function handleSubmit"))
     expect(effect).toContain("if (!el || !isVisible) return")
-    expect(effect).toMatch(/\}, \[input, isVisible, inputRef, messagesContainerRef\]\)/)
+    expect(effect).toMatch(/\}, \[input, isVisible, inputRef, messagesContainerRef, shouldStickListToBottom\]\)/)
     const body = source.match(/const resize = \(\) => \{([\s\S]*?)\n {8}\}/)?.[1] ?? ""
     const guard = body.indexOf("if (el.getClientRects().length === 0) return")
     expect(guard).toBeGreaterThan(-1)

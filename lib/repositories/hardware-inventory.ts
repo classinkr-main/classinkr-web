@@ -1492,6 +1492,8 @@ export async function createHardwareMovementRows(
  * 운영 도구(홈 MCP) 쓰기의 idempotency 키 해시로 이미 만든 기록을 찾는다 — 해시는 raw.mcp.idempotency_key_hash 에,
  * 호출자는 raw.mcp.caller 에, 인자 지문은 raw.mcp.args_fingerprint 에 실려 있다(lib/ops-tools/defs/hardware.ts).
  * 서버리스 인스턴스가 달라도 같은 키로 두 번 만들지 않게 하는 DB 쪽 확인이다. 무효 처리된 행도 돌려준다(같은 키 = 같은 요청).
+ * 어드민 출고 확정이 만든 출고 행(converted_from_movement_id 있음)은 예정 행의 raw 를 복사해 같은 키를 갖지만 MCP 가 만든 행이 아니다 —
+ * 처음 결과에 넣지 않는다(유니크 색인 20261125_hardware_movements_mcp_idempotency_unique 과 같은 조건).
  * 키 원문은 저장하지 않는다(사람이 키에 적은 값이 기록·어드민 화면으로 퍼지지 않게).
  */
 export async function findHardwareMovementsByMcpIdempotencyKey(caller: string, keyHash: string): Promise<HardwareMovement[]> {
@@ -1501,6 +1503,7 @@ export async function findHardwareMovementsByMcpIdempotencyKey(caller: string, k
     .select(HARDWARE_MOVEMENT_LEDGER_COLUMNS)
     .eq("raw->mcp->>caller", caller)
     .eq("raw->mcp->>idempotency_key_hash", keyHash)
+    .is("converted_from_movement_id", null)
     .order("created_at", { ascending: true })
     .limit(50)
   if (error) throw error

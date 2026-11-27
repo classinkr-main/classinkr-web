@@ -4771,9 +4771,35 @@
       "명의 바꿔요",
       "명의 이전해요",
       "계약자 바꾸기",
-      "계약자 변경해요"
+      "계약자 변경해요",
+      "계약 명의",
+      "결제 명의",
+      "사업자 명의",
+      "학원 명의",
+      "대표자 명의"
     ],
-    "ambiguous": []
+    "ambiguous": [
+      {
+        "form": "명의",
+        "requiresAny": [
+          "C_contract_terms",
+          "C_contract_period",
+          "C_quote",
+          "C_payment_method",
+          "C_subscription",
+          "C_billing_unit",
+          "C_tax_invoice",
+          "C_business_registration",
+          "C_main_admin_account",
+          "C_org_account",
+          "C_payment_account",
+          "C_contract_end",
+          "C_early_termination",
+          "C_auto_renewal",
+          "C_price"
+        ]
+      }
+    ]
   },
   {
     "id": "C_contract_period",
@@ -12941,9 +12967,24 @@
         "boundary": "both"
       },
       "수상 경력",
-      "특허 있나요"
+      "특허 있나요",
+      "수상 이력",
+      "수상 내역",
+      "수상 실적"
     ],
-    "ambiguous": []
+    "ambiguous": [
+      {
+        "form": "수상",
+        "requiresAny": [
+          "C_company_intro",
+          "C_ceo",
+          "C_company_size",
+          "C_customer_case",
+          "C_adoption_count",
+          "C_certification"
+        ]
+      }
+    ]
   },
   {
     "id": "C_referral_discount",
@@ -13492,7 +13533,43 @@
       "원생 명단 추출",
       "학생 리스트"
     ],
-    "ambiguous": []
+    "ambiguous": [
+      {
+        "form": "구성원 명단",
+        "notWith": [
+          "C_bulk_import",
+          "C_upload"
+        ]
+      },
+      {
+        "form": "학생 명단",
+        "notWith": [
+          "C_bulk_import",
+          "C_upload"
+        ]
+      },
+      {
+        "form": "명단 엑셀로",
+        "notWith": [
+          "C_bulk_import",
+          "C_upload"
+        ]
+      },
+      {
+        "form": "명단 엑셀",
+        "notWith": [
+          "C_bulk_import",
+          "C_upload"
+        ]
+      },
+      {
+        "form": "학생 리스트",
+        "notWith": [
+          "C_bulk_import",
+          "C_upload"
+        ]
+      }
+    ]
   },
   {
     "id": "C_router",
@@ -14106,7 +14183,10 @@
       "회원가입 안 돼요",
       "가입 안 됨",
       "가입시키다",
-      "회원 등록"
+      "회원 등록",
+      "계정 등록",
+      "앱에 등록",
+      "가입 등록"
     ],
     "ambiguous": []
   },
@@ -15523,7 +15603,16 @@
       {
         "form": "올리기",
         "boundary": "both"
-      }
+      },
+      {
+        "form": "올리면",
+        "boundary": "both"
+      },
+      {
+        "form": "올려도",
+        "boundary": "both"
+      },
+      "올렸는데"
     ],
     "ambiguous": []
   },
@@ -16274,7 +16363,17 @@
         "boundary": "both"
       }
     ],
-    "ambiguous": []
+    "ambiguous": [
+      {
+        "form": "독",
+        "requiresAny": [
+          "C_board",
+          "C_blackboard",
+          "C_tool_visibility",
+          "C_board_port"
+        ]
+      }
+    ]
   },
   {
     "id": "C_gear_icon",
@@ -21189,6 +21288,83 @@
       "통화 가능 시간대",
       "연락 시간 예약",
       "전화 약속"
+    ],
+    "ambiguous": [
+      {
+        "form": "통화 가능 시간",
+        "requiresAny": [
+          "C_booking_action"
+        ]
+      },
+      {
+        "form": "전화 가능 시간",
+        "requiresAny": [
+          "C_booking_action"
+        ]
+      },
+      {
+        "form": "통화 가능 시간대",
+        "requiresAny": [
+          "C_booking_action"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "C_booking_action",
+    "kind": "action",
+    "generic": true,
+    "parents": [],
+    "doc": [
+      {
+        "form": "예약",
+        "boundary": "both"
+      },
+      "시간 지정"
+    ],
+    "visitor": [
+      "시간 정해",
+      "시간 맞춰",
+      "시간 잡아",
+      {
+        "form": "약속 잡",
+        "boundary": "both"
+      },
+      {
+        "form": "미리 잡",
+        "boundary": "both"
+      },
+      "남겨 두면",
+      "예약해요",
+      "예약하고"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_pen_required",
+    "kind": "ask",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      {
+        "form": "펜 필수",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [
+      "펜이 필수",
+      "펜 꼭 필요",
+      {
+        "form": "펜이 꼭",
+        "boundary": "both"
+      },
+      "펜 꼭 있어야",
+      "펜 없으면",
+      "펜까지 사",
+      "펜 꼭 사야",
+      "스타일러스 필수",
+      "펜 없이도",
+      "펜이 필요"
     ],
     "ambiguous": []
   },
@@ -34514,7 +34690,10 @@
       "원생 가입시키기",
       "수강생 가입",
       "수강생 회원가입",
-      "수강생 계정 생성"
+      "수강생 계정 생성",
+      "자녀 계정 만들기",
+      "아이 아이디 만들기",
+      "자녀 계정 가입"
     ],
     "ambiguous": []
   },
@@ -37299,6 +37478,159 @@
       "녹화 수정",
       "녹화 편집 방법",
       "녹화본 편집하기"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_external_attendance_sync",
+    "kind": "object",
+    "generic": false,
+    "parents": [
+      "C_attendance"
+    ],
+    "doc": [
+      "출결 연동",
+      "외부 출결"
+    ],
+    "visitor": [
+      "출결 단말기",
+      "출결 API",
+      "출결 시스템 연동",
+      "출결 기기 연동",
+      "등하원 단말기",
+      "출결 기록 등록",
+      "출결 푸시 알림"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_watermark",
+    "kind": "object",
+    "generic": false,
+    "parents": [
+      "C_recording"
+    ],
+    "doc": [
+      "영상 워터마크"
+    ],
+    "visitor": [
+      "워터마크 삭제",
+      "워터마크 없애",
+      "워터마크 끄기",
+      "워터마크 표시",
+      "워터마크 내용",
+      "워터마크 지우"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_proxy_register_check",
+    "kind": "attribute",
+    "generic": false,
+    "parents": [
+      "C_academy_created_account"
+    ],
+    "doc": [
+      "대리 등록 여부"
+    ],
+    "visitor": [
+      "대리 등록했는지",
+      "대리 등록 확인",
+      "대리 등록 체크했",
+      "대리등록 체크 확인",
+      "대리 등록 여부"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_tablet_landscape",
+    "kind": "attribute",
+    "generic": false,
+    "parents": [
+      "C_screen_rotation"
+    ],
+    "doc": [
+      "태블릿 가로 화면"
+    ],
+    "visitor": [
+      "태블릿 가로",
+      "가로 화면 잘림",
+      "화면 오른쪽 잘림",
+      "화면 우측 잘림",
+      "가로로 접속"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_one_to_one_camera",
+    "kind": "attribute",
+    "generic": false,
+    "parents": [
+      "C_onstage_count"
+    ],
+    "doc": [
+      "1대1 수업"
+    ],
+    "visitor": [
+      "일대일 수업",
+      "1대1 카메라",
+      "일대일 카메라",
+      "1대1 수업 카메라",
+      "1:1 수업 카메라",
+      "상대 카메라"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_monitoring_contact",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      "모니터링 연락"
+    ],
+    "visitor": [
+      "연락 기능",
+      "연락 버튼",
+      "모니터링에서 연락",
+      "연락 문자 요금",
+      "교사에게 연락하기"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_sgf_file",
+    "kind": "object",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      "sgf 파일"
+    ],
+    "visitor": [
+      "기보 파일",
+      "sgf 두 개",
+      "sgf 동시에",
+      "바둑 기보",
+      "sgf 열기"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_touch_calibration",
+    "kind": "action",
+    "generic": false,
+    "parents": [
+      "C_board"
+    ],
+    "doc": [
+      "터치 보정"
+    ],
+    "visitor": [
+      "터치 틀어짐",
+      "터치 위치 어긋남",
+      "터치 영점",
+      "보정 매뉴얼",
+      "터치 보정 방법"
     ],
     "ambiguous": []
   }

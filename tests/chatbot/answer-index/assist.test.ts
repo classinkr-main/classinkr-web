@@ -55,6 +55,21 @@ import { equivalenceHash, legacyEquivalenceCases, readLegacyEquivalence } from "
 
 const firstParagraph = (text: string) => text.split("\n\n")[0]
 
+/** 정책 카드(종류 policy, 주어진 개념) 한 장을 덧붙인 색인(픽스처에는 정책 카드가 없다). 순위·번호는 그대로다. */
+function withPolicyCard(index: CompiledAnswerIndex, concepts: string[]): CompiledAnswerIndex {
+  const template = index.cards[index.cardById.get(CARDS.price)!]
+  const id = "policy:test-policy"
+  const card = { ...template, index: index.cards.length, id, kind: "policy" as const, ownConcepts: concepts, conceptClosure: new Set(concepts), card: { ...template.card, id, kind: "policy", concepts } as AnswerCard }
+  const cardById = new Map(index.cardById)
+  cardById.set(id, card.index)
+  return { ...index, cards: [...index.cards, card], cardById }
+}
+
+/** 카드 한 장의 카드 칸을 바꾼 색인. */
+function markCard(index: CompiledAnswerIndex, cardId: string, fields: Partial<AnswerCard>): CompiledAnswerIndex {
+  return { ...index, cards: index.cards.map((compiled) => (compiled.id === cardId ? { ...compiled, card: { ...compiled.card, ...fields } as AnswerCard } : compiled)) }
+}
+
 interface RecordedCall {
   url: string
   body: {
@@ -447,11 +462,13 @@ describe("resolveAssistPick (acceptance rules)", () => {
     }
   })
 
-  it("keeps policy topics on policy cards", () => {
-    const index = compileFixture()
-    const { decision, analysis } = decideWithAnalysis(index, "녹화 영상 다시보기 어디서 봐요", { env: {} })
+  it("keeps policy topics on policy cards only when the picked card touches the asked policy concept (R2 B3)", () => {
+    // 픽스처에는 정책 카드(종류 policy)가 없다: 정책 개념 C_download 를 가진 정책 카드를 하나 붙인 색인으로 본다.
+    const index = withPolicyCard(compileFixture(), ["C_download"])
+    const { decision, analysis } = decideWithAnalysis(index, "녹화 영상 다시보기 어디서 내려받아요", { env: {} })
     const candidates = assistCandidates(index, analysis, {})
     const download = candidates.find((candidate) => candidate.id === CARDS.download)!
+    // 질문의 정책 개념(C_download)과 고른 카드 개념이 겹친다 → 정규식이 걸리면 막는다(맞게 막는 경우 유지).
     expect(resolveAssistPick(index, analysis, decision, candidates, download.n, { env: {}, isPolicyTopic: () => true })).toMatchObject({
       accepted: false,
       rejectReason: "policy_topic",
@@ -459,6 +476,21 @@ describe("resolveAssistPick (acceptance rules)", () => {
     expect(resolveAssistPick(index, analysis, decision, candidates, download.n, { env: {}, isPolicyTopic: () => false })).toMatchObject({
       accepted: true,
       decision: { kind: "answer", card: CARDS.download },
+    })
+    // 사람이 허용 표시(policyTopicAllowed)를 단 카드는 받아들인다.
+    const allowed = markCard(index, CARDS.download, { policyTopicAllowed: true })
+    expect(resolveAssistPick(allowed, analysis, decision, candidates, download.n, { env: {}, isPolicyTopic: () => true })).toMatchObject({
+      accepted: true,
+      decision: { kind: "answer", card: CARDS.download, cautions: [{ kind: "policy_topic" }] },
+    })
+    // 정규식만 걸리고 개념이 겹치지 않으면('원가'⊂'회원가입' 같은 오탐) 받아들이고 주의 표시를 남긴다.
+    const plain = compileFixture()
+    const other = decideWithAnalysis(plain, "녹화 영상 다시보기 어디서 내려받아요", { env: {} })
+    const otherCandidates = assistCandidates(plain, other.analysis, {})
+    const otherDownload = otherCandidates.find((candidate) => candidate.id === CARDS.download)!
+    expect(resolveAssistPick(plain, other.analysis, other.decision, otherCandidates, otherDownload.n, { env: {}, isPolicyTopic: () => true })).toMatchObject({
+      accepted: true,
+      decision: { kind: "answer", card: CARDS.download, cautions: [{ kind: "policy_topic", reason: "no_concept_overlap" }] },
     })
   })
 
@@ -501,7 +533,8 @@ describe("compiled route with the assist layer (fake model)", () => {
       original: { kind: "answer", card: CARDS.replay },
     })
     expect(assistOf(result)?.ms).toEqual(expect.any(Number))
-    expect(result.answer).toContain("녹화 파일은 [다운로드] 버튼으로 내 컴퓨터에 저장할 수 있습니다.")
+    // compiled 답은 요체로 낸다(R3 a1, CHATBOT_COMPILED_TONE 기본 yo): 카드 글 '저장할 수 있습니다.' → '저장할 수 있어요.'
+    expect(result.answer).toContain("녹화 파일은 [다운로드] 버튼으로 내 컴퓨터에 저장할 수 있어요.")
     expect(decidedByFromAnswerIndex(result.answerIndex)).toBe(`index:${CARDS.download}`)
     // 질문당 모델 호출 1회, 지시문 그대로, 가린 질문과 후보 줄.
     expect(calls).toHaveLength(1)
@@ -660,12 +693,32 @@ describe("compiled route with the assist layer (fake model)", () => {
     expect(result.answer).toContain("[다시보기]")
   })
 
-  it("does not move a policy-topic question to a document card", async () => {
+  it("does not move a policy-topic question to a document card that touches the asked policy concept", async () => {
+    stubModelEnv("always")
+    // 정책 개념 C_price·C_student_count 를 가진 정책 카드를 붙인다. '학생 수 요금' 질문에서 학생 수 카드는 정책 개념이 겹쳐 막힌다.
+    __setRouterAnswerIndexForTests(withPolicyCard(compileFixture(), ["C_price", "C_student_count"]))
+    behavior = pickTopic("한 교실 학생 수")
+    const result = await evaluateChatbotQuery("학생 수 기준 요금이 어떻게 돼요?")
+    expect(assistOf(result)).toMatchObject({ used: true, accepted: false, rejectReason: "policy_topic", pickCard: CARDS.count })
+    expect(result.answerIndex).toMatchObject({ decision: "abstain", card: null })
+  })
+
+  it("keeps a pure price question off a document card that shares no concept with it (R2 검토 회귀-6)", async () => {
+    stubModelEnv("always")
+    // 질문에 정책 개념(C_price)이 있으면 고른 카드가 그 개념과 겹치지 않아도(학생 수 카드) 막는다: 엉뚱한 카드가 요금 답처럼 읽히지 않게.
+    __setRouterAnswerIndexForTests(withPolicyCard(compileFixture(), ["C_price"]))
+    behavior = pickTopic("한 교실 학생 수")
+    const result = await evaluateChatbotQuery("요금이 어떻게 돼요?")
+    expect(assistOf(result)).toMatchObject({ used: true, accepted: false, rejectReason: "policy_topic", pickCard: CARDS.count })
+    expect(result.answerIndex?.card).not.toBe(CARDS.count)
+  })
+
+  it("moves a policy-topic question to a document card when the question has no policy concept (regex false hit), with a caution", async () => {
     stubModelEnv("always")
     behavior = pickTopic("한 교실 학생 수")
     const result = await evaluateChatbotQuery("요금이 어떻게 돼요?")
-    expect(result.answerIndex).toMatchObject({ decision: "answer", card: CARDS.price })
-    expect(assistOf(result)).toMatchObject({ accepted: false, rejectReason: "policy_topic", pickCard: CARDS.count })
+    expect(assistOf(result)).toMatchObject({ accepted: true, rejectReason: null, pickCard: CARDS.count })
+    expect(result.answerIndex).toMatchObject({ decision: "answer", card: CARDS.count })
   })
 
   it("asks once per index-decided question and not at all for pre-index answers or empty candidate lists", async () => {

@@ -43,7 +43,14 @@ export type WritePreview<P> = { plan: P; summary: Record<string, unknown>; warni
 export type WriteExecuteMeta = { idempotency?: { keyHash: string; fingerprint: string } }
 
 /** execute 결과 — output 은 호출자에게 그대로 가는 값(꼴은 바꾸기 전과 같다), auditFailure 는 감사 실패 코드(로그에만) */
-export type WriteExecuteResult = { output: unknown; auditFailure?: string }
+export type WriteExecuteResult = {
+  output: unknown
+  auditFailure?: string
+  /** 같은 키로 이미 만든 결과를 돌려줬다(동시 두 번째 호출이 유니크 제약·공용 저장소에서 처음 결과를 찾았다) — 로그 코드 replayed */
+  replayed?: true
+  /** 공용 저장소 없이 인스턴스 메모리로만 판정했다 — 응답(idempotency_scope)·로그에 표시한다 */
+  idempotencyScope?: "instance_memory"
+}
 
 export type WriteToolDef<P = unknown> = ToolBase & {
   risk: "R1"
@@ -55,6 +62,11 @@ export type WriteToolDef<P = unknown> = ToolBase & {
    * 메모리 밖(도메인 표)에서 같은 키 해시로 이미 만든 결과와 그때의 인자 지문을 찾는다(없으면 null).
    * 키를 실을 칸이 없으면 두지 않는다
    */
+  /**
+   * 도메인 행에 키를 실을 칸이 없는 도구 — 공용 저장소(Upstash)에서 같은 키 동시 실행을 한 번으로 막는다
+   * (lib/ops-tools/idempotency-store.ts). 저장소가 없으면 닫지 않고 인스턴스 메모리 판정으로 내려가 표시한다
+   */
+  sharedIdempotency?: boolean
   findExisting?: (actor: OpsActor, keyHash: string) => Promise<{ result: WriteExecuteResult; fingerprint: string | null } | null>
 }
 

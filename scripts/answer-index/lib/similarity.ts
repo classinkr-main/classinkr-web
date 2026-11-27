@@ -7,12 +7,22 @@
  * - 편집거리 2 이하(둘 다 정규화 길이 EDIT_MIN_LENGTH 이상일 때만. 짧은 글은 거리 2가 뜻이 다른 글도 묶는다)
  * - 글자 2-gram 자카드 0.8 이상
  * - (사전 형태만) 개발 질문과 8자 이상 연속 일치
+ * 근사 사본(R4 계획 §4-3 "낱말 한두 개만 바꾼 것", V-7 경고): 자료 글 3-gram 가운데 0.8 이상이 한 참조 글 안에 있음
+ * (정규화 NEAR_MIN_LENGTH 자 이상만). 위 기준에 걸리지 않고 참조 글에서 낱말을 떼거나 조금 바꾼 글을 찾는다.
  */
 
 export const JACCARD_THRESHOLD = 0.8
 export const EDIT_DISTANCE_MAX = 2
 export const EDIT_MIN_LENGTH = 8
 export const SUBSTRING_MIN_LENGTH = 8
+export const NEAR_TRIGRAM_CONTAINMENT = 0.8
+export const NEAR_MIN_LENGTH = 6
+
+export function trigramSet(normalized: string) {
+  const out = new Set<string>()
+  for (let i = 0; i + 2 < normalized.length; i += 1) out.add(normalized.slice(i, i + 3))
+  return out
+}
 
 export function normalizeForOverlap(text: string) {
   return text.normalize("NFC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "")
@@ -74,6 +84,8 @@ export class OverlapIndex {
   private readonly exact = new Map<string, number>()
   private readonly postings = new Map<string, number[]>()
   private readonly substrings = new Map<string, number>()
+  /** 근사 사본 찾기(findNear)용 3-gram 역색인. 처음 부를 때 만든다. */
+  private trigramPostings: Map<string, number[]> | null = null
 
   constructor(texts: readonly string[], options: { substrings?: boolean } = {}) {
     this.items = texts.map((text) => {
@@ -141,5 +153,36 @@ export class OverlapIndex {
       }
     }
     return null
+  }
+
+  /**
+   * 근사 사본: 글의 3-gram 가운데 NEAR_TRIGRAM_CONTAINMENT 이상이 한 참조 글 안에 있으면(참조 글에서 낱말을 떼거나 조금 바꿨으면)
+   * 그 참조 글(가장 앞 위치)과 몫을 돌려준다. 정규화 NEAR_MIN_LENGTH 자보다 짧은 글은 보지 않는다(짧은 구는 흔한 낱말 하나로도 걸린다).
+   * 짧은 참조 글을 통째로 담고 낱말을 붙인 글은 자연스러운 질문에도 많아(경고가 수백 개 늘어) 보지 않는다.
+   */
+  findNear(text: string): { index: number; containment: number } | null {
+    const normalized = normalizeForOverlap(text)
+    if (normalized.length < NEAR_MIN_LENGTH) return null
+    if (!this.trigramPostings) {
+      const postings = new Map<string, number[]>()
+      this.items.forEach((item, index) => {
+        for (const gram of trigramSet(item.normalized)) {
+          const list = postings.get(gram) ?? []
+          list.push(index)
+          postings.set(gram, list)
+        }
+      })
+      this.trigramPostings = postings
+    }
+    const grams = trigramSet(normalized)
+    const shared = new Map<number, number>()
+    for (const gram of grams) for (const index of this.trigramPostings.get(gram) ?? []) shared.set(index, (shared.get(index) ?? 0) + 1)
+    let best: { index: number; containment: number } | null = null
+    for (const [index, count] of shared) {
+      const containment = count / grams.size
+      if (containment < NEAR_TRIGRAM_CONTAINMENT) continue
+      if (!best || containment > best.containment || (containment === best.containment && index < best.index)) best = { index, containment }
+    }
+    return best
   }
 }

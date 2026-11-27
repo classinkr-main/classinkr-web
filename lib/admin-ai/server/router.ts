@@ -10,7 +10,7 @@
 //  4. 1·2위 점수가 가까우면 되묻는다(후보 2개 카드). 모델 어댑터가 있으면 그 둘 중에서만 고르게 한다.
 // 순수 모듈이다(I/O·server-only 없음) — 시험과 이후 위컴 방 어댑터가 그대로 부른다.
 
-export type AskBranch = "knowledge" | "contact" | "link" | "read"
+export type AskBranch = "knowledge" | "contact" | "link" | "read" | "consultations" | "customer_history"
 export type Branch = AskBranch | "write" | "unknown"
 
 /** 조회 도구(lib/ops-tools 레지스트리의 R0, mcpName). screen 은 도구가 없는 조회 — 화면 링크로 안내한다. */
@@ -51,10 +51,17 @@ export interface RouteDecision {
 const SENTENCE_BREAK = /(?<=[?？!])\s*|(?<=[가-힣A-Za-z0-9)])[.。]\s+|[.。]$|\n+/
 // 늘 끊는 이음 — "…하고, …" "…이고, …" "…며, …"(쉼표가 붙은 이음 어미)와 "그리고"·"또". 앞 조각에 이음 어미를 남겨 원형으로 되돌린다.
 const ALWAYS_BREAK = /(?<=[가-힣](?:고|며|면서|구))\s*,\s*|\s*,?\s*그리고\s+|\s+또\s+(?=[가-힣])/
+// 묻는 어미 + 쉼표 — "가나학원 지난달 문의 뭐였지, 재고는 몇 대 남았어?"(앞 갈래 답이 사라지지 않게). 늘 끊지 않고
+// 뒤 조각이 제 대상을 묻는 질문일 때만 끊는다(acceptQuestionCommaSplit) — "환불 규정이 뭐야, 알려줘"·"이거 뭐야, 담당자 알려줘"
+// (뒤가 청하는 말)와 "라이선스 있어, 연결이 안 돼요"(뒤가 서술)는 한 조각 그대로다.
+const QUESTION_COMMA =
+  /(?<=(?:였지|었지|았지|했지|뭐지|뭐야|이야|거야|있어|있나|었나|았나|였나|했나|했어|됐어|됐나))\s*,\s*/g
+/** 청하는 꼬리로 끝나는 말 — 앞 질문을 다시 청하는 것이라 따로 묻는 조각이 아니다("…뭐야, 알려줘"). */
+const REQUEST_END = /(?:알려|보여|찾아|설명해|정리해|확인해|뽑아|조회해|말해)\s*(?:줘|주세요|줄래|주라|봐|봐요)\s*[?？.!]*$/
 // 쉼표 없는 이음(검토 동작-2) — 청하거나 시키는 동사 + 고. "환불 규정 알려 주고 담당자도 알려 줘", "출고 예정 등록하고 견적 초안도 만들어 줘".
 // 끊은 뒤 양쪽 꼴을 보고 받아들인다(acceptVerbSplit). "바꾸고 내가 맡을게"·"만들고 나서 …"는 끊지 않는다.
 const VERB_JOINT =
-  /(?<=(?:(?:알려|보여|찾아|설명해|정리해|확인해|만들어|보내|넣어|잡아|등록해|뽑아)\s*주|(?:등록|작성|추가|생성|확인|조회|정리|설명)\s*하|만들|보내|넣|잡)(?:고|구))\s+(?!나서|나면|난\s|있|싶|다시|나니)/g
+  /(?<=(?:(?:알려|보여|찾아|설명해|정리해|확인해|만들어|보내|넣어|잡아|등록해|뽑아|링크|주소)\s*주|(?:등록|작성|추가|생성|확인|조회|정리|설명)\s*하|만들|보내|넣|잡)(?:고|구))\s+(?!나서|나면|난\s|있|싶|다시|나니)/g
 // 명사 이음 — "견적 목록이랑 딜 목록 보여 줘". 양쪽에 서로 다른 조회 대상이 있을 때만 끊는다.
 const NOUN_JOINT = /(?<=[가-힣A-Za-z0-9])(?:이랑|랑|하고|과|와)\s+/g
 /** 오른쪽 조각의 청하는 꼬리 — 명사로 끝난 왼쪽 조각이 빌려 쓴다("견적 목록" + "보여 줘"). */
@@ -86,6 +93,11 @@ function restoreJoint(piece: string, nextForm: SentenceForm | null): string {
 
 function readToolOf(text: string): string | undefined {
   return READ_TOOLS.find((entry) => entry.match.test(text))?.tool
+}
+
+/** 명사 이음을 끊을 조회 대상 — 조회 도구, 또는 상담 이력·내역·기록("가나학원 상담 이력이랑 견적 목록 보여 줘"). */
+function jointTargetOf(text: string): string | undefined {
+  return readToolOf(text) ?? (CONSULT_OBJ.test(text) && CONSULT_RECORD.test(text) ? "consultations" : undefined)
 }
 
 /** 쉼표 없는 동사 이음을 받아들일지 — 양쪽이 묻거나 시키는 꼴이고, 시키는 앞 조각은 뒤도 시키는 말일 때만. */
@@ -124,10 +136,15 @@ function splitAt(piece: string, joint: RegExp, accept: (left: string, right: str
   return out
 }
 
+function acceptQuestionCommaSplit(left: string, right: string): string | null {
+  if (detectForm(right) !== "question" || REQUEST_END.test(right)) return null
+  return left
+}
+
 function acceptNounSplit(left: string, right: string): string | null {
   if (left.length > 20 || VERBISH_END.test(left)) return null
-  const leftTool = readToolOf(left)
-  const rightTool = readToolOf(right)
+  const leftTool = jointTargetOf(left)
+  const rightTool = jointTargetOf(right)
   if (!leftTool || !rightTool || leftTool === rightTool) return null
   const tail = right.match(ASK_TAIL)?.[0].trim()
   return tail ? `${left} ${tail}` : left
@@ -137,7 +154,11 @@ export function splitPieces(text: string): string[] {
   const sentences = text.split(SENTENCE_BREAK).map((piece) => (piece ?? "").trim()).filter(Boolean)
   const out: string[] = []
   for (const sentence of sentences) {
-    const clauses = sentence.split(ALWAYS_BREAK).map((piece) => (piece ?? "").trim()).filter(Boolean)
+    const clauses = sentence
+      .split(ALWAYS_BREAK)
+      .map((piece) => (piece ?? "").trim())
+      .filter(Boolean)
+      .flatMap((piece) => splitAt(piece, QUESTION_COMMA, acceptQuestionCommaSplit))
     clauses.forEach((clause, index) => {
       const next = clauses[index + 1]
       const restored = next ? restoreJoint(clause, detectForm(next)) : clause
@@ -264,6 +285,66 @@ const READ_FORM =
 /** 화면·페이지가 어디 있는지 묻는 말 — 조회가 아니라 링크다("리드 목록 페이지 어디 있어?"). */
 const SCREEN_WHERE = /(?:화면|페이지|메뉴|탭)\s*(?:은|는|이|가)?\s*(?:어디|어딨)/
 
+// 상담 내역 찾기 — 묻는 대상(상담·문의·채팅·채널톡)과 묻는 꼴(찾아·있었나·보여·뭐였지·언제·최근) 또는 고객(기관 이름·"이 고객")이
+// 함께일 때만. "상담 연결 방법은?" 같은 정보 질문, 담당자·화면 위치를 묻는 말, 응대 방법을 묻는 말은 이 갈래가 아니다.
+const CONSULT_OBJ = /상담(?!원)|문의(?!처)|채팅(?!창)|채널톡|cs\s*(?:대화|건|내역)/i
+const CONSULT_RECORD = /이력|기록|내역/
+const CONSULT_FORM =
+  /찾아|있었|있어|있나|있는지|들어온|들어왔|(?:왔|온)\s*(?:거|게|건|어|나|었)|보여|뭐였|뭐\s*(?:문의|상담|물어)|무슨\s*(?:문의|상담)|언제|최근|요즘|지난|이번\s*(?:주|달)|했(?:지|나|던|었|어\s*[?？])|목록|몇\s*건/
+const CONSULT_CUSTOMER = /[가-힣A-Za-z0-9]{2,}(?:학원|어학원|에듀|교육|스쿨|센터|학교|아카데미|교습소)|(?:^|\s)(?:이|해당)\s*(?:고객|학원|기관|곳)/
+const CONSULT_NOT = /방법|어떻게|절차|정책|규정|규칙|하려면|(?:하는|거는|여는|받는|남기는)\s*법|연결\s*(?:하|해|방법|은|는)|신청|답해|답하|응대|뜻|의미|기능|설정|버튼|가능/
+/**
+ * 상담이 CRM 단계·일정·다른 조회 대상의 이름으로 쓰인 말 — "상담 단계 리드", "상담 일정 언제야", "문의 유입 몇 건", "상담 메모".
+ * 이때는 상담 내역 갈래가 아니다(옛 판정 — 조회·정보 — 그대로). 시험: router.test.ts "CRM 상담 단계·일정 문장".
+ */
+const CONSULT_CRM =
+  /단계|리드|딜|영업\s*기회|파이프라인|유입|트래픽|방문(?:자|수)|일정|스케줄|잡혀\s*있|(?:상담|문의|채팅)\s*(?:가능\s*)?시간|(?:상담|문의)\s*메모|주제|유형|순위/
+
+/** 상담 내역을 찾는 말인가 — 시험: tests/admin-ai/fixtures/intent-table.ts CONSULTATION_ASKS·CONSULTATION_NOT. */
+export function isConsultationAsk(text: string): boolean {
+  if (!CONSULT_OBJ.test(text) || CONSULT_NOT.test(text) || CONSULT_CRM.test(text)) return false
+  if (WHO.test(text.replace(INDIRECT_WHO, " ")) || LINK_FORM.test(text)) return false
+  return CONSULT_FORM.test(text) || CONSULT_CUSTOMER.test(text) || CONSULT_RECORD.test(text)
+}
+
+// 고객 이력 — 고객사 하나의 CRM 활동 기록(결제·견적·AS·API·CS 케이스 태그)과 담당 영업. "가나학원 결제 문제 있었나?",
+// "이 고객 견적 이슈 있었어?", "가나학원 고객 이력 알려 줘". 상담·문의·채팅(상담 내역 갈래), CRM 단계·일정, 방법·규정 질문,
+// 목록·금액 조회(견적 목록·수금 현황), 담당자·화면 위치를 묻는 말은 이 갈래가 아니다.
+// 시험: tests/admin-ai/fixtures/customer-history-table.ts(판정 표)·customer-history-router.test.ts.
+const HISTORY_TOPIC =
+  /결제|입금|수금|미수|미납|정산|환불|청구|견적|(?<![a-z])a\/?s(?![a-z])|에이에스|수리|고장|파손|불량|교체|(?<![a-z])api(?![a-z])|연동|(?<![a-z])cs\s*케이스|씨에스\s*케이스/i
+/** 문제를 가리키는 말 — 고장·파손·불량은 고객이 있을 때만 문제로 친다("칠판 고장 있었나?"만으로는 어느 고객인지 모른다). */
+const HISTORY_ISSUE = /문제|이슈|사고|클레임|컴플레인|불만|트러블|분쟁|민원|케이스/
+const HISTORY_DEFECT = /고장|파손|불량/
+/**
+ * 이력을 가리키는 말 — "고객 이력", "문제 이력", "AS 이력", "가나학원 이력". 견적·결제 이력은 넣지 않는다(견적 목록 조회·수금 화면 몫).
+ * 통화·컨택 기록은 활동 조회 몫이라 "기록"은 문제·이슈 뒤에서만 받는다.
+ */
+const HISTORY_RECORD_WORD =
+  /고객\s*이력|(?:이슈|문제|클레임|사고|민원)\s*(?:이력|기록|내역)|(?:(?<![a-z])a\/?s|(?<![a-z])api|연동|cs\s*케이스|수리)\s*(?:이력|기록|내역)|(?:학원|에듀|교육|스쿨|센터|학교|아카데미|교습소|기관)(?:의)?\s*(?:전체\s*)?이력/i
+/** 고객이 있을 때 받는 묻는 꼴 — 있었나·이력·보여 줘·뭐였지·최근. */
+const HISTORY_FORM = /있었|있어|있나|있는지|났었|났어|났나|생겼|터졌|이력|기록|내역|보여|알려|찾아|정리해|뭐였|언제|최근|요즘/
+/** 고객이 없을 때는 지난 일을 묻는 꼴만 — "결제 문제 있나요?"(지금 알려진 문제가 있나)는 정보 질문으로 둔다. */
+const HISTORY_PAST = /있었|났었|생겼|터졌|이력|기록|내역|뭐였/
+const HISTORY_NOT = /방법|어떻게|절차|정책|규정|규칙|하려면|하면|되면|가능|기능|설정|버튼|뜻|의미|차이|기준|조건|왜/
+const HISTORY_LIST = /목록|현황|합계|얼마|금액|몇\s*(?:대|개|번)|버전|비교|단가|초안/
+/** 여러 고객을 거꾸로 찾는 말 — "결제 문제 있었던 고객 알려 줘". 고객 하나의 이력이 아니다. */
+const HISTORY_MANY = /(?:어느|어떤|무슨)\s*(?:고객|학원|기관|곳)|(?:고객|학원|기관|곳)\s*들|(?:있었던|났던|생긴)\s*(?:고객|학원|기관|곳)/
+
+/** 고객 이력을 묻는 말인가 — 상담 내역 갈래(isConsultationAsk)와 겹치지 않는다(상담·문의·채팅 낱말이 있으면 아니다). */
+export function isCustomerHistoryAsk(text: string): boolean {
+  if (CONSULT_OBJ.test(text) || CONSULT_CRM.test(text) || HISTORY_NOT.test(text) || HISTORY_LIST.test(text) || HISTORY_MANY.test(text)) return false
+  if (WHO.test(text.replace(INDIRECT_WHO, " ")) || LINK_FORM.test(text)) return false
+  const record = HISTORY_RECORD_WORD.test(text)
+  // 고객이 없으면 주제·문제·지난 일이 모두 있어야 하고, 제품 질문("클래스인 결제 문제 있었어?" — 알려진 장애)은 정보 답에 둔다.
+  if (!CONSULT_CUSTOMER.test(text)) {
+    return HISTORY_TOPIC.test(text) && (HISTORY_ISSUE.test(text) || record) && HISTORY_PAST.test(text) && !PRODUCT.test(text)
+  }
+  if (record) return true
+  const issue = HISTORY_ISSUE.test(text) || HISTORY_DEFECT.test(text)
+  return issue && (HISTORY_TOPIC.test(text) ? HISTORY_FORM.test(text) : HISTORY_PAST.test(text))
+}
+
 const READ_TOOLS: Array<{ match: RegExp; tool: Extract<ReadTarget, { kind: "tool" }>["tool"] }> = [
   { match: /재고|가용|남은\s*수량|몇\s*대\s*(?:남|있)|주문\s*권장/, tool: "hw_stock" },
   {
@@ -294,7 +375,7 @@ function matchRead(text: string): ReadTarget | undefined {
 }
 
 export function scoreBranches(text: string): { scores: Record<AskBranch, number>; read?: ReadTarget } {
-  const scores: Record<AskBranch, number> = { knowledge: 1, contact: 0, link: 0, read: 0 }
+  const scores: Record<AskBranch, number> = { knowledge: 1, contact: 0, link: 0, read: 0, consultations: 0, customer_history: 0 }
   const symptom = SYMPTOM.test(text)
   const knowledgeForm = KNOWLEDGE_FORM.test(text)
 
@@ -314,6 +395,9 @@ export function scoreBranches(text: string): { scores: Record<AskBranch, number>
     }
     if (knowledgeForm) scores.read -= 3
   }
+
+  if (isConsultationAsk(text)) scores.consultations += CONSULT_RECORD.test(text) ? 8 : 7
+  if (isCustomerHistoryAsk(text)) scores.customer_history += 8
 
   if (knowledgeForm) scores.knowledge += 2
   if (PRODUCT.test(text)) scores.knowledge += 1
@@ -364,4 +448,6 @@ export const BRANCH_LABEL: Record<AskBranch, string> = {
   contact: "담당자 찾기",
   link: "화면·주소 링크",
   read: "데이터 조회",
+  consultations: "상담 내역 찾기",
+  customer_history: "고객 이력 찾기",
 }

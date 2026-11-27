@@ -12,7 +12,7 @@ SMS/LMS/카카오 알림톡 발송을 위한 solapi 연동 백엔드 운영 문�
 |----|------|------|
 | `SOLAPI_API` | 예 | solapi API Key. 미설정 시 발송은 자동으로 `simulated` 처리(무음 실패 아님). |
 | `SOLAPI_SECRET` | 예 | solapi API Secret. |
-| `SOLAPI_SENDER_NUMBER` | 아니오 | 기본 발신번호. 미설정 시 `01059118522`(등록 확인된 번호)로 폴백. 하이픈 없이 저장 권장. |
+| `SOLAPI_SENDER_NUMBER` | 아니오 | 기본 발신번호. 미설정 시 `[발신번호 제외]`(등록 확인된 번호)로 폴백. 하이픈 없이 저장 권장. |
 | `SOLAPI_KAKAO_PF_ID` | 아니오 | 카카오 발신프로필(pfId). 미설정 시 확정 채널 상수(`KA01PF2607030241141841Yu8RL3EQMB`, searchId "클래스인코리아")로 폴백. |
 | `MESSAGING_DRY_RUN` | 아니오 | `1`이면 실발송 없이 모든 발송을 `simulated`로 기록. 스테이징/리허설용. |
 
@@ -29,7 +29,7 @@ SMS/LMS를 보내려면 발신번호가 solapi에 사전 등록되어 있어야 
 3. 통신사 서류 또는 ARS 인증으로 번호 소유를 증명.
 4. 승인되면 해당 번호를 `SOLAPI_SENDER_NUMBER`로 설정.
 
-> 현재 `01059118522`는 등록·검증 완료 상태다(2026-07-03 실발송 e2e에서 `registeredSuccess:1` 확인).
+> 현재 `[발신번호 제외]`는 등록·검증 완료 상태다(2026-07-03 실발송 e2e에서 `registeredSuccess:1` 확인).
 > 미등록 번호로 보내면 solapi가 접수 단계에서 실패를 반환하며, 그 에러 메시지는
 > `/api/admin/messaging/test-send` 응답의 `error` 필드에 원문 그대로 전달된다.
 

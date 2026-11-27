@@ -15,6 +15,8 @@
  *   CHATBOT_CLAUDE_MAX_OUTPUT_TOKENS 답변 1회 출력 상한 (기본 700)
  */
 
+import { ASSIST_CANDIDATES, assistCandidateCount, assistPickPromptVersion, type AssistPickPromptVersion } from "@/lib/chatbot/answer-index/assist"
+
 export type ChatbotProviderName = "gemini" | "claude"
 
 export interface ChatbotClaudeConfig {
@@ -81,6 +83,11 @@ export function readChatbotClaudeConfig(env: Env = process.env): ChatbotClaudeCo
 //   CHATBOT_ASSIST_ESCALATE_TIMEOUT_MS 올림 한 번의 시간 상한(기본 3,000ms, 남은 라우트 예산 안에서)
 //   CHATBOT_ASSIST_CROSS_FALLBACK     off(기본) | on — Gemini 고르기가 402·429·5xx·차단기면 Claude Haiku 로 한 번(⑤)
 //   CHATBOT_CLAUDE_DAILY_BUDGET_USD   선택 층 Claude 호출의 KST 하루 상한(기본 1). 넘으면 ③⑤를 끄고 Gemini 고르기만 돈다
+//   (아래는 lib/chatbot/answer-index/assist.ts 가 읽는다 — 여기서는 답 캐시 열쇠 꼬리에만 쓴다)
+//   CHATBOT_ASSIST_PICK_PROMPT        v1(기본) | v2 — 단일 질문 고르기 지시문 판
+//   CHATBOT_ASSIST_CANDIDATES         후보 수(기본 10, 1~20)
+//   CHATBOT_ASSIST_BAND_LO·_HI        band 모드 확신도 대역(없으면 calibration.json assist.band)
+//   CHATBOT_ASSIST_ABSTAIN_BAND_LO    못 찾은(abstain) 결정에만 쓰는 더 낮은 하한(없으면 꺼짐)
 
 export type AssistPickProvider = "gemini" | "claude"
 
@@ -95,7 +102,21 @@ export interface AssistPickConfig {
   crossFallbackModel: string
   dailyBudgetUsd: number
   apiKeys: string[]
+  /** 단일 질문 고르기 지시문 판(CHATBOT_ASSIST_PICK_PROMPT). */
+  pickPrompt: AssistPickPromptVersion
+  /** 후보 수(CHATBOT_ASSIST_CANDIDATES). */
+  candidates: number
+  /** band 대역 덮어쓰기(CHATBOT_ASSIST_BAND_LO·HI 글 그대로, 없으면 null). */
+  band: [string | null, string | null]
+  /** abstain 전용 하한(CHATBOT_ASSIST_ABSTAIN_BAND_LO 글 그대로, 없으면 null). */
+  abstainBandLo: string | null
 }
+
+/**
+ * 고르기 규약 판(답 캐시 열쇠 꼬리 맨 앞). 모델 선택 층을 켰을 때만 열쇠에 들어간다(끄면 열쇠가 그대로다).
+ * picks1(R2 B3): 복합 질문 {"picks": […]}·조각별 수락·정책 주제 개념 겹침·없는 개념은 묻는 대상만·정책 카드 답의 0 허용.
+ */
+export const ASSIST_PICK_PROTOCOL = "picks1"
 
 export const DEFAULT_ASSIST_CLAUDE_PICK_MODEL = "claude-haiku-5-5"
 export const DEFAULT_ASSIST_ESCALATE_MODEL = "claude-sonnet-5-5"
@@ -116,16 +137,27 @@ export function readAssistPickConfig(env: Env = process.env): AssistPickConfig {
     crossFallbackModel: DEFAULT_ASSIST_CROSS_FALLBACK_MODEL,
     dailyBudgetUsd: num(env.CHATBOT_CLAUDE_DAILY_BUDGET_USD, DEFAULT_ASSIST_CLAUDE_DAILY_BUDGET_USD),
     apiKeys: resolveAnthropicKeys(env),
+    pickPrompt: assistPickPromptVersion(env),
+    candidates: assistCandidateCount(env),
+    band: [env.CHATBOT_ASSIST_BAND_LO?.trim() || null, env.CHATBOT_ASSIST_BAND_HI?.trim() || null],
+    abstainBandLo: env.CHATBOT_ASSIST_ABSTAIN_BAND_LO?.trim() || null,
   }
 }
 
-/** 기본(지금 동작)과 다른 설정이면 답 캐시 열쇠에 붙일 꼬리. 기본이면 빈 글(열쇠가 그대로다). */
+/**
+ * 답 캐시 열쇠 꼬리(모델 선택 층을 켰을 때만 붙는다). 맨 앞은 고르기 규약 판(ASSIST_PICK_PROTOCOL — 규약을 바꾸면 판을 올려 옛 답을
+ * 꺼내지 않는다), 그 뒤는 기본과 다른 설정(업체·모델·올림·대체·지시문 판·후보 수·대역).
+ */
 export function assistPickCacheSuffix(config: AssistPickConfig): string {
-  const parts: string[] = []
+  const parts: string[] = [ASSIST_PICK_PROTOCOL]
   if (config.pickProvider === "claude" || config.pickModel) parts.push(`pick-${config.pickProvider}:${config.pickModel ?? "basic"}`)
   if (config.escalate) parts.push(`esc-${config.escalateModel}`)
   if (config.crossFallback) parts.push(`xfb-${config.crossFallbackModel}`)
-  return parts.length > 0 ? `+${parts.join("+")}` : ""
+  if (config.pickPrompt !== "v1") parts.push(`prompt-${config.pickPrompt}`)
+  if (config.candidates !== ASSIST_CANDIDATES) parts.push(`cand-${config.candidates}`)
+  if (config.band[0] || config.band[1]) parts.push(`band-${config.band[0] ?? ""}-${config.band[1] ?? ""}`)
+  if (config.abstainBandLo) parts.push(`abstain-${config.abstainBandLo}`)
+  return `+${parts.join("+")}`
 }
 
 /** 이 요청을 Claude 로 보낼지 — provider·키·카나리 비율. 예산·분당 상한은 budget.ts 가 따로 본다. */

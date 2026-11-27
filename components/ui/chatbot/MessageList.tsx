@@ -21,9 +21,12 @@ import { ConsultationBridge, getChannelTalkLabel } from "@/components/ui/chatbot
 import { alignHandoffButtonMention } from "@/components/ui/chatbot/consultation-draft"
 import { getSupportHoursState, type SupportHoursState } from "@/lib/contact/support-hours"
 import {
+    AnswerHeadLine,
     LinkifiedText,
+    findAnswerHeadBlocks,
     flattenAssistantMarkdownLinks,
     prepareAssistantDisplayText,
+    splitAnswerBlocks,
 } from "@/components/ui/chatbot/MessageText"
 import { EASING_SOFT_ENTER } from "@/components/ui/chatbot/constants"
 import {
@@ -184,6 +187,8 @@ function Caret({ shouldReduceMotion }: { shouldReduceMotion: boolean | null }) {
 }
 
 // 이전 메시지들은 props(원시값)가 그대로라 memo로 재파싱(sanitize+split+regex) 건너뜀 — 스트리밍 버블만 갱신.
+// 문단·목록 항목 key 는 순서만 쓴다. 글을 key 에 넣으면 흐르는 동안 조각마다 마지막 문단이 새 요소로 바뀌어,
+// 휴대폰에서 손가락 밑 요소가 문서에서 빠지고 그 손가락의 touchmove·touchend 가 목록까지 오지 않았다.
 const MessageContent = memo(function MessageContent({
     content,
     role,
@@ -205,13 +210,106 @@ const MessageContent = memo(function MessageContent({
     // 목록 항목 값은 every(Boolean) 로 걸렀지만 타입은 string | undefined 라 빈 글로 받는다.
     const renderText = (text: string | undefined) =>
         role === "assistant" ? <LinkifiedText text={text ?? ""} onNavigate={onNavigate} /> : text
-    const blocks = visibleContent
-        .trim()
-        .split(/\n{2,}/)
-        .map((block) => block.trim())
-        .filter(Boolean)
+    const blocks = splitAnswerBlocks(visibleContent)
 
     if (blocks.length === 0) return null
+
+    // 복합 답의 "1. 주제" 머리 줄(answer-heads.ts). 답 글에서만 찾는다. 흐르는 동안은 머리 줄만 온 끝 덩이도 머리로 본다(굵기가 깜빡이지 않게).
+    const headBlocks = new Set(role === "assistant" ? findAnswerHeadBlocks(blocks, { streaming: isStreaming }) : [])
+
+    // 덩이 하나(줄 묶음)를 번호 목록·점 목록·리드 + 점 목록·문단 가운데 하나로 그린다.
+    const renderLines = (lines: string[], showCaret: boolean, key?: number) => {
+        const orderedItems = lines.map(orderedLineValue)
+        const bulletItems = lines.map(bulletLineValue)
+
+        if (orderedItems.length > 0 && orderedItems.every(Boolean)) {
+            return (
+                <ol key={key} className="space-y-2">
+                    {orderedItems.map((item, index) => {
+                        const isLastItem = index === orderedItems.length - 1
+                        return (
+                            <li key={index} className="flex items-start gap-2">
+                                {/* 번호는 장식이라 읽지 않는다(목록이 순서를 알린다). 원 배지 대신 13px 숫자(CX-16). */}
+                                <span className="min-w-4 shrink-0 text-folio leading-6 tabular-nums text-fg-muted" aria-hidden="true">
+                                    {index + 1}.
+                                </span>
+                                <span className="flex-1">
+                                    {renderText(item)}
+                                    {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
+                                </span>
+                            </li>
+                        )
+                    })}
+                </ol>
+            )
+        }
+
+        if (bulletItems.length > 0 && bulletItems.every(Boolean)) {
+            return (
+                <ul key={key} className="space-y-2">
+                    {bulletItems.map((item, index) => {
+                        const isLastItem = index === bulletItems.length - 1
+                        return (
+                            <li key={index} className="flex items-start gap-2.5">
+                                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
+                                <span className="flex-1">
+                                    {renderText(item)}
+                                    {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
+                                </span>
+                            </li>
+                        )
+                    })}
+                </ul>
+            )
+        }
+
+        // 리드 문장 + 뒤따르는 불릿 목록(예: "보통 이렇게 묶여요.\n- A\n- B")은
+        // 리드 줄을 문단으로, 나머지를 불릿 리스트로 분리해 렌더링한다. 불릿이 섞인 본문에서
+        // 날 대시("- ")가 그대로 보이던 문제를 막는다. 불릿 뒤에 다시 평문이 오는 혼합 블록은
+        // 오인 렌더를 피하려 이 분기에서 처리하지 않고 아래 <p> 로 보낸다.
+        const firstBulletIndex = lines.findIndex((line) => bulletLineValue(line) !== undefined)
+        if (
+            firstBulletIndex > 0 &&
+            lines.slice(firstBulletIndex).every((line) => bulletLineValue(line) !== undefined)
+        ) {
+            const leadLines = lines.slice(0, firstBulletIndex).map(cleanMessageLine).filter(Boolean)
+            const trailingBullets = lines
+                .slice(firstBulletIndex)
+                .map(bulletLineValue)
+                .filter((value): value is string => Boolean(value))
+            return (
+                <div key={key} className="space-y-2">
+                    {leadLines.length > 0 && (
+                        <p>
+                            {renderText(leadLines.join("\n"))}
+                            {showCaret && trailingBullets.length === 0 ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
+                        </p>
+                    )}
+                    <ul className="space-y-2">
+                        {trailingBullets.map((item, index) => {
+                            const isLastItem = index === trailingBullets.length - 1
+                            return (
+                                <li key={index} className="flex items-start gap-2.5">
+                                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
+                                    <span className="flex-1">
+                                        {renderText(item)}
+                                        {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
+                                    </span>
+                                </li>
+                            )
+                        })}
+                    </ul>
+                </div>
+            )
+        }
+
+        return (
+            <p key={key}>
+                {renderText(lines.map(cleanMessageLine).filter(Boolean).join("\n"))}
+                {showCaret ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
+            </p>
+        )
+    }
 
     return (
         <motion.div
@@ -224,104 +322,19 @@ const MessageContent = memo(function MessageContent({
                 role === "assistant" ? "text-fg-ink" : "text-fg-on-accent"
             )}
         >
-            {blocks.map((block, blockIndex) => {
-                const isLastBlock = blockIndex === blocks.length - 1
-                const showCaret = isStreaming && isLastBlock
-
-                const lines = block
-                    .split("\n")
-                    .map((line) => line.trim())
-                    .filter(Boolean)
-                    .filter((line) => !/^(권장 순서|확인 기준):\s*$/i.test(line))
-                const orderedItems = lines.map(orderedLineValue)
-                const bulletItems = lines.map(bulletLineValue)
-
-                if (orderedItems.length > 0 && orderedItems.every(Boolean)) {
-                    return (
-                        <ol key={`${blockIndex}:${block}`} className="space-y-2">
-                            {orderedItems.map((item, index) => {
-                                const isLastItem = index === orderedItems.length - 1
-                                return (
-                                    <li key={`${index}:${item}`} className="flex items-start gap-2">
-                                        {/* 번호는 장식이라 읽지 않는다(목록이 순서를 알린다). 원 배지 대신 13px 숫자(CX-16). */}
-                                        <span className="min-w-4 shrink-0 text-folio leading-6 tabular-nums text-fg-muted" aria-hidden="true">
-                                            {index + 1}.
-                                        </span>
-                                        <span className="flex-1">
-                                            {renderText(item)}
-                                            {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                        </span>
-                                    </li>
-                                )
-                            })}
-                        </ol>
-                    )
-                }
-
-                if (bulletItems.length > 0 && bulletItems.every(Boolean)) {
-                    return (
-                        <ul key={`${blockIndex}:${block}`} className="space-y-2">
-                            {bulletItems.map((item, index) => {
-                                const isLastItem = index === bulletItems.length - 1
-                                return (
-                                    <li key={`${index}:${item}`} className="flex items-start gap-2.5">
-                                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
-                                        <span className="flex-1">
-                                            {renderText(item)}
-                                            {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                        </span>
-                                    </li>
-                                )
-                            })}
-                        </ul>
-                    )
-                }
-
-                // 리드 문장 + 뒤따르는 불릿 목록(예: "보통 이렇게 묶여요.\n- A\n- B")은
-                // 리드 줄을 문단으로, 나머지를 불릿 리스트로 분리해 렌더링한다. 불릿이 섞인 본문에서
-                // 날 대시("- ")가 그대로 보이던 문제를 막는다. 불릿 뒤에 다시 평문이 오는 혼합 블록은
-                // 오인 렌더를 피하려 이 분기에서 처리하지 않고 아래 <p> 로 보낸다.
-                const firstBulletIndex = lines.findIndex((line) => bulletLineValue(line) !== undefined)
-                if (
-                    firstBulletIndex > 0 &&
-                    lines.slice(firstBulletIndex).every((line) => bulletLineValue(line) !== undefined)
-                ) {
-                    const leadLines = lines.slice(0, firstBulletIndex).map(cleanMessageLine).filter(Boolean)
-                    const trailingBullets = lines
-                        .slice(firstBulletIndex)
-                        .map(bulletLineValue)
-                        .filter((value): value is string => Boolean(value))
-                    return (
-                        <div key={`${blockIndex}:${block}`} className="space-y-2">
-                            {leadLines.length > 0 && (
-                                <p>
-                                    {renderText(leadLines.join("\n"))}
-                                    {showCaret && trailingBullets.length === 0 ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                </p>
-                            )}
-                            <ul className="space-y-2">
-                                {trailingBullets.map((item, index) => {
-                                    const isLastItem = index === trailingBullets.length - 1
-                                    return (
-                                        <li key={`${index}:${item}`} className="flex items-start gap-2.5">
-                                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-fg-accent" aria-hidden="true" />
-                                            <span className="flex-1">
-                                                {renderText(item)}
-                                                {showCaret && isLastItem ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                                            </span>
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        </div>
-                    )
-                }
-
+            {blocks.map((lines, blockIndex) => {
+                const showCaret = isStreaming && blockIndex === blocks.length - 1
+                if (!headBlocks.has(blockIndex)) return renderLines(lines, showCaret, blockIndex)
+                // 머리 줄 바로 아래 결론 줄·단계는 머리 없이 그릴 때와 같다. 첫 덩이가 아니면 물음 사이를 조금 띄운다.
+                // 흐르는 중 머리 줄만 온 덩이는 커서를 머리 줄 끝에 둔다(빈 문단을 미리 만들지 않는다).
+                const headOnly = lines.length === 1
                 return (
-                    <p key={`${blockIndex}:${block}`}>
-                        {renderText(lines.map(cleanMessageLine).filter(Boolean).join("\n"))}
-                        {showCaret ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
-                    </p>
+                    <div key={blockIndex} className={blockIndex > 0 ? "pt-1.5" : undefined}>
+                        <AnswerHeadLine text={lines[0]} onNavigate={onNavigate}>
+                            {showCaret && headOnly ? <Caret shouldReduceMotion={shouldReduceMotion} /> : null}
+                        </AnswerHeadLine>
+                        {headOnly ? null : renderLines(lines.slice(1), showCaret)}
+                    </div>
                 )
             })}
         </motion.div>
@@ -512,7 +525,6 @@ function ThinkingIndicator({
         <motion.div
             initial={m({ opacity: 0, y: 10, scale: 0.96 }, shouldReduceMotion)}
             animate={m({ opacity: 1, y: 0, scale: 1 }, shouldReduceMotion)}
-            exit={m({ opacity: 0, y: -6, scale: 0.98 }, shouldReduceMotion)}
             transition={m(CHATBOT_MOTION.enter, shouldReduceMotion)}
             className="flex justify-start"
         >
@@ -635,6 +647,7 @@ export const MessageList = memo(function MessageList({
                         <motion.div
                             key={message.id}
                             data-chat-message-id={message.id}
+                            data-chat-message-role={message.role}
                             layout={animateLayout ? "position" : false}
                             initial={m({ opacity: 0, y: 10, scale: 0.98 }, shouldReduceMotion)}
                             animate={m({ opacity: 1, y: 0, scale: 1 }, shouldReduceMotion)}
@@ -774,11 +787,10 @@ export const MessageList = memo(function MessageList({
                         </motion.div>
                     )
                 })}
-
-                {isSending && !isStreaming ? (
-                    <ThinkingIndicator key="thinking" shouldReduceMotion={shouldReduceMotion} isSlow={isSlow} />
-                ) : null}
             </AnimatePresence>
+            {/* 기다림 말풍선은 AnimatePresence 밖에 둔다: 답 말풍선이 생기는 렌더에서 바로 빠져야 한다. 안에 두면 사라지는 효과가 끝난 뒤에도
+                보이지 않는 채 질문과 새 답 사이에 92px 자리를 잡고 있다가 다음 렌더에 빠져, 막 읽기 시작한 답 머리가 위로 미끄러졌다. */}
+            {isSending && !isStreaming ? <ThinkingIndicator shouldReduceMotion={shouldReduceMotion} isSlow={isSlow} /> : null}
             <div ref={bottomRef} />
         </div>
     )

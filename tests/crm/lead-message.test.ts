@@ -10,7 +10,7 @@ const META_MESSAGE = [
   "campaign=오프라인 HW/SW",
   "adset=교실녹화기능광고",
   "ad=교실녹화기능광고",
-  "fields=full_name: 최형우 / company_name: 메타A학원 / phone_number: +821023656411 / email: test@example.com / city: Cheongju",
+  "fields=full_name: 홍길동 / company_name: 메타A학원 / phone_number: +821000000000 / email: test@example.com / city: Cheongju",
 ].join("\n")
 
 describe("parseLeadMessage", () => {

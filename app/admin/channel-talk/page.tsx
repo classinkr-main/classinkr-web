@@ -292,6 +292,17 @@ function ChannelTalkInbox() {
     }
   }, [])
 
+  // 갈매봇 상담 내역 카드의 [열기](?conversation=<id>) — 목록을 읽은 뒤 그 상담의 대화 전문을 한 번 연다.
+  // 목록에 없는 id 면 아무것도 열지 않는다(목록 화면 그대로).
+  const deepLinkConversationId = searchParams.get("conversation")
+  const openedDeepLinkId = useRef<string | null>(null)
+  useEffect(() => {
+    if (!deepLinkConversationId || !data || openedDeepLinkId.current === deepLinkConversationId) return
+    openedDeepLinkId.current = deepLinkConversationId
+    const target = data.conversations.find((conversation) => conversation.id === deepLinkConversationId)
+    if (target) void openChatModal(target)
+  }, [data, deepLinkConversationId, openChatModal])
+
   // FAQ 후보 → 챗봇 추천 질문 승격
   async function promoteSuggestion(suggestion: FaqSuggestion) {
     const key = suggestion.question

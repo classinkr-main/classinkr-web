@@ -466,6 +466,121 @@ export async function listCrmCustomerEvents(
   }
 }
 
+// ── 갈매봇 "고객 이력" — 태그로 좁힌 최근 기록(lib/admin-ai/server/customer-history-deps.ts) ─────────────
+
+/** 고객 이력 한 줄 — 화면 카드에 쓰는 칸만. 본문·녹음·참석자·결정 사항은 읽지 않는다(서명 URL 도 만들지 않는다). */
+export interface CrmCustomerEventTagHit {
+  id: string
+  targetType: CrmCustomerEventTargetType
+  targetId: string | null
+  sourceType: CrmCustomerEventSourceType
+  sourceId: string | null
+  occurredAt: string
+  title: string
+  summary: string | null
+  nextActions: CrmEventNextAction[]
+  tags: string[]
+}
+
+export interface ListCrmCustomerEventsByTagsOptions {
+  /** 기록 대상(NEO 계정·리드). 같은 고객의 연결 대상까지 3개까지만 읽는다. */
+  targets: ReadonlyArray<{ targetType: CrmCustomerEventTargetType; targetId: string }>
+  /** 이 태그 중 하나라도 붙은 기록(tags && 배열 — crm_customer_events_tags_idx GIN). */
+  tags: readonly string[]
+  /** occurred_at >= from (ISO). */
+  from?: string
+  /** occurred_at <= to (ISO). */
+  to?: string
+  limit?: number
+}
+
+export interface ListCrmCustomerEventsByTagsResult {
+  /** false 면 기록 표가 아직 없다(마이그레이션 전) — 0건이 "기록 없음"이 아니다. */
+  ok: boolean
+  message: string | null
+  /** 맞는 기록 전체 건수(대상별 exact count 의 합). */
+  total: number
+  /** 최신순(occurred_at, id) 상위 limit 건. */
+  rows: CrmCustomerEventTagHit[]
+}
+
+const TAG_HIT_SELECT = "id, target_type, target_id, source_type, source_id, occurred_at, title, summary, next_actions, tags"
+const TAG_HIT_MAX_TARGETS = 3
+
+type CrmCustomerEventTagHitRow = Pick<
+  CrmCustomerEvent,
+  "id" | "target_type" | "target_id" | "source_type" | "source_id" | "occurred_at" | "title" | "summary" | "next_actions" | "tags"
+>
+
+/**
+ * 고객 하나(연결 대상 포함)의 기록 중 태그가 겹치는 최근 기록. 대상마다 한 번씩 읽어(최대 3) 최신순으로 합친다 —
+ * 대상 id 를 or() 식에 넣지 않으므로 id 의 쉼표·괄호를 따로 가리지 않아도 된다(crm_customer_events_target_idx 를 탄다).
+ * 표가 없으면 ok:false(빈 결과), 그 밖의 오류는 던진다(호출자가 "읽지 못했습니다"로 말한다 — 0건으로 숨기지 않는다).
+ */
+export async function listCrmCustomerEventsByTags(
+  options: ListCrmCustomerEventsByTagsOptions
+): Promise<ListCrmCustomerEventsByTagsResult> {
+  const limit = clampInteger(options.limit, 5, 1, 50)
+  const tags = [...new Set(options.tags.map((tag) => tag.trim()).filter(Boolean))]
+  const seen = new Set<string>()
+  const targets = options.targets
+    .map((target) => ({ targetType: target.targetType, targetId: target.targetId.trim() }))
+    .filter((target) => {
+      const key = `${target.targetType}:${target.targetId}`
+      if (!target.targetId || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .slice(0, TAG_HIT_MAX_TARGETS)
+  if (tags.length === 0 || targets.length === 0) return { ok: true, message: null, total: 0, rows: [] }
+
+  const supabase = createSupabaseAdminClient()
+  const results = await Promise.all(
+    targets.map((target) => {
+      let query = supabase
+        .from("crm_customer_events")
+        .select(TAG_HIT_SELECT, { count: "exact" })
+        .eq("target_type", target.targetType)
+        .eq("target_id", target.targetId)
+        .overlaps("tags", tags)
+      if (options.from) query = query.gte("occurred_at", options.from)
+      if (options.to) query = query.lte("occurred_at", options.to)
+      return query.order("occurred_at", { ascending: false }).order("id", { ascending: false }).limit(limit)
+    })
+  )
+
+  let total = 0
+  const byId = new Map<string, CrmCustomerEventTagHit>()
+  for (const { data, error, count } of results) {
+    if (error) {
+      if (isMissingCrmEventsTableError(error)) {
+        return { ok: false, message: "CRM 기록 DB 마이그레이션이 아직 적용되지 않았습니다.", total: 0, rows: [] }
+      }
+      throw new Error(`[crm-events] 태그 기록 조회 실패: ${error.message}`)
+    }
+    const rows = (data ?? []) as CrmCustomerEventTagHitRow[]
+    total += count ?? rows.length
+    for (const row of rows) {
+      byId.set(row.id, {
+        id: row.id,
+        targetType: row.target_type,
+        targetId: row.target_id,
+        sourceType: row.source_type,
+        sourceId: row.source_id,
+        occurredAt: row.occurred_at,
+        title: row.title,
+        summary: row.summary,
+        nextActions: nextActionsFromJson(row.next_actions),
+        tags: row.tags ?? [],
+      })
+    }
+  }
+  const rows = Array.from(byId.values())
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.id.localeCompare(a.id))
+    .slice(0, limit)
+  return { ok: true, message: null, total, rows }
+}
+
 // 실제 접촉으로 치는 기록 종류 allowlist. 내부 메모(manual_note)는 사람이 남겨도 고객과
 // 접촉했다는 증거가 아니므로 최초 응답·최근 컨택에서 제외한다.
 const RESPONSE_SOURCE_TYPES = ["call", "sms", "meeting_minutes", "recording", "lead_contact_log"] as const

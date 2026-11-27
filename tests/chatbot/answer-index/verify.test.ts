@@ -164,6 +164,35 @@ describe("V-7 평가 질문 겹침", () => {
     expect(errorsOf(result.findings, "V-7")).toHaveLength(2)
   })
 
+  it("카드 anchors 가 개발용 질문과 겹치면 경고한다(실패는 아님)", async () => {
+    const devSet = { name: "dev-fixture", questions: ["학생 화면 공유는 어디서 끄나요?"], sha: "0".repeat(16) }
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/course.json": [memberCard({ anchors: ["멤버 삭제", "학생 화면 공유는 어디서 끄나요"] })],
+      "variants/course.json": memberVariants(),
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [devSet] })
+    expect(errorsOf(result.findings, "V-7")).toHaveLength(0)
+    const warnings = result.findings.filter((finding) => finding.rule === "V-7" && finding.level === "warning")
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0].message).toContain("anchor")
+    expect(warnings[0].message).not.toContain("어디서 끄나요?")
+  })
+
+  it("낱말만 떼거나 바꾼 근사 사본 변형·반례는 경고한다", async () => {
+    const devSet = { name: "dev-fixture", questions: ["클래스인 누구를 위한 서비스예요"], sha: "0".repeat(16) }
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/course.json": [memberCard({ negatives: [{ q: "누구를 위한 서비스예요 클래스", route: "none" }] })],
+      "variants/course.json": memberVariants(["누구를 위한 서비스예요", "우리 학원 원장님이 쓰는 서비스인가요"]),
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [devSet] })
+    expect(errorsOf(result.findings, "V-7")).toHaveLength(0)
+    const near = result.findings.filter((finding) => finding.rule === "V-7" && finding.level === "warning" && finding.message.includes("근사 사본"))
+    expect(near.map((finding) => finding.file).sort()).toEqual(["cards/course.json", "variants/course.json"])
+    expect(near.every((finding) => !finding.message.includes("클래스인 누구를"))).toBe(true)
+  })
+
   it("확정용 묶음은 겹친 개수만 찍고 글은 찍지 않는다", async () => {
     const secret = "이 문장은 확정용 묶음 시험에만 쓰는 문장입니다"
     const dir = fixture({
@@ -319,6 +348,50 @@ describe("그 밖의 규칙", () => {
     })
     const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
     expect(errorsOf(result.findings, "V-12").some((finding) => finding.message.includes("fixed:wrong-kind"))).toBe(true)
+  })
+
+  it("V-13 first 가 답 문장 밖이면 실패하고, 안이면 통과한다", async () => {
+    const unit = units.find((candidate) => candidate.unitId === MEMBER_UNIT)!
+    const run = async (i: number) => {
+      const card = memberCard({ answer: { ...memberCard().answer, first: { unit: MEMBER_UNIT, i, hash: unit.sentences[i].hash } } })
+      const dir = fixture({ ...baseFiles(units, siteFacts), "cards/course.json": [card], "variants/course.json": memberVariants() })
+      return runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    }
+    expect(errorsOf((await run(4)).findings, "V-13")).toEqual([])
+    expect(errorsOf((await run(0)).findings, "V-13").some((finding) => finding.message.includes("답 문장에 없음"))).toBe(true)
+  })
+
+  it("V-13 headline 은 요체 마침표·60자 이하·카드 문장의 숫자와 부정 극성을 지켜야 한다", async () => {
+    const unit = units.find((candidate) => candidate.unitId === MEMBER_UNIT)!
+    const basis = [{ unit: MEMBER_UNIT, i: 3, hash: unit.sentences[3].hash }]
+    const run = async (text: string) => {
+      const card = memberCard({ answer: { ...memberCard().answer, headline: { text, basis } } })
+      const dir = fixture({ ...baseFiles(units, siteFacts), "cards/course.json": [card], "variants/course.json": memberVariants() })
+      return errorsOf((await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })).findings, "V-13").map((finding) => finding.message)
+    }
+    expect((await run("구성원을 내보내요")).some((message) => message.includes("요체"))).toBe(true)
+    expect((await run(`${"가".repeat(61)}요.`)).some((message) => message.includes("길이"))).toBe(true)
+    expect((await run("코스 구성원은 999명까지 내보낼 수 있어요.")).some((message) => message.includes('"999"'))).toBe(true)
+  })
+
+  it("V-6 명의·독·수상 형태에 모호 규칙이 없으면 실패하고, 있으면 통과한다", async () => {
+    const concept = (ambiguous: unknown[]) => ({ id: "C_x", kind: "attribute", generic: false, parents: [], doc: [], visitor: [{ form: "명의", boundary: "both" }], ambiguous })
+    const run = async (ambiguous: unknown[]) => {
+      const dir = fixture({ ...baseFiles(units, siteFacts), "lexicon.json": [concept(ambiguous), { id: "C_y", kind: "object", generic: false, parents: [], doc: ["계약 조건"], visitor: [], ambiguous: [] }] })
+      return errorsOf((await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })).findings, "V-6")
+    }
+    expect((await run([])).some((finding) => finding.message.includes("모호 규칙"))).toBe(true)
+    expect((await run([{ form: "명의", requiresAny: ["C_y"] }])).some((finding) => finding.message.includes("모호 규칙"))).toBe(false)
+  })
+
+  it("V-5 없는 개념 형태가 짧은 낱말 하나(수상)면 실패한다", async () => {
+    const absent = (forms: string[]) => [{ id: "absent:company/x", label: "수상", forms, area: "company", gapCard: "gap:company/x", verified: { grep: forms, unitHits: 0, siteHits: 0, checkedAt: "2026-11-25", checker: "test" } }]
+    const run = async (forms: string[]) => {
+      const dir = fixture({ ...baseFiles(units, siteFacts), "absent.json": absent(forms) })
+      return errorsOf((await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })).findings, "V-5")
+    }
+    expect((await run(["수상"])).some((finding) => finding.message.includes("짧은 낱말"))).toBe(true)
+    expect((await run(["수상 이력"])).some((finding) => finding.message.includes("짧은 낱말"))).toBe(false)
   })
 
   it("V-12 calibration.json 은 자기 자신을 뺀 자료 판과 비교한다(보정을 쓴 뒤 manifest 를 다시 써도 낡지 않음)", async () => {
@@ -675,5 +748,100 @@ describe("V-3 결정 전 정책 구절(blockPhrases)", () => {
     // 대기열 항목은 사람 결정을 기다리는 그대로다: policyRef 가 대기열 밖이면 V-11 은 여전히 오류.
     expect(errorsOf(result.findings, "V-11").some((finding) => finding.message.startsWith("policy:outside-queue:"))).toBe(true)
     expect(errorsOf(result.findings, "V-11").some((finding) => finding.message.startsWith("policy:plan-overview:"))).toBe(false)
+  })
+})
+
+describe("V-14·V-15 카드 꼴·변형 한 줄 물음(R3)", () => {
+  const goodText = [
+    "카메라 랜선과 전원 장치부터 확인해 주세요.",
+    "",
+    "1. 전원 장치가 켜져 있는지 봐요.",
+    "2. 랜선이 출력 단자에 꽂혀 있는지 봐요.",
+    "3. 다시 꽂았다면 1~2분 뒤 [검색]을 다시 눌러요.",
+    "",
+    '그래도 안 되면 "상담원 연결"이라고 남겨 주세요. 교실 위치와 카메라 모델을 알려 주시면 원격으로 점검해 드려요.',
+  ].join("\n")
+  const badText = [
+    "이 카드는 첫 줄이 너무 길어서 결론 한 줄 규칙을 지키지 못하는 글이고 [기관 관리] 메뉴 이름도 옛 이름입니다.",
+    "※ 설정은 직접 바꾸지 마세요.",
+    "",
+    "1. 하나를 눌러요.",
+    "2. 둘을 눌러요.",
+    "3. 셋을 눌러요.",
+    "4. 넷을 눌러요.",
+    "5. 다섯을 눌러요.",
+  ].join("\n")
+  const fixedCard = (id: string, text: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    kind: "fixed",
+    tier: "standard",
+    area: "classroom",
+    topic: "시험 카드",
+    answer: { text, textHash: answerTextHash(text) },
+    status: "active",
+    ...extra,
+  })
+  const variants = (id: string, qs: string[]) => ({ [id]: qs.map((q) => ({ q, p: "fixture", g: "A", m: "fixture" })) })
+
+  it("축약 카드 조각(team<4자리>)은 꼴·첫 줄·말투·옛 메뉴 이름·접두를 오류로, 기존 카드는 카드마다 경고 한 줄로 본다", async () => {
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/classroom.team1126.json": [fixedCard("fixed:r3-shape-good", goodText), fixedCard("fixed:r3-shape-bad", badText)],
+      "cards/classroom.json": [fixedCard("fixed:r3-shape-old", badText)],
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    const v14 = result.findings.filter((finding) => finding.rule === "V-14")
+    expect(v14.filter((finding) => finding.message.startsWith("fixed:r3-shape-good"))).toEqual([])
+    const strictErrors = errorsOf(v14).filter((finding) => finding.message.startsWith("fixed:r3-shape-bad"))
+    for (const code of ["first_line_60", "steps_4", "첫 줄이 결론이 아님", "니다체·요체 섞임", "옛 메뉴 이름", "※"]) {
+      expect(strictErrors.some((finding) => finding.message.includes(code))).toBe(true)
+    }
+    const old = v14.filter((finding) => finding.message.startsWith("fixed:r3-shape-old"))
+    expect(old).toHaveLength(1)
+    expect(old[0].level).toBe("warning")
+    expect(old[0].file).toBe("cards/classroom.json")
+    expect(v14.some((finding) => finding.level === "info" && finding.message.includes("첫 줄 결론"))).toBe(true)
+  })
+
+  it("합친 뒤에도 provenance.unit 이 team<4자리>면 축약 카드 조각으로 본다", async () => {
+    const provenance = { unit: "team1126", writer: "fixture", at: "2026-11-26", legacyIds: [] }
+    const dir = fixture({ ...baseFiles(units, siteFacts), "cards/classroom.json": [fixedCard("fixed:r3-shape-merged", badText, { provenance })] })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    expect(errorsOf(result.findings, "V-14").some((finding) => finding.message.startsWith("fixed:r3-shape-merged"))).toBe(true)
+  })
+
+  it("toneLocked 카드는 말투 섞임을 보지 않고, 꼴이 틀린 toneLocked·role 은 V-12 오류다", async () => {
+    const mixed = "네, 막을 수 있어요.\n관련 약관에 따라 처리됩니다."
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/classroom.team1126.json": [fixedCard("fixed:r3-tone-locked", mixed, { toneLocked: true }), fixedCard("fixed:r3-bad-flags", goodText, { toneLocked: "yes", role: "main" })],
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    expect(result.findings.filter((finding) => finding.rule === "V-14" && finding.message.startsWith("fixed:r3-tone-locked") && finding.message.includes("섞임"))).toEqual([])
+    const v12 = errorsOf(result.findings, "V-12").map((finding) => finding.message)
+    expect(v12.some((message) => message.includes("fixed:r3-bad-flags: toneLocked"))).toBe(true)
+    expect(v12.some((message) => message.includes("fixed:r3-bad-flags: role"))).toBe(true)
+  })
+
+  it("V-15 변형이 두 조각으로 나뉘면 축약 카드는 오류, 기존 카드는 카드마다 경고 한 줄, compoundOk 면 통과", async () => {
+    const compound = "녹화는 어디서 봐요? 그리고 삭제는 어떻게 해요?"
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/classroom.team1126.json": [fixedCard("fixed:r3-variant-new", goodText)],
+      "cards/classroom.json": [fixedCard("fixed:r3-variant-old", goodText)],
+      "variants/classroom.json": {
+        ...variants("fixed:r3-variant-new", [compound, "카메라가 안 잡혀요"]),
+        ...variants("fixed:r3-variant-old", [compound, "녹화는 어디서 봐요? 그리고 다운로드는 어떻게 해요?"]),
+      },
+      "variants/classroom.team1126.json": { "fixed:r3-variant-flag": [{ q: compound, p: "fixture", g: "A", m: "fixture", compoundOk: true }] },
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    const v15 = result.findings.filter((finding) => finding.rule === "V-15")
+    expect(errorsOf(v15).filter((finding) => finding.message.startsWith("fixed:r3-variant-new"))).toHaveLength(1)
+    const old = v15.filter((finding) => finding.message.startsWith("fixed:r3-variant-old"))
+    expect(old).toHaveLength(1)
+    expect(old[0]).toMatchObject({ level: "warning" })
+    expect(old[0].message).toContain("변형 2줄")
+    expect(v15.some((finding) => finding.message.startsWith("fixed:r3-variant-flag"))).toBe(false)
   })
 })

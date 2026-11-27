@@ -10,7 +10,9 @@ import type { OpsActor } from "@/lib/ops-tools/actor"
 
 import type { AdminAiStreamEvent } from "../stream-protocol"
 import type { AdminAiPageContext, AiBlock, OrderTicket } from "../types"
-import { contactBlock, linksBlock } from "./contact"
+import { CONSULTATION_INBOX_LINK_ID, consultationsBlock, type ConsultationSearchResult } from "./consultations"
+import { contactBlock, linksBlock, openCustomerOf } from "./contact"
+import { CUSTOMER_HISTORY_LINK_ID, customerHistoryBlocks, type CustomerHistoryResult } from "./customer-history"
 import { answerKnowledge, type KnowledgeDeps } from "./knowledge"
 import { askModelRoute, type AdminAiModelAdapter } from "./llm/adapter"
 import { BRANCH_LABEL, routeMessageDetailed, type AskBranch, type RouteDecision, type WriteKind } from "./router"
@@ -26,6 +28,23 @@ export interface OrchestratorDeps {
   resolveContact: (question: string, openCustomer: CustomerRef | null) => Promise<InternalContactCard>
   ops: OpsDeps
   model: AdminAiModelAdapter | null
+  /**
+   * 상담 내역 찾기(consultations.ts findConsultations 를 행위자 권한과 함께 묶은 것). 없으면 상담 화면 안내만 낸다.
+   * 질문·상담 글을 로그나 모델 입력으로 보내지 않는다.
+   */
+  consultations?: (question: string, openCustomer: CustomerRef | null, now: number) => Promise<ConsultationSearchResult>
+  /**
+   * 상담 내역 갈래를 통째로 막을 때 대신 낼 카드(위컴 단체방 — 답이 방 전체에 보인다). 있으면 consultations 를 부르지 않는다.
+   * 묻기 답의 "관련 상담 n건" 줄은 knowledge.consultationCount 를 빼서 따로 막는다.
+   */
+  consultationsDenied?: AiBlock
+  /**
+   * 고객 이력(customer-history.ts findCustomerHistory 를 행위자 권한과 함께 묶은 것) — 고객 하나의 결제·견적·AS·API·CS 케이스 기록과
+   * 담당 영업. 없으면 고객 화면 안내만 낸다. 질문·기록 글을 로그나 모델 입력으로 보내지 않는다.
+   */
+  customerHistory?: (question: string, openCustomer: CustomerRef | null, now: number) => Promise<CustomerHistoryResult>
+  /** 고객 이력 갈래를 통째로 막을 때 대신 낼 카드(위컴 단체방). 있으면 customerHistory 를 부르지 않는다. */
+  customerHistoryDenied?: AiBlock
   /** 쓰기(견적 초안·HW 배송 예정) 미리보기 — 없으면 쓰기는 모두 "아직 준비 중" 카드. */
   previewWrite?: (kind: "quote_draft" | "hw_plan", ctx: ToolTurnContext) => Promise<WriteTurnResult>
   /** 조각 하나(근거 찾기·조회·미리보기)의 시간 상한. 기본 15초 — 넘으면 "시간이 넘었습니다 — 화면에서" 카드. */
@@ -46,13 +65,15 @@ export interface TurnInput {
 export type Emit = (event: AdminAiStreamEvent) => void
 
 const UNKNOWN_TEXT =
-  "무엇을 도와드릴까요? 클래스인 정보 질문, 재고·견적·딜 조회, 담당자·링크 찾기, 견적 초안·배송 예정 등록을 할 수 있습니다."
+  "무엇을 도와드릴까요? 클래스인 정보 질문, 재고·견적·딜 조회, 상담 내역 찾기, 담당자·링크 찾기, 견적 초안·배송 예정 등록을 할 수 있습니다."
 
 const STEP_LABEL: Record<RouteDecision["branch"], string> = {
   knowledge: "근거 문서 찾기",
   contact: "담당표 찾기",
   link: "링크 목록 찾기",
   read: "데이터 조회",
+  consultations: "상담 내역 찾기",
+  customer_history: "고객 이력 찾기",
   write: "오더 미리보기",
   unknown: "질문 확인",
 }
@@ -89,6 +110,26 @@ async function askBranchBlocks(branch: AskBranch, decision: RouteDecision, input
     case "read":
       if (!decision.read) return [{ kind: "text", text: "무엇을 조회할지 알아듣지 못했습니다." }]
       return readBlocks(decision.read, { text, actor: input.actor, context: input.context, now: input.now }, deps.ops)
+    case "consultations": {
+      if (deps.consultationsDenied) return [deps.consultationsDenied]
+      if (!deps.consultations) {
+        return [
+          { kind: "text", text: "상담 내역 찾기가 아직 연결되지 않았습니다. 상담 화면에서 찾아 주세요." },
+          { kind: "links", card: { title: "상담 화면", target: { label: "상담 Inbox", meta: "채널톡 상담" }, items: [{ linkId: CONSULTATION_INBOX_LINK_ID }] } },
+        ]
+      }
+      return [consultationsBlock(await deps.consultations(text, openCustomerOf(input.context), input.now))]
+    }
+    case "customer_history": {
+      if (deps.customerHistoryDenied) return [deps.customerHistoryDenied]
+      if (!deps.customerHistory) {
+        return [
+          { kind: "text", text: "고객 이력 찾기가 아직 연결되지 않았습니다. 고객 화면의 활동 기록에서 확인해 주세요." },
+          { kind: "links", card: { title: "고객 화면", target: { label: "통합 고객", meta: "CRM" }, items: [{ linkId: CUSTOMER_HISTORY_LINK_ID }] } },
+        ]
+      }
+      return customerHistoryBlocks(await deps.customerHistory(text, openCustomerOf(input.context), input.now))
+    }
   }
 }
 
@@ -109,6 +150,8 @@ const CLARIFY_HINT: Record<AskBranch, string> = {
   contact: "예: \"… 은 누구한테 물어?\"",
   link: "예: \"… 화면 링크 알려 줘\"",
   read: "예: \"… 현황 보여 줘\"",
+  consultations: "예: \"… 상담 최근에 있었나?\"",
+  customer_history: "예: \"가나학원 결제 문제 있었나?\"",
 }
 
 async function segmentBlocks(decision: RouteDecision, input: TurnInput, deps: OrchestratorDeps, state: { orderTaken: boolean }): Promise<WriteTurnResult> {
@@ -159,6 +202,21 @@ async function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
   }
 }
 
+/** 대상 없이 담당만 묻는 짧은 조각 — "누가 맡아?", "담당은 누구야?". 고객 이름(기관 꼴)이 있으면 제 대상이 있다. */
+const BARE_OWNER_ASK = /누가|누구|담당/
+const HAS_OWN_CUSTOMER = /[가-힣A-Za-z0-9]{2,}(?:학원|어학원|에듀|교육|스쿨|센터|학교|아카데미|교습소)|(?:이|해당)\s*(?:고객|학원|기관|곳)/
+
+/**
+ * 고객 이력 바로 뒤의 짧은 담당 질문은 앞 조각의 고객을 잇는다 — "가나학원 결제 문제 있었나? 누가 맡아?"의 두 번째 조각이
+ * 대상 없는 담당자 찾기("담당표에 없음")가 되지 않게. 다른 갈래 뒤의 조각은 그대로다(기존 판정을 바꾸지 않는다).
+ */
+export function inheritCustomerSubject(decision: RouteDecision, previous: RouteDecision | undefined): RouteDecision {
+  if (!previous || previous.branch !== "customer_history" || decision.branch !== "contact") return decision
+  const text = decision.text.trim()
+  if (text.length > 14 || !BARE_OWNER_ASK.test(text) || HAS_OWN_CUSTOMER.test(text)) return decision
+  return { ...decision, text: `${previous.text} ${text}` }
+}
+
 /** 한 턴 안에서 같은 담당자·링크 카드는 한 번만 낸다(복합 질문에서 근거 없는 조각마다 같은 카드가 겹치지 않게, 검토 동작-8). */
 const cardKey = (block: AiBlock) => (block.kind === "contact" || block.kind === "links" ? `${block.kind}:${JSON.stringify(block.card)}` : null)
 
@@ -170,7 +228,8 @@ export async function runTurn(input: TurnInput, deps: OrchestratorDeps, emit: Em
   const state = { orderTaken: false }
   const timeoutMs = deps.segmentTimeoutMs ?? SEGMENT_TIMEOUT_MS
   const seen = new Set<string>()
-  for (const [index, decision] of decisions.entries()) {
+  for (const [index, routed] of decisions.entries()) {
+    const decision = inheritCustomerSubject(routed, decisions[index - 1])
     emit({ type: "step", label: STEP_LABEL[decision.branch] })
     let result: WriteTurnResult
     try {

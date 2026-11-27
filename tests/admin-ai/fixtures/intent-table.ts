@@ -25,3 +25,74 @@ export const INTENT_COMMANDS: ReadonlyArray<[string, DemoScenarioKey]> = [
   ["누가 봐도 데모 끝났으니 새움에듀 상태 바꿔", "lead"],
   ["가온학원 견적 초안에서 10% 깎아 확정", "amount"],
 ]
+
+/**
+ * 상담 내역 찾기 판정 표(새 문장 30개) — 기관 이름은 가짜다.
+ * CONSULTATION_ASKS 20개는 상담 내역 갈래로, CONSULTATION_NOT 10개는 그 갈래가 아닌 곳(괄호 갈래)으로 간다.
+ * 낱말 하나("상담")로 가지 않는다 — 묻는 대상과 묻는 꼴(또는 고객)이 함께일 때만.
+ */
+export const CONSULTATION_ASKS: readonly string[] = [
+  "가나학원 지난달에 뭐 문의했지?",
+  "녹화 안 된다는 상담 최근에 있었나?",
+  "이 고객 최근 상담 보여 줘",
+  "환불 문의 들어온 거 있어?",
+  "다라에듀 상담 내역 찾아 줘",
+  "카메라 고장 문의 최근에 있었어?",
+  "로그인 오류 채팅 들어온 거 있나?",
+  "지난주 들어온 결제 문의 보여 줘",
+  "이번 달 환불 상담 몇 건이야?",
+  "마바학원 채널톡 상담 이력 보여 줘",
+  "가나학원 상담 기록 좀 보여 줘",
+  "최근 30일 녹화 문의 찾아 줘",
+  "해당 고객 문의 이력 있어?",
+  "설치 안 된다는 문의 언제 들어왔지?",
+  "요즘 화질 상담 들어온 거 있어?",
+  "사바어학원 지난주에 무슨 문의 했어?",
+  "화면 공유 끊긴다는 채팅 있었나?",
+  "가나학원 문의 뭐였지?",
+  "이 학원 상담 최근 거 보여 줘",
+  "견적 문의 들어온 거 찾아 줘",
+]
+
+export const CONSULTATION_NOT: ReadonlyArray<[string, "knowledge" | "contact" | "link"]> = [
+  ["상담 연결 방법은?", "knowledge"],
+  ["담당자 누구야", "contact"],
+  ["상담 신청은 어떻게 해?", "knowledge"],
+  ["문의처 어디야?", "contact"],
+  ["채팅창에 문자가 깨져 보여요", "knowledge"],
+  ["결제 링크가 열리지 않는다는 문의는 어떻게 답해?", "knowledge"],
+  ["상담 화면 어디 있어?", "link"],
+  ["환불 상담은 누구한테 넘겨?", "contact"],
+  ["상담 녹화 기능 있어?", "knowledge"],
+  ["문의 남기는 방법 알려 줘", "knowledge"],
+]
+
+/**
+ * 상담이 CRM 단계·일정·다른 조회 대상의 이름으로 쓰인 말 — 상담 내역 갈래가 생기기 전 판정(조회·정보·담당자)이 그대로여야 한다.
+ * 반박 검토에서 상담 내역 갈래가 가져가던 문장들(옛 router 와 대조). 괄호는 조각마다의 갈래(read 는 도구·화면 이름).
+ */
+export const CONSULTATION_CRM_KEEP: ReadonlyArray<[string, string[]]> = [
+  ["최근 상담 단계로 바뀐 리드 보여줘", ["read:lead"]],
+  ["이번 주 상담 단계 리드 목록 보여줘", ["read:lead"]],
+  ["상담 중인 리드 몇 건이야?", ["read:lead"]],
+  ["이번 달 상담 리드 몇 건 들어왔어?", ["read:lead"]],
+  ["상담 신청한 리드 최근 거 보여줘", ["read:lead"]],
+  ["지난주 상담 단계 딜 목록 보여줘", ["read:deals_list"]],
+  ["최근 견적 문의 온 리드 보여줘", ["read:quotes_list"]],
+  ["지난달 문의 유입 몇 건이야?", ["read:site_traffic"]],
+  ["상담 시간이 언제까지야?", ["knowledge"]],
+  ["상담 가능한 시간 언제야?", ["knowledge"]],
+  ["가나학원 상담 일정 언제야?", ["knowledge"]],
+  ["데모 상담 언제 잡혀 있어?", ["knowledge"]],
+  ["상담 메모 남긴 거 보여줘", ["knowledge"]],
+  ["최근 문의 많은 기능이 뭐야?", ["knowledge"]],
+  ["요즘 고객 문의 많은 주제 알려줘", ["contact"]],
+  ["가나학원 최근 통화 기록 보여줘", ["read:activity"]],
+]
+
+/** 복합 문장 — 상담 내역 조각과 다른 조각이 둘 다 답해야 한다(앞 갈래 답이 사라지지 않게). */
+export const CONSULTATION_COMPOUND: ReadonlyArray<[string, string[]]> = [
+  ["가나학원 상담 이력이랑 견적 목록 보여줘", ["consultations", "read:quotes_list"]],
+  ["가나학원 지난달 문의 뭐였지, 재고는 몇 대 남았어?", ["consultations", "read:hw_stock"]],
+  ["상담 Inbox 링크 주고 환불 문의 들어온 거 있는지 봐줘", ["link", "consultations"]],
+]

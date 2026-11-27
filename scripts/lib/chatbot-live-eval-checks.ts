@@ -9,6 +9,8 @@
 // - 모델 없는 측정(모든 모델 단계 끔)에서 Gemini 호출이 나간 줄 확인: compiled 면 측정 무효(종료 코드 3), 그 밖은 경고.
 // - 답 색인 흔적(answerIndex, 사양 §3.7) → decidedBy 의 index:* 값.
 
+import { parseDecoyExpect, parseExpectFragments, type DecoyExpect, type ExpectFragment } from "./chatbot-live-eval-probes"
+
 export const ANSWER_ROUTERS = ["legacy", "shadow", "compiled"] as const
 export type AnswerRouter = (typeof ANSWER_ROUTERS)[number]
 
@@ -348,6 +350,12 @@ export interface EvalCase {
   conversation: boolean
   turns: EvalTurnInput[]
   pagePath?: string
+  /** 복합 질문의 조각별 기대(조각 답 비율 측정용, scripts/lib/chatbot-live-eval-probes.ts). */
+  expectFragments?: ExpectFragment[]
+  /** 질문 하나(과분할 측정용). */
+  single?: boolean
+  /** 낱말 미끼(장치별 걸림 집계용). */
+  decoy?: DecoyExpect
 }
 
 export const PAGE_PATH_MAX = 300
@@ -356,6 +364,17 @@ function normalizeTurn(raw: unknown, where: string): EvalTurnInput {
   if (typeof raw === "string" && raw.trim()) return { question: raw }
   if (isRecord(raw) && typeof raw.question === "string" && raw.question.trim()) return { question: raw.question }
   throw new Error(`${where} 의 턴에 question 이 없습니다.`)
+}
+
+/** 입력 한 줄의 탐침 칸(expectFragments·single·decoy). 없으면 빈 객체. */
+function probeFields(row: Record<string, unknown>, where: string): Pick<EvalCase, "expectFragments" | "single" | "decoy"> {
+  const expectFragments = parseExpectFragments(row.expectFragments, where)
+  const decoy = parseDecoyExpect(row.decoy, where)
+  return {
+    ...(expectFragments ? { expectFragments } : {}),
+    ...(row.single === true ? { single: true } : {}),
+    ...(decoy ? { decoy } : {}),
+  }
 }
 
 /**
@@ -379,6 +398,7 @@ export function parseEvalCases(raw: unknown): EvalCase[] {
       ...(typeof row.group === "string" ? { group: row.group } : {}),
       expectTopic: typeof row.expectTopic === "string" ? row.expectTopic : null,
       ...(pagePath ? { pagePath } : {}),
+      ...probeFields(row, where),
     }
     if (Array.isArray(row.turns)) {
       if (row.turns.length === 0) throw new Error(`${where} 의 turns 가 비었습니다.`)
