@@ -32077,7 +32077,8 @@
       "칠판 가격 비교·할인 → policy:board-price-comparison-discount",
       "칠판 없이 소프트웨어만 쓰기 → policy:basics-board-not-required",
       "다른 회사 칠판에서 소프트웨어만 쓰기 → policy:other-brand-board-software-only",
-      "모델별 크기·무게 → policy:board-lineup-specs-summary"
+      "모델별 크기·무게 → policy:board-lineup-specs-summary",
+      "클래스인을 만든 회사 → policy:basics-company-origin"
     ],
     "negatives": [
       {
