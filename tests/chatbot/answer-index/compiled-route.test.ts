@@ -256,8 +256,17 @@ describe("compiled router with fixture cards", () => {
     stubCompiledEnv("test-model-key")
     const chat = await evaluateChatbotQuery("수업 중 학생 채팅 막을 수 있나요?")
     expect(chat.answerIndex).toMatchObject({ decision: "answer", card: CARDS.chat })
-    expect(chat.answer).toContain("수업 중에 [채팅 금지] 버튼을 누르면 학생 채팅을 막을 수 있습니다.")
+    // R3 기본(CHATBOT_COMPILED_TONE=yo, CHATBOT_COMPILED_ARROW=arrow): 문서 문장 끝은 요체, 경로 기호는 →.
+    expect(chat.answer).toContain("수업 중에 [채팅 금지] 버튼을 누르면 학생 채팅을 막을 수 있어요.")
+    expect(chat.answer).toContain("경로: 교실 → [도구] → [채팅 금지]")
     expect(chat.sources.map((source) => source.urlPath)).toEqual(["/docs/fake/chat"])
+    // R3 스위치를 끄면 R2 글 그대로(문서 문장 니다체, > 경로).
+    vi.stubEnv("CHATBOT_COMPILED_TONE", "off")
+    vi.stubEnv("CHATBOT_COMPILED_ARROW", "gt")
+    __clearAnswerCacheForTests()
+    const r2 = await evaluateChatbotQuery("수업 중 학생 채팅 막을 수 있나요?")
+    expect(r2.answer).toContain("수업 중에 [채팅 금지] 버튼을 누르면 학생 채팅을 막을 수 있습니다.")
+    expect(r2.answer).not.toContain("→")
     const gap = await evaluateChatbotQuery("ISMS 인증 받았나요?")
     expect(gap.answerIndex).toMatchObject({ decision: "gap", card: CARDS.gapCert })
     expect(gap.needsHandoff).toBe(true)
