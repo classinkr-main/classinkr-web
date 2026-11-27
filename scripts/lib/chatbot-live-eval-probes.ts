@@ -8,6 +8,9 @@
 // - decoy: { device, forbid?, expect?, observable? } 낱말 미끼. forbid·expect 는 outcomeSignature 에 맞추는 정규식 글이다.
 //
 // 결과 줄에 더하는 칸(기존 칸은 그대로): fragments(조각 기록)·expectFragments·single·decoy·outcome.
+// R3: 조각이 둘 이상이고 색인이 답을 정했으면 fragments.compoundLint 에 L13(복합 꼴) 판정 세부 이름을 적는다(빈 배열이면 통과).
+
+import { lintCompound } from "../answer-index/lib/style-audit-core"
 
 /** 복합 질문 한 조각의 기대. */
 export interface ExpectFragment {
@@ -214,6 +217,11 @@ export interface FragmentRecord {
   /** 알림 줄 가운데 '공개 안내에 없다'고 말하는 줄이 있는지(거짓 알림 판정용). */
   absenceNotice: boolean
   perFragment: FragmentSoloResult[]
+  /**
+   * L13 복합 꼴 판정(R3 답 꼴 규격 S10): 걸린 세부 이름(head_count·head_order·head_alone·no_conclusion·notice_outside). 빈 배열이면 통과.
+   * 조각이 하나뿐이거나 색인이 답을 정하지 않았으면 없다.
+   */
+  compoundLint?: string[]
 }
 
 export interface SoloProbe {
@@ -327,7 +335,20 @@ export function buildFragmentRecord(input: FragmentRecordInput): FragmentRecord 
     }
   })
 
-  return { source, segmentCount: segments.length || 1, segments, answeredCards, notice, absenceNotice, perFragment }
+  // L13: 같은 카드로 이미 답한 조각은 앞 번호에 묶인다(respond.ts buildCompound).
+  let compoundLint: string[] | undefined
+  if (input.indexDecided && input.answer && segments.length >= 2 && source !== "count") {
+    const seen = new Set<string>()
+    let bound = 0
+    for (const segment of segments) {
+      if (!ANSWERED_KINDS.has(segment.kind) || !segment.card) continue
+      if (seen.has(segment.card)) bound += 1
+      else seen.add(segment.card)
+    }
+    compoundLint = Array.from(new Set(lintCompound(input.answer, { segments: segments.length, bound }).map((finding) => finding.code)))
+  }
+
+  return { source, segmentCount: segments.length || 1, segments, answeredCards, notice, absenceNotice, perFragment, ...(compoundLint ? { compoundLint } : {}) }
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +395,8 @@ export interface FragmentSummary {
     /** 질문 조각 수(trace/probe 가 센 값)가 기대 조각 수보다 적은 줄(나누지 못함). */
     underSplit: number
     byGroup: Record<string, { rows: number; answeredFragments: number; fragments: number; allAnswered: number }>
+    /** L13 복합 꼴(R3): 판정한 줄(조각 2개 이상·색인이 정함)·통과한 줄·세부 이름별 줄 수. */
+    compoundLint: { judged: number; pass: number; codes: Record<string, number> }
   }
   /** 단일 질문(single: true). 2조각 이상으로 나뉜 줄이 과분할이다. */
   single: { rows: number; overSplit: number; overSplitRatio: number; overSplitIds: string[] }
@@ -397,6 +420,7 @@ export function summarizeFragments(rows: readonly FragmentRowInput[]): FragmentS
   let falseNoticeStrict = 0
   let noCard = 0
   let underSplit = 0
+  const compoundLint: FragmentSummary["multi"]["compoundLint"] = { judged: 0, pass: 0, codes: {} }
   const byGroup: FragmentSummary["multi"]["byGroup"] = {}
   for (const row of multiRows) {
     const record = row.fragments as FragmentRecord
@@ -415,6 +439,11 @@ export function summarizeFragments(rows: readonly FragmentRowInput[]): FragmentS
     if (answered.length === 0) noneAnswered += 1
     if (record.answeredCards.length === 0) noCard += 1
     if (record.segmentCount < per.length) underSplit += 1
+    if (record.compoundLint) {
+      compoundLint.judged += 1
+      if (record.compoundLint.length === 0) compoundLint.pass += 1
+      for (const code of record.compoundLint) compoundLint.codes[code] = (compoundLint.codes[code] ?? 0) + 1
+    }
     const partial = answered.length > 0 && answered.length < per.length
     if (partial) {
       partialRows += 1
@@ -456,6 +485,7 @@ export function summarizeFragments(rows: readonly FragmentRowInput[]): FragmentS
       noCard,
       underSplit,
       byGroup,
+      compoundLint,
     },
     single: {
       rows: singleRows.length,

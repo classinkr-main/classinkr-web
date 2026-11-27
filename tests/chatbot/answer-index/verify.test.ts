@@ -721,3 +721,98 @@ describe("V-3 결정 전 정책 구절(blockPhrases)", () => {
     expect(errorsOf(result.findings, "V-11").some((finding) => finding.message.startsWith("policy:plan-overview:"))).toBe(false)
   })
 })
+
+describe("V-14·V-15 카드 꼴·변형 한 줄 물음(R3)", () => {
+  const goodText = [
+    "카메라 랜선과 전원 장치부터 확인해 주세요.",
+    "",
+    "1. 전원 장치가 켜져 있는지 봐요.",
+    "2. 랜선이 출력 단자에 꽂혀 있는지 봐요.",
+    "3. 다시 꽂았다면 1~2분 뒤 [검색]을 다시 눌러요.",
+    "",
+    '그래도 안 되면 "상담원 연결"이라고 남겨 주세요. 교실 위치와 카메라 모델을 알려 주시면 원격으로 점검해 드려요.',
+  ].join("\n")
+  const badText = [
+    "이 카드는 첫 줄이 너무 길어서 결론 한 줄 규칙을 지키지 못하는 글이고 [기관 관리] 메뉴 이름도 옛 이름입니다.",
+    "※ 설정은 직접 바꾸지 마세요.",
+    "",
+    "1. 하나를 눌러요.",
+    "2. 둘을 눌러요.",
+    "3. 셋을 눌러요.",
+    "4. 넷을 눌러요.",
+    "5. 다섯을 눌러요.",
+  ].join("\n")
+  const fixedCard = (id: string, text: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    kind: "fixed",
+    tier: "standard",
+    area: "classroom",
+    topic: "시험 카드",
+    answer: { text, textHash: answerTextHash(text) },
+    status: "active",
+    ...extra,
+  })
+  const variants = (id: string, qs: string[]) => ({ [id]: qs.map((q) => ({ q, p: "fixture", g: "A", m: "fixture" })) })
+
+  it("축약 카드 조각(team<4자리>)은 꼴·첫 줄·말투·옛 메뉴 이름·접두를 오류로, 기존 카드는 카드마다 경고 한 줄로 본다", async () => {
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/classroom.team1126.json": [fixedCard("fixed:r3-shape-good", goodText), fixedCard("fixed:r3-shape-bad", badText)],
+      "cards/classroom.json": [fixedCard("fixed:r3-shape-old", badText)],
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    const v14 = result.findings.filter((finding) => finding.rule === "V-14")
+    expect(v14.filter((finding) => finding.message.startsWith("fixed:r3-shape-good"))).toEqual([])
+    const strictErrors = errorsOf(v14).filter((finding) => finding.message.startsWith("fixed:r3-shape-bad"))
+    for (const code of ["first_line_60", "steps_4", "첫 줄이 결론이 아님", "니다체·요체 섞임", "옛 메뉴 이름", "※"]) {
+      expect(strictErrors.some((finding) => finding.message.includes(code))).toBe(true)
+    }
+    const old = v14.filter((finding) => finding.message.startsWith("fixed:r3-shape-old"))
+    expect(old).toHaveLength(1)
+    expect(old[0].level).toBe("warning")
+    expect(old[0].file).toBe("cards/classroom.json")
+    expect(v14.some((finding) => finding.level === "info" && finding.message.includes("첫 줄 결론"))).toBe(true)
+  })
+
+  it("합친 뒤에도 provenance.unit 이 team<4자리>면 축약 카드 조각으로 본다", async () => {
+    const provenance = { unit: "team1126", writer: "fixture", at: "2026-11-26", legacyIds: [] }
+    const dir = fixture({ ...baseFiles(units, siteFacts), "cards/classroom.json": [fixedCard("fixed:r3-shape-merged", badText, { provenance })] })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    expect(errorsOf(result.findings, "V-14").some((finding) => finding.message.startsWith("fixed:r3-shape-merged"))).toBe(true)
+  })
+
+  it("toneLocked 카드는 말투 섞임을 보지 않고, 꼴이 틀린 toneLocked·role 은 V-12 오류다", async () => {
+    const mixed = "네, 막을 수 있어요.\n관련 약관에 따라 처리됩니다."
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/classroom.team1126.json": [fixedCard("fixed:r3-tone-locked", mixed, { toneLocked: true }), fixedCard("fixed:r3-bad-flags", goodText, { toneLocked: "yes", role: "main" })],
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    expect(result.findings.filter((finding) => finding.rule === "V-14" && finding.message.startsWith("fixed:r3-tone-locked") && finding.message.includes("섞임"))).toEqual([])
+    const v12 = errorsOf(result.findings, "V-12").map((finding) => finding.message)
+    expect(v12.some((message) => message.includes("fixed:r3-bad-flags: toneLocked"))).toBe(true)
+    expect(v12.some((message) => message.includes("fixed:r3-bad-flags: role"))).toBe(true)
+  })
+
+  it("V-15 변형이 두 조각으로 나뉘면 축약 카드는 오류, 기존 카드는 카드마다 경고 한 줄, compoundOk 면 통과", async () => {
+    const compound = "녹화는 어디서 봐요? 그리고 삭제는 어떻게 해요?"
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/classroom.team1126.json": [fixedCard("fixed:r3-variant-new", goodText)],
+      "cards/classroom.json": [fixedCard("fixed:r3-variant-old", goodText)],
+      "variants/classroom.json": {
+        ...variants("fixed:r3-variant-new", [compound, "카메라가 안 잡혀요"]),
+        ...variants("fixed:r3-variant-old", [compound, "녹화는 어디서 봐요? 그리고 다운로드는 어떻게 해요?"]),
+      },
+      "variants/classroom.team1126.json": { "fixed:r3-variant-flag": [{ q: compound, p: "fixture", g: "A", m: "fixture", compoundOk: true }] },
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [] })
+    const v15 = result.findings.filter((finding) => finding.rule === "V-15")
+    expect(errorsOf(v15).filter((finding) => finding.message.startsWith("fixed:r3-variant-new"))).toHaveLength(1)
+    const old = v15.filter((finding) => finding.message.startsWith("fixed:r3-variant-old"))
+    expect(old).toHaveLength(1)
+    expect(old[0]).toMatchObject({ level: "warning" })
+    expect(old[0].message).toContain("변형 2줄")
+    expect(v15.some((finding) => finding.message.startsWith("fixed:r3-variant-flag"))).toBe(false)
+  })
+})
