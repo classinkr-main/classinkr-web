@@ -19,6 +19,16 @@
  * 2조각 700자·3조각 900자에서 서비스 후속 줄 몫을 뺀 값이고, 넘으면 가장 긴 조각부터 하나씩 줄인다(정책 글은 줄이지 않고 알림으로). 소리 없이 조각을 버리지 않는다.
  * compiled 답은 마지막에 shape.ts 로 줄바꿈·목록·표기를 가지런히 한다(CHATBOT_COMPILED_SHAPE, 기본 on).
  *
+ * R3 a1 스위치(모두 compiled 경로 안에서만 돈다. legacy 경로에는 닿지 않는다. 끄면 R2 와 바이트가 같다):
+ * - CHATBOT_COMPILED_TONE=yo(기본)|off: 카드 글의 니다체 문장 끝을 요체로(yo-tone.ts). 정책 글(policy·policyGoverned)과 toneLocked 카드는 바꾸지 않는다.
+ * - CHATBOT_COMPILED_ARROW=arrow(기본)|gt: 경로 기호 →, 「」는 문서 제목만, 옛 메뉴 이름 → 현행명, 줄 앞 ※ 뗌(shape.ts unifyNotation).
+ * - CHATBOT_COMPOUND_HEAD=number(기본)|bracket: 복합 답 머리를 "1. 주제" + 바로 아래 결론 줄로, 조각 안 단계는 "-" 점 목록 3개까지, 머리만 있는 덩이는
+ *   만들지 않는다. 넘친 조각(overflow)도 번호째 '따로 물어봐 주세요' 알림으로 두고 추천 질문에 넣는다. 모든 조각을 못 정했어도 번호째 알림을 둔다
+ *   (번호 수 + 묶인 조각 수 = 조각 수). 4조각 이상 길이 상한 1,000자. bracket 이면 R2 의 【주제】 꼴.
+ * - CHATBOT_COMPILED_FORM=r3(기본)|r2: 공백 답 첫 줄을 한 문장으로(규격 S11), doc·howto 답의 6단계 넘는 번호 목록을 5단계 + 「문서 제목」 한 줄로(S2),
+ *   두 문장 마무리 줄('그래도 안 되면 … 남겨 주세요. … 알려 주시면 …')을 한 줄로 둔다(S6).
+ * - CHATBOT_COMPILED_SKIP_TRIED=on|off(기본): 질문에 '이미 해 본 동작'(RespondContext.tried)이 있으면 그 동작 단계를 빼고 둘째 줄에 밝힌다(S14).
+ *
  * 리드는 묻는 꼴에 맞을 때만 붙인다: yes_can·not_supported 는 예/아니오 질문(yesno)에서 근거 문장(leadBasis)이 지금 문서와 맞을 때,
  * how_to 는 방법·가능 여부 질문(howto·yesno)이거나 묻는 꼴을 모를 때.
  *
@@ -37,7 +47,20 @@ import { toAnswerIndexTrace } from "./decide"
 import { answerTextHash } from "./hash"
 import { detectAskType, isQuestionSentence, normalizeText } from "./normalize"
 import { groupSentenceParagraphs, type ParagraphSentence } from "./paragraphs"
-import { blockKind, compiledShapeEnabled, fromBlocks, isClosingLine, isClosingTemplate, shapeAnswer, shapeOptionsFor, toBlocks } from "./shape"
+import {
+  blockKind,
+  compiledForm,
+  compiledShapeEnabled,
+  fromBlocks,
+  isClosingLine,
+  isClosingTemplate,
+  shapeAnswer,
+  singleItemLines,
+  shapeOptionsFor,
+  toBlocks,
+  type CompiledForm,
+  type ShapeOptions,
+} from "./shape"
 import type {
   AnswerCard,
   AnswerIndexDecision,
@@ -128,6 +151,11 @@ export interface RespondContext {
   /** 흔적에 적을 색인 판. */
   version: string
   env?: Env
+  /**
+   * 질문에서 뽑은 '이미 해 본 동작'(DecideContext.tried 와 같은 값, 규격 S14: reinstall·restart·update·relogin). CHATBOT_COMPILED_SKIP_TRIED=on 일 때만
+   * 그 동작 단계를 뺀다. 없으면 빼지 않는다.
+   */
+  tried?: readonly string[]
 }
 
 export interface AnswerIndexQuestion {
@@ -152,21 +180,42 @@ export function compiledHeadlineEnabled(env: Env = process.env): boolean {
   return env.CHATBOT_COMPILED_HEADLINE?.trim().toLowerCase() === "on"
 }
 
+/** 복합 답 머리 꼴(R3 D2): number = "1. 주제"(기본), bracket = R2 의 【주제】. */
+export type CompoundHeadMode = "number" | "bracket"
+
+/** CHATBOT_COMPOUND_HEAD: number(기본, numbered 도 받음) · bracket. */
+export function compoundHeadMode(env: Env = process.env): CompoundHeadMode {
+  return env.CHATBOT_COMPOUND_HEAD?.trim().toLowerCase() === "bracket" ? "bracket" : "number"
+}
+
+export { compiledForm, type CompiledForm }
+
+/** CHATBOT_COMPILED_SKIP_TRIED: on 일 때만(기본 off, 측정 뒤 켠다). */
+export function compiledSkipTried(env: Env = process.env): boolean {
+  return env.CHATBOT_COMPILED_SKIP_TRIED?.trim().toLowerCase() === "on"
+}
+
 export const LEAD_TEXT: Record<Exclude<AnswerLead, "none">, string> = {
   yes_can: "네, 할 수 있어요.",
   how_to: "이렇게 하면 돼요.",
   not_supported: "공개 안내 기준으로는 지원하지 않아요.",
 }
 
-/** 공백 카드 답 틀 첫 두 문장(§3.6, §14 결정 과제 10). {topic} 은 카드 topic(조사 없음). 주제 길이와 상관없이 늘 두 줄이다(품질-14). */
-export function gapLeadLine(topic: string) {
+/**
+ * 공백 카드 답 틀 첫 줄(§3.6, §14 결정 과제 10). {topic} 은 카드 topic(조사 없음).
+ * r3(기본, 규격 S11): 한 문장 "…공개 안내에서 확인되지 않았어요." — 결론도 행동도 아닌 '추측해 말씀드리지 않을게요'는 뺀다.
+ * r2: 두 줄(주제 길이와 상관없이 늘 두 줄, 품질-14).
+ */
+export function gapLeadLine(topic: string, form: CompiledForm = compiledForm()) {
+  if (form === "r3") return `${topic}에 대한 내용은 공개 안내에서 확인되지 않았어요.`
   return `${topic}에 대한 내용은 공개 안내에서 찾지 못했어요.\n확인되지 않은 내용을 추측해 말씀드리지 않을게요.`
 }
 
 export const GAP_RELATED_INTRO = "공개 안내에는 이런 내용이 있어요:"
 
-/** 복합 질문 답 길이 상한(결정 1): 2조각 700자, 3조각 이상 900자. */
-export function compoundLengthCap(pieces: number) {
+/** 복합 질문 답 길이 상한(결정 1): 2조각 700자, 3조각 이상 900자. number 머리(R3)는 4조각 이상 1,000자(규격 S10-8). */
+export function compoundLengthCap(pieces: number, head: CompoundHeadMode = "bracket") {
+  if (head === "number" && pieces >= 4) return 1000
   return pieces >= 3 ? 900 : 700
 }
 
@@ -221,6 +270,10 @@ interface RenderInput {
   conf: number
   /** 결론 한 줄(headline)을 그리는지(CHATBOT_COMPILED_HEADLINE). */
   headline: boolean
+  /** 답 꼴 판(CHATBOT_COMPILED_FORM). */
+  form: CompiledForm
+  /** 복합 답 머리 꼴(CHATBOT_COMPOUND_HEAD). */
+  head: CompoundHeadMode
 }
 
 interface Rendered {
@@ -482,7 +535,7 @@ function renderGap(card: GapAnswerCard, input: RenderInput): RenderResult {
   const related = relatedSentences(ctx, card.answer?.related ?? [])
   const second = ctx.host.noSourceAnswer.split("\n\n").slice(1).join("\n\n")
   const lines = [
-    gapLeadLine(card.topic),
+    gapLeadLine(card.topic, input.form),
     related.length > 0 ? `${GAP_RELATED_INTRO}\n${groupSentenceParagraphs(related).join("\n")}` : null,
     second || null,
   ].filter((line): line is string => Boolean(line))
@@ -596,6 +649,52 @@ export function shortTopic(topic: string, max = 22, fallback?: string | null) {
 
 const headerLine = (label: string) => `【${label}】`
 
+/** number 머리 줄(규격 S10-1): "{n}. {이름}". 머리 줄만 있는 덩이는 만들지 않는다(위젯이 단독 "2."를 "1."로 다시 그린다). */
+const numberHeadLine = (n: number, label: string) => `${n}. ${label}`
+
+/** 조각 안 단계 상한(규격 S10-3)과 넘칠 때 끝 줄. 알림 줄(따로 한 번 더 물어봐 주세요)과 다른 글이라 번호째 알림으로 세지 않는다. */
+export const PIECE_STEP_MAX = 3
+export const PIECE_MORE_STEPS_LINE = "이어지는 순서는 이 질문만 따로 물어봐 주세요."
+/** bracket(R2) 조각을 결론만 남길 때 목록 뒤 줄. */
+const BRACKET_MORE_LINE = "이어지는 내용은 이 질문만 따로 한 번 더 물어봐 주세요."
+
+const itemTextOf = (line: string) => line.replace(/^(?:\d+[.)]|[-•·*–])\s+/, "").trim()
+const toBullets = (lines: readonly string[]) => lines.map((line) => `- ${itemTextOf(line)}`)
+
+/**
+ * number 머리 조각 본문(규격 S10-3): 첫 문장 덩이를 결론 줄로 머리 줄 바로 아래 두고, 바로 이어지는 단계 목록은 "-" 점 목록(stepMax 개까지)으로 같은 덩이에
+ * 붙인다(위젯이 "리드 + 목록"으로 그린다). 본문이 목록으로 시작하면 첫 단계를 결론 줄로 올린다. 그 뒤 덩이는 따로 두되 번호 목록은 점 목록으로 바꾼다
+ * (머리 줄 "n."·번호 세기와 헷갈리지 않게). 단계가 넘치면 그 목록 바로 뒤 덩이에 PIECE_MORE_STEPS_LINE 을 둔다. 글자는 목록 표시만 바뀐다.
+ */
+export function numberedPieceBlocks(blocks: readonly (readonly string[])[], stepMax = PIECE_STEP_MAX): { lead: string[]; rest: string[][] } {
+  const queue = blocks.map((lines) => [...lines]).filter((lines) => lines.length > 0)
+  const first = queue.shift()
+  if (!first) return { lead: [], rest: [] }
+  let lead: string[]
+  let steps: string[] = []
+  if (blockKind(first) === "plain") {
+    lead = first
+    if (queue[0] && blockKind(queue[0]) !== "plain") steps = queue.shift()!.map(itemTextOf)
+  } else {
+    // 목록 첫 단계를 결론 줄로 올릴 때는 목록 항목이 아니므로 한 문장 한 줄로 나눈다(shape.ts 단일 항목과 같은 규칙).
+    const items = first.map(itemTextOf)
+    lead = singleItemLines(items[0])
+    steps = items.slice(1)
+  }
+  const shown = steps.slice(0, stepMax).map((step) => `- ${step}`)
+  const rest: string[][] = steps.length > stepMax ? [[PIECE_MORE_STEPS_LINE]] : []
+  for (const lines of queue) rest.push(blockKind(lines) === "ordered" ? toBullets(lines) : lines)
+  return { lead: [...lead, ...shown], rest }
+}
+
+/** 손님 조각 글을 머리 이름으로 쓸 때(규격 S10-2): 따옴표, 24자 이하, 숫자 4자리 이상·@·주소가 없을 때만. 아니면 null. */
+export function segmentTextLabel(text: string): string | null {
+  const plain = text.replace(/\s+/g, " ").trim().replace(/[\s?？!.。~…]+$/, "")
+  if (!plain || plain.length > 24) return null
+  if (/\d{4,}|@|https?:\/\/|www\./i.test(plain)) return null
+  return `"${plain}"`
+}
+
 export interface PieceAnswer {
   kind: "answer"
   label: string
@@ -650,7 +749,7 @@ function isPreviewLine(line: string) {
  * 조각 본문을 결론만 남긴다(맨 앞 공감·예고 줄은 건너뛴다): 첫 내용 덩이가 문장이면 그 덩이(deeper 면 첫 줄 하나), 목록이면 첫 항목 하나와
  * 이어 묻기 한 줄. 남길 내용이 없으면 null.
  */
-function conclusionOnly(blocks: string[][], deeper = false): string[][] | null {
+function conclusionOnly(blocks: string[][], deeper = false, head: CompoundHeadMode = "bracket"): string[][] | null {
   for (let at = 0; at < blocks.length; at += 1) {
     const block = blocks[at]
     if (blockKind(block) === "plain") {
@@ -660,7 +759,7 @@ function conclusionOnly(blocks: string[][], deeper = false): string[][] | null {
       return [deeper ? [rest[0]] : rest]
     }
     const text = block[0].replace(/^(?:\d+[.)]|[-•·*–])\s+/, "")
-    return [[text], ["이어지는 내용은 이 질문만 따로 한 번 더 물어봐 주세요."]]
+    return [[text], [head === "number" ? PIECE_MORE_STEPS_LINE : BRACKET_MORE_LINE]]
   }
   return null
 }
@@ -678,7 +777,8 @@ function noticeLine(kind: AnswerIndexNoticeKind) {
   }
 }
 
-function pieceText(piece: Piece, blocksOverride?: string[][]) {
+function pieceText(piece: Piece, blocksOverride?: string[][], head: CompoundHeadMode = "bracket", n = 1) {
+  if (head === "number") return numberedPieceText(piece, n, blocksOverride)
   const header = headerLine(piece.label)
   if (isAnswerPiece(piece)) {
     const blocks = blocksOverride ?? piece.blocks
@@ -693,6 +793,22 @@ function pieceText(piece: Piece, blocksOverride?: string[][]) {
   return fromBlocks(blocks)
 }
 
+/**
+ * number 머리 조각 글: "{n}. 이름" 줄 + 결론 줄(+ 점 단계)이 한 덩이, 그 뒤 덩이들. 알림 조각은 "{n}. 이름" + 알림 한 줄.
+ * 사람이 쓴 글(정책)은 단계 수를 자르지 않는다(목록 표시만 점으로). 남길 본문이 없으면 머리 줄만 두지 않고 '따로 물어봐 주세요' 알림으로 둔다.
+ */
+function numberedPieceText(piece: Piece, n: number, blocksOverride?: string[][]) {
+  const head = numberHeadLine(n, piece.label)
+  if (isAnswerPiece(piece)) {
+    const { lead, rest } = numberedPieceBlocks(blocksOverride ?? piece.blocks, isFixedText(piece) ? Infinity : PIECE_STEP_MAX)
+    if (lead.length === 0) return fromBlocks([[head, SEGMENT_RETRY_LINE]])
+    return fromBlocks([[head, ...lead], ...rest])
+  }
+  const blocks: string[][] = [[head, noticeLine(piece.kind)]]
+  if (piece.kind === "absent" && piece.related.length > 0) blocks.push([GAP_RELATED_INTRO, ...piece.related])
+  return fromBlocks(blocks)
+}
+
 /** 사람이 쓴 글(policy·policyGoverned fixed): 줄이면 단서가 빠질 수 있어 결론만 남기지 않고 통째로 알림으로 바꾼다. */
 function isFixedText(piece: PieceAnswer) {
   return isPolicyGoverned(piece.card)
@@ -703,16 +819,16 @@ function isFixedText(piece: PieceAnswer) {
  * 정책·사람 글 조각은 줄이지 않고, 다른 조각을 다 줄여도 넘을 때만 그 조각을 '따로 물어봐 주세요' 알림으로 바꾼다.
  * 결론만 남길 때 맨 앞 공감·예고 줄은 건너뛰고, 남길 내용이 없으면 알림으로 바꾼다. 답한 조각은 하나는 남긴다.
  */
-export function assemblePieces(pieces: Piece[], tail: string[], closing: string | null, cap: number) {
+export function assemblePieces(pieces: Piece[], tail: string[], closing: string | null, cap: number, head: CompoundHeadMode = compoundHeadMode()) {
   type Mode = "full" | "conclusion" | "line" | "dropped"
   const modes: Mode[] = pieces.map(() => "full")
   const work: Piece[] = [...pieces]
   const textOf = (at: number): string => {
     const piece = work[at]
-    if (!isAnswerPiece(piece)) return pieceText(piece)
+    if (!isAnswerPiece(piece)) return pieceText(piece, undefined, head, at + 1)
     const mode = modes[at]
-    if (mode === "full") return pieceText(piece)
-    return pieceText(piece, conclusionOnly(piece.blocks, mode === "line") ?? [])
+    if (mode === "full") return pieceText(piece, undefined, head, at + 1)
+    return pieceText(piece, conclusionOnly(piece.blocks, mode === "line", head) ?? [], head, at + 1)
   }
   const render = () => [...work.map((_piece, at) => textOf(at)), ...tail, ...(closing ? [closing] : [])].join("\n\n")
   const drop = (at: number) => {
@@ -728,7 +844,7 @@ export function assemblePieces(pieces: Piece[], tail: string[], closing: string 
       const longest = reducible.reduce((a, b) => (textOf(b.at).length > textOf(a.at).length ? b : a))
       modes[longest.at] = modes[longest.at] === "full" ? "conclusion" : "line"
       // 결론으로 줄였더니 남길 내용이 없으면(공감·예고뿐) 그 조각은 알림으로 바꾼다.
-      if (conclusionOnly(longest.piece.blocks, modes[longest.at] === "line") === null && answered.length > 1) drop(longest.at)
+      if (conclusionOnly(longest.piece.blocks, modes[longest.at] === "line", head) === null && answered.length > 1) drop(longest.at)
       text = render()
       continue
     }
@@ -738,6 +854,42 @@ export function assemblePieces(pieces: Piece[], tail: string[], closing: string 
     text = render()
   }
   return { text, modes, pieces: work }
+}
+
+// ─── 이미 해 본 동작(규격 S14) ───────────────────────────────────────────
+
+/** 이미 해 본 동작 id → 단계 줄에서 찾는 꼴·이름(style-audit-core TRIED_ACTIONS 의 step 과 같은 꼴). */
+const TRIED_STEPS: Readonly<Record<string, { step: RegExp; name: string }>> = {
+  reinstall: { step: /재설치|다시\s?설치|삭제한?\s?(?:뒤|후)|지우고|삭제해/, name: "재설치" },
+  restart: { step: /재시작|재부팅|다시\s?(?:시작|실행|켜)|껐다\s?(?:가\s?)?켜/, name: "다시 시작" },
+  update: { step: /업데이트/, name: "업데이트" },
+  relogin: { step: /로그아웃|다시\s?로그인/, name: "다시 로그인" },
+}
+
+/**
+ * 이미 해 봤다는 동작 단계를 목록에서 빼고 첫 줄 바로 아래에 "이미 해 보신 {동작}은 빼고 안내할게요."를 둔다. 빼고 남는 단계가 1개 이하면,
+ * 또는 첫 덩이가 문장 덩이가 아니면 빼지 않는다(첫 줄은 실제 물음의 결론이어야 한다).
+ */
+export function skipTriedSteps(text: string, tried: readonly string[]): string {
+  const rules = tried.map((id) => ({ id, ...TRIED_STEPS[id] })).filter((rule) => rule.step)
+  if (rules.length === 0) return text
+  const blocks = toBlocks(text)
+  if (blocks.length === 0 || blockKind(blocks[0]) !== "plain") return text
+  const removed = new Set<string>()
+  const out = blocks.map((lines) => {
+    const kind = blockKind(lines)
+    if (kind === "plain") return lines
+    const hits = lines.map((line) => rules.filter((rule) => rule.step.test(itemTextOf(line))))
+    const kept = lines.filter((_line, at) => hits[at].length === 0)
+    if (kept.length === lines.length || kept.length <= 1) return lines
+    for (const list of hits) for (const rule of list) removed.add(rule.name)
+    return kind === "ordered" ? kept.map((line, at) => `${at + 1}. ${itemTextOf(line)}`) : kept
+  })
+  if (removed.size === 0) return text
+  const label = [...removed].join("·")
+  const note = `이미 해 보신 ${label}${topicParticle(label)} 빼고 안내할게요.`
+  out[0] = [out[0][0], note, ...out[0].slice(1)]
+  return fromBlocks(out)
 }
 
 // ─── 합치기 ──────────────────────────────────────────────────────────────
@@ -759,25 +911,50 @@ function roundConf(value: number) {
 }
 
 /** 문장 덩이가 아닌 줄 단위 본문을 shape 로 다듬어 덩이로 돌려준다(빈 리드를 걷고 끝맺음은 지우지 않는다 — 틀 줄은 takeClosing 이 거둔다). */
-function shapedBlocks(text: string, shape: boolean) {
-  const shaped = shape ? shapeAnswer(text, { keepClosings: true }).text : text
+function shapedBlocks(text: string, shape: boolean, options: ShapeOptions = {}) {
+  const shaped = shape ? shapeAnswer(text, { ...options, keepClosings: true }).text : text
   return toBlocks(shaped)
 }
 
+/**
+ * 복합 답 '없음' 알림 아래 관련 문장(공백 카드, 문서 문장 그대로)도 R3 말투·표기를 맞춘다(단일 공백 답은 답 전체를 다듬어 이미 맞는다).
+ * R3 말투·표기 스위치가 모두 꺼져 있으면 R2 처럼 손대지 않는다(바이트가 같다).
+ */
+function shapedRelated(related: readonly string[], card: AnswerCard, input: RenderInput, shape: boolean): string[] {
+  const options = cardShapeOptions(card, input.ctx.env ?? process.env)
+  if (!shape || (options.tone !== "yo" && options.arrow !== "arrow")) return [...related]
+  return related.map((sentence) => shapeAnswer(sentence, { ...options, keepClosings: true }).text)
+}
+
+/** 카드 글 다듬기 선택(R3): 정책 글·toneLocked 는 말투를 바꾸지 않는다. 표기·말투 스위치는 ctx.env 를 읽는다. */
+function cardShapeOptions(card: AnswerCard, env: Env): ShapeOptions {
+  return { ...shapeOptionsFor(isPolicyGoverned(card) ? "policy" : card.kind, { toneLocked: card.toneLocked === true, env }), env }
+}
+
 /** 못 정한 조각의 알림 종류와 이름(R2 검토 품질-3·품질-10). 'retry'는 그 조각만 물으면 답이 나올 때만이다. */
-function noticeFor(segment: AnswerIndexSegmentDecision, at: number, ctx: RespondContext): { kind: AnswerIndexNoticeKind; label: string } {
+function noticeFor(segment: AnswerIndexSegmentDecision, at: number, ctx: RespondContext, head: CompoundHeadMode = "bracket"): { kind: AnswerIndexNoticeKind; label: string } {
   const absentLabel = segment.absentHit ? ctx.index.absent.byId.get(segment.absentHit)?.label : undefined
-  const label = absentLabel ?? segment.label ?? ordinalLabel(at)
+  const label = absentLabel ?? noticeLabel(segment, at, head)
   if (absentLabel) return { kind: "absent", label }
+  // 넘친 조각(최대 조각 수 밖)은 판정하지 않았으므로 '찾지 못했어요'가 아니라 따로 물어봐 달라고 한다(number 머리, 규격 S10-9).
+  if (head === "number" && segment.source === "overflow") return { kind: "retry", label }
   if (segment.alone === "answer") return { kind: "retry", label }
   if (segment.alone === "gap") return { kind: "absent", label }
   if (segment.symptom) return { kind: "symptom", label }
   return { kind: "notfound", label }
 }
 
-/** 추천 질문 칩에 넣을 조각 글: 묻는 꼴이 온전하고(꼬리를 나눠 붙인 글·'-고'로 끝나는 글은 아님) 그 글만 물으면 답이 나오는 조각만(품질-11). */
-function chipText(segment: AnswerIndexSegmentDecision, original: string): string | null {
-  if (segment.alone !== "answer") return null
+/** 카드 없는 조각의 머리 이름: 조각 주절 개념 이름 → (number 머리면) 따옴표 친 조각 글(segmentTextLabel) → "n번째 질문". */
+function noticeLabel(segment: AnswerIndexSegmentDecision, at: number, head: CompoundHeadMode) {
+  return segment.label ?? (head === "number" ? segmentTextLabel(segment.text) : null) ?? ordinalLabel(at)
+}
+
+/**
+ * 추천 질문 칩에 넣을 조각 글: 묻는 꼴이 온전하고(꼬리를 나눠 붙인 글·'-고'로 끝나는 글은 아님) 그 글만 물으면 답이 나오는 조각만(품질-11).
+ * overflow 가 true 면(number 머리) 판정하지 않은 넘친 조각도 넣는다(규격 S10-9: 남은 조각은 추천 질문으로).
+ */
+function chipText(segment: AnswerIndexSegmentDecision, original: string, overflow = false): string | null {
+  if (segment.alone !== "answer" && !(overflow && segment.source === "overflow")) return null
   const text = segment.text.trim()
   if (!text || text.length > 80 || !original.includes(text)) return null
   if (!isQuestionSentence(text) || /고[,.]?$/.test(text)) return null
@@ -808,7 +985,9 @@ export function buildAnswerIndexCore(
   const shape = compiledShapeEnabled(env)
   const trace = toAnswerIndexTrace(decision, { version: ctx.version, router: ctx.router })
   const conf = roundConf(decision.conf)
-  const input: RenderInput = { ctx, question, askType: decision.askType, framing, conf, headline: compiledHeadlineEnabled(env) }
+  const form = compiledForm(env)
+  const head = compoundHeadMode(env)
+  const input: RenderInput = { ctx, question, askType: decision.askType, framing, conf, headline: compiledHeadlineEnabled(env), form, head }
 
   const finish = (parts: AnswerIndexCoreParts, overrides: Partial<AnswerIndexTrace> = {}): AnswerIndexCore => {
     ctx.host.markFinal(parts.response)
@@ -821,11 +1000,13 @@ export function buildAnswerIndexCore(
   if (decision.kind === "abstain") {
     const pieces = decision.segments
     if (framing === "full" && pieces && pieces.length >= 2) {
-      // 어느 조각도 못 정했으면 예전처럼 못 찾음 한 덩이다(조각마다 '따로 물어봐 주세요'만 늘어놓지 않는다, 품질-3). 다만 원문이 증상 못 찾음인데
-      // 증상이 아닌 조각이 있으면 그 조각이 소리 없이 빠지지 않게 조각마다 알림 줄을 낸다(품질-10).
+      // bracket(R2): 어느 조각도 못 정했으면 예전처럼 못 찾음 한 덩이다(조각마다 '따로 물어봐 주세요'만 늘어놓지 않는다, 품질-3). 다만 원문이 증상
+      // 못 찾음인데 증상이 아닌 조각이 있으면 그 조각이 소리 없이 빠지지 않게 조각마다 알림 줄을 낸다(품질-10).
+      // number(R3, 규격 S10-5·4.3): 못 답한 조각도 번호째 그 자리에 사실대로 한 줄(번호 수 = 조각 수). 알림 종류는 조각마다 가린다(noticeFor).
       const nonSymptom = pieces.some((segment) => !segment.symptom)
-      if (decision.abstainReason === "symptom" && nonSymptom) {
-        const compound = buildCompound(decision, pieces, input, shape, abstainParts("symptom", question, ctx.host, conf))
+      if (head === "number" || (decision.abstainReason === "symptom" && nonSymptom)) {
+        const reason = decision.abstainReason === "symptom" ? "symptom" : "nodoc"
+        const compound = buildCompound(decision, pieces, input, shape, abstainParts(reason, question, ctx.host, conf))
         if (compound?.ok) return finish(compound.parts, { ...compound.overrides, partial: false, absentTail: null })
       }
       // 한 덩이 못 찾음. 그 조각만 물으면 답이 나오는 조각은 추천 질문 맨 앞에 둔다(막다른 길이 되지 않게).
@@ -869,8 +1050,16 @@ export function buildAnswerIndexCore(
     }
   }
   if (extra.length > 0) response.answer = [response.answer, ...extra].join("\n\n")
-  // 사람이 쓴 글·공백 답은 끝맺음을 지우지 않는다(shapeOptionsFor, 회귀-3).
-  if (shape) response.answer = shapeAnswer(response.answer, shapeOptionsFor(isPolicyGoverned(card) ? "policy" : card.kind)).text
+  // 사람이 쓴 글·공백 답은 끝맺음을 지우지 않는다(shapeOptionsFor, 회귀-3). 정책 글·toneLocked 는 말투를 바꾸지 않는다(R3).
+  if (shape) {
+    const options = cardShapeOptions(card, env)
+    // 6단계 넘는 번호 목록은 앞 5단계 + 「문서 제목」 한 줄(규격 S2). 문서 제목을 아는 doc·howto 답만(사람이 쓴 fixed·policy 글은 자르지 않는다).
+    const title = response.sources[0]?.title?.trim()
+    if (form === "r3" && (card.kind === "doc" || card.kind === "howto") && title) options.steps = { max: 5, title }
+    response.answer = shapeAnswer(response.answer, options).text
+  }
+  // 이미 해 본 동작 단계 빼기(규격 S14, 스위치 기본 off).
+  if (shape && compiledSkipTried(env) && ctx.tried && ctx.tried.length > 0 && !isPolicyGoverned(card)) response.answer = skipTriedSteps(response.answer, ctx.tried)
 
   return finish(parts, { partial: decision.kind === "answer" && tailed, absentTail })
 }
@@ -899,7 +1088,7 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
     const cardIndex = decided && segment.card ? ctx.index.cardById.get(segment.card) : undefined
     if (cardIndex === undefined) {
       undecided = true
-      const notice = noticeFor(segment, at, ctx)
+      const notice = noticeFor(segment, at, ctx, input.head)
       pieceAt.push(pieces.length)
       pieces.push({ kind: notice.kind, label: notice.label, related: [], card: null, parts: null })
       noticeOf.push(true)
@@ -915,7 +1104,7 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
     if (!result.ok) {
       failures.push(`${segment.card}:${result.reason}`)
       pieceAt.push(pieces.length)
-      pieces.push({ kind: "retry", label: segment.label ?? ordinalLabel(at), related: [], card, parts: null })
+      pieces.push({ kind: "retry", label: noticeLabel(segment, at, input.head), related: [], card, parts: null })
       noticeOf.push(true)
       return
     }
@@ -924,10 +1113,10 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
     noticeOf.push(false)
     const label = shortTopic(card.topic, 22, segment.label) || segment.label || ordinalLabel(at)
     if (card.kind === "gap") {
-      pieces.push({ kind: "absent", label, related: result.value.related ?? [], card, parts: result.value.parts })
+      pieces.push({ kind: "absent", label, related: shapedRelated(result.value.related ?? [], card, input, shape), card, parts: result.value.parts })
       return
     }
-    const closed = takeClosing(shapedBlocks(result.value.parts.response.answer, shape))
+    const closed = takeClosing(shapedBlocks(result.value.parts.response.answer, shape, cardShapeOptions(card, input.ctx.env ?? process.env)))
     pieces.push({ kind: "answer", label, blocks: closed.blocks, closing: closed.closing, card, parts: result.value.parts })
   })
 
@@ -961,7 +1150,10 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
     }
   }
   // 그 조각만 물으면 답이 나오는 못 답한 조각을 추천 질문 맨 앞에(손님이 그대로 눌러 따로 물을 수 있게). 온전한 질문 글만 쓴다.
-  const chips = segments.filter((_segment, at) => noticeOf[at]).map((segment) => chipText(segment, input.question.redacted)).filter((text): text is string => Boolean(text))
+  const chips = segments
+    .filter((_segment, at) => noticeOf[at])
+    .map((segment) => chipText(segment, input.question.redacted, input.head === "number"))
+    .filter((text): text is string => Boolean(text))
   response.suggestedQuestions = Array.from(new Set([...chips, ...response.suggestedQuestions])).slice(0, 3)
   response.confidence = Math.min(response.confidence, ...pieces.map((piece) => (piece.parts ? piece.parts.response.confidence : 1)))
   const anyAnswered = answered.length > 0
@@ -998,9 +1190,9 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
   // 조각 본문에 이미 상담 안내 줄('[도입 상담 남기기]에 … 남겨 주세요' 같은 사람 글 포함)이 있으면 끝맺음을 더하지 않는다.
   const bodyHasClosing = answered.some((piece) => piece.blocks.flat().some((line) => isClosingLine(line) || CONSULT_GUIDE_RE.test(line)))
   const closing = needClosing && !bodyHasClosing ? COMPOUND_CLOSING_LINE : null
-  const cap = compoundLengthCap(segments.length)
+  const cap = compoundLengthCap(segments.length, input.head)
   const budget = cap - COMPOUND_FOLLOW_UP_RESERVE
-  const assembled = assemblePieces(pieces, tail, closing, budget)
+  const assembled = assemblePieces(pieces, tail, closing, budget, input.head)
   response.answer = assembled.text
   const dropped = assembled.pieces.filter((_piece, at) => assembled.modes[at] === "dropped").length
   const compacted = assembled.modes.filter((mode) => mode === "conclusion" || mode === "line").length
