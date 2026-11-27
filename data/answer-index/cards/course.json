@@ -2515,7 +2515,11 @@
       "수업 모니터링 데이터",
       "교실 캡처",
       "1분마다 캡처",
-      "출석부"
+      "출석부",
+      "출석부 확인",
+      "출결 현황",
+      "출결 기록",
+      "출석 현황"
     ],
     "covers": "특정 학생의 결석·지각을 [수업 관리] > [조작] > 수업 모니터링 데이터의 입장·퇴장 기록과 1분 간격 교실 캡처로 확인하는 방법",
     "notCovers": [
@@ -2523,7 +2527,8 @@
       "수업 참여 데이터·학습 보고서 → doc:/docs/admin/course-management#3/lesson-data-report",
       "학원 현장(오프라인)·등원 출석 체크 → doc:/docs/start/pre-adoption-faq-22-questions#6/offline-attendance-none",
       "관리자가 보는 수업 데이터 전반·통계 파일·데이터 접근 권한 → doc:/docs/start/academy-system-os-positioning#4/admin-data-overview",
-      "스토리지 수업 스크린샷 아래 입장·퇴장 기록 → doc:/docs/admin/storage-management#3/attendance-log"
+      "스토리지 수업 스크린샷 아래 입장·퇴장 기록 → doc:/docs/admin/storage-management#3/attendance-log",
+      "출석부·출결을 엑셀 파일로 받기 → doc:/docs/admin/course-management#6/settlement-excel"
     ],
     "negatives": [
       {
@@ -3685,7 +3690,11 @@
       "출석 학생 수",
       "엑셀",
       "학원 시스템",
-      "연동"
+      "연동",
+      "출석부 엑셀",
+      "출결 엑셀",
+      "출석 엑셀",
+      "출결 파일"
     ],
     "covers": "결제·오프라인 출결 정산은 [통계 다운로드]로 수업 일자·시간·담당 교사·출석 학생 수를 엑셀로 받아 학원 시스템에서 따로 정리하고, 연동은 상담에서 확인한다는 것",
     "notCovers": [
