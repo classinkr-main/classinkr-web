@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "dataVersion": "ai-17d2acfc41a6",
+  "dataVersion": "ai-6cf644526ef3",
   "sources": {
     "app/about/AboutPageClient.tsx": "201307dd2bc22b3b",
     "app/about/layout.tsx": "cbced2f28647c89c",
@@ -143,11 +143,11 @@
       "count": 47
     },
     "audit/C-05.jsonl": {
-      "sha": "98657fe909a526b4",
+      "sha": "82975e76c78ff0c4",
       "count": 47
     },
     "audit/C-06.jsonl": {
-      "sha": "77c0740bc63c19c8",
+      "sha": "13fbd4db9ec2f2dd",
       "count": 40
     },
     "audit/C-07.jsonl": {
@@ -179,7 +179,7 @@
       "count": 45
     },
     "audit/C-14.jsonl": {
-      "sha": "225e2ae3bf33a0d5",
+      "sha": "c976112b6e375467",
       "count": 45
     },
     "audit/C-15.jsonl": {
@@ -215,11 +215,11 @@
       "count": 45
     },
     "audit/C-23.jsonl": {
-      "sha": "3c06685c16ab8690",
+      "sha": "5c703e3ef7e24051",
       "count": 45
     },
     "audit/C-24.jsonl": {
-      "sha": "3736767ca688b4b0",
+      "sha": "19549e90e459a1a9",
       "count": 34
     },
     "audit/C-25.jsonl": {
@@ -235,19 +235,19 @@
       "count": 45
     },
     "audit/C-28.jsonl": {
-      "sha": "54ee4e146609b6fd",
+      "sha": "55d971e948177ab4",
       "count": 45
     },
     "audit/C-29.jsonl": {
-      "sha": "534523197a7ff065",
+      "sha": "e3633ec2f8c457f1",
       "count": 8
     },
     "audit/C-30.jsonl": {
-      "sha": "2932efc3dc348b4b",
+      "sha": "cd66ce83588dc87f",
       "count": 45
     },
     "audit/C-31.jsonl": {
-      "sha": "f40d2294e308a3a3",
+      "sha": "82304d29667dec99",
       "count": 45
     },
     "audit/C-32.jsonl": {
@@ -255,11 +255,11 @@
       "count": 9
     },
     "audit/C-33.jsonl": {
-      "sha": "0b33b9f7b27cbe15",
+      "sha": "808d8213777d2216",
       "count": 45
     },
     "audit/C-34.jsonl": {
-      "sha": "a40f7fb7029f91e6",
+      "sha": "300bb922b21769f1",
       "count": 44
     },
     "audit/human-queue.json": {
@@ -275,15 +275,15 @@
       "count": 112
     },
     "cards/admin.json": {
-      "sha": "3d02eb94d69a90b9",
+      "sha": "c35b8f6cd5942b21",
       "count": 177
     },
     "cards/board.json": {
-      "sha": "c44dcbba1e2e3f0e",
+      "sha": "e8203af1b80f74e2",
       "count": 343
     },
     "cards/classroom.json": {
-      "sha": "abf450eef506f769",
+      "sha": "5fe1b97e24d21acc",
       "count": 357
     },
     "cards/company.json": {
@@ -291,7 +291,7 @@
       "count": 194
     },
     "cards/course.json": {
-      "sha": "b3e0a3d80042b113",
+      "sha": "96b1c8aa51b7b2cd",
       "count": 200
     },
     "cards/gaps-account.json": {
@@ -343,7 +343,7 @@
       "count": 19
     },
     "cards/homework.json": {
-      "sha": "9caf589f87d85e43",
+      "sha": "7e7fc6751d161d6a",
       "count": 223
     },
     "cards/pricing.json": {
@@ -351,11 +351,11 @@
       "count": 127
     },
     "cards/recording.json": {
-      "sha": "a37108353d2dba0b",
+      "sha": "534c0b3de4a4b8ae",
       "count": 212
     },
     "cards/start.json": {
-      "sha": "117475306b99b3fe",
+      "sha": "aeadbe636265991a",
       "count": 133
     },
     "cards/support.json": {
