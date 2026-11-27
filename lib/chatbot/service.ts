@@ -80,8 +80,12 @@ import { resolveSymptomTriage, type SymptomTriageResult } from "@/lib/chatbot/sy
 import {
   ENGLISH_SUPPORT_ANSWER,
   PRIOR_INQUIRY_LINE,
+  applyCompiledToneToAnswer,
   applyToneToAnswer,
+  compiledEmpathyMode,
+  compiledRepeated,
   detectConversationTone,
+  detectStrongToneSignals,
   glossForRouting,
   isEnglishSupportRequest,
 } from "@/lib/chatbot/tone"
@@ -142,6 +146,7 @@ import { isCompiledScope } from "@/lib/chatbot/answer-index/scope"
 import type { AnswerIndexDecision, AnswerIndexRouter, AnswerIndexTrace } from "@/lib/chatbot/answer-index/types"
 import type { ChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
 import {
+  compiledNextTurnMode,
   contentWordsOf,
   parseDocPagePath,
   parsePreviousTurnInput,
@@ -441,6 +446,11 @@ interface CachedAnswerEntry {
   intent: ChatbotIntent
   handoffIntent: HandoffIntent
   warning?: string
+  /**
+   * compiled 라우터가 정한 코어의 흔적(스트림 경로만 싣는다). 캐시에서 꺼낸 코어도 compiled 말투 층(R3 a3)·조각 알림 생략을
+   * 비스트림과 같이 거치게 한다. legacy 코어는 없다.
+   */
+  answerIndex?: AnswerIndexTrace
 }
 
 // 2026-11-23: 쇼룸 실시간 응답·수업 워크플로 통합에 맞춰 캐시 판을 올렸다.
@@ -477,7 +487,9 @@ function getAnswerCacheKey(question: NormalizedQuestion, options?: RetrievalOpti
 function answerCacheRouterKey() {
   const router = getAnswerRouter()
   const assist = router === "compiled" ? answerAssistMode() : "off"
-  return assist === "off" ? router : `${router}+assist-${assist}${assistPickCacheSuffix(readAssistPickConfig())}`
+  // compiled 앞단 좁히기(CHATBOT_COMPILED_FRONT, R3 c2)를 끄면 같은 글의 코어가 달라진다(기본이면 꼬리 없음).
+  const front = router === "compiled" && compiledFrontMode() === "off" ? "+front-off" : ""
+  return assist === "off" ? `${router}${front}` : `${router}${front}+assist-${assist}${assistPickCacheSuffix(readAssistPickConfig())}`
 }
 
 /** 답 캐시 열쇠에 넣을 대화 맥락 판단. 지금 말 그대로 검색해도 판단에 따라 답이 다른 경우만 값이 있다. */
@@ -2945,6 +2957,38 @@ function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   if (isHardwareBoardLineupQuestion(question)) return false
 
   return false
+}
+
+// ── compiled 앞단 즉시 상담 좁히기(R3 c2) ───────────────────────────────────────────────────────────────
+// compiled 라우터에서만 쓴다(legacy 즉시 상담 판정은 그대로). 스위치 CHATBOT_COMPILED_FRONT=narrow(기본)|off.
+// 상담·데모를 '어디서·어떻게' 신청하는지, 상담을 어떤 수단으로 하는지 묻는 말은 연결해 달라는 말이 아니라 위치·방법 질문이다
+// ("상담 신청은 어디서 하나요?", "데모 수업 신청 어디서 해요", "도입 상담은 전화로 해요 메일로 해요?"). 이런 말은 색인이 카드로 답하면
+// 색인 답 + 상담 버튼으로 내고, 색인이 카드로 답하지 못하면 지금처럼 즉시 상담 답을 낸다.
+// 연결·신청을 직접 청하는 말("도입 상담 신청하고 싶어요", "데모 신청할게요"), 화난·반복·지난 문의는 좁히지 않는다.
+export type CompiledFrontMode = "narrow" | "off"
+
+export function compiledFrontMode(env: Record<string, string | undefined> = process.env): CompiledFrontMode {
+  return env.CHATBOT_COMPILED_FRONT?.trim().toLowerCase() === "off" ? "off" : "narrow"
+}
+
+const APPLY_WHERE_RE =
+  /(?:신청|예약|접수|요청)\s*(?:은|는|을|를|하려면|하는\s*곳|할\s*곳|하는\s*데|할\s*수\s*있는\s*곳)?\s*(?:어디|어떻게|어느\s*(?:페이지|메뉴|화면|곳)|방법|절차|하는\s*법|경로)|(?:어디서|어디에서|어디로|어떻게)\s*(?:(?:도입\s*)?상담|데모|시연|체험|견적|쇼룸\s*방문|방문)?\s*(?:을|를|은|는)?\s*(?:신청|예약|접수)/
+const CONTACT_MODE_CHOICE_RE =
+  /(?:전화|메일|이메일|문자|카톡|카카오톡|채팅|방문|화상|대면)(?:로|으로)\s*(?:해요|하나요|하는|진행|받|오나요|와요|돼요|되나요)[^.?!]{0,4}?\s*(?:아니면\s*|or\s*)?(?:전화|메일|이메일|문자|카톡|카카오톡|채팅|방문|화상|대면)(?:로|으로)/
+const CONNECT_REQUEST_RE =
+  /연결|바꿔|불러|이어\s*(?:줘|주)|(?:하고|받고|드리고|보고)\s*싶|싶어|싶습|원해|원합|원함|부탁|할래|할게|하겠|(?:해|드려)\s*(?:주세요|줘|주실)|주세요|연락\s*(?:주|줘|바랍)|급해|급합/
+
+function isCompiledHandoffInfoQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  const tone = detectConversationTone(question.redacted)
+  if (tone.angry || tone.repeated || tone.priorContext) return false
+  if (CONNECT_REQUEST_RE.test(text)) return false
+  return APPLY_WHERE_RE.test(text) || CONTACT_MODE_CHOICE_RE.test(text)
+}
+
+/** compiled 앞단이 즉시 상담 대신 색인에 맡기는 말(색인이 카드로 답할 때만 실제로 맡긴다). */
+function compiledHandoffYields(question: NormalizedQuestion) {
+  return compiledFrontMode() === "narrow" && isCompiledHandoffInfoQuestion(question)
 }
 
 const EXPLICIT_HUMAN_CONNECTION_RE =
@@ -5740,15 +5784,18 @@ function applyConversationTone(core: ChatbotCore) {
     tone.priorContext = null
     tone.priorKind = null
   }
+  // compiled 라우터가 정한 답(R3 a3, CHATBOT_COMPILED_EMPATHY=strong 기본): 공감은 강한 표지에만 결론 다음 줄에, 고정 문구는 요체로.
+  // '반복 문의'도 우리에게 다시 묻거나 같은 문제가 되풀이된다는 말만 센다(compiledRepeated). legacy 답은 아래 옛 판정 그대로다.
+  const signals = isCompiledFinalCore(core) && compiledEmpathyMode() === "strong" ? detectStrongToneSignals(said.redacted, tone) : null
+  if (signals) tone.repeated = compiledRepeated(tone, signals)
   // 지난 문의를 전제로 한 질문은 "볼 수 없다"는 줄만 붙이고, 상담 연결은 화난·반복 문의일 때만 앞세운다.
   // 이미 상담원 대기 중이라고 항의하는 사람에게 "지금 바로 연결해 드릴게요"를 또 약속하지 않는다.
   const waitingForAgent = /대기\s*(?:순번|번호|중)|순번|상담원\s*연결을?\s*(?:눌렀|했는데|했더니)/.test(text)
   const offerHandoff = !waitingForAgent && ((tone.angry && !core.howtoAnswer) || tone.repeated)
-  core.response.answer = applyToneToAnswer(core.response.answer, tone, {
-    englishSummary: core.englishSummary,
-    offerHandoff,
-    mentionsRefund: /환불|보상|배상/.test(text),
-  })
+  const toneOptions = { englishSummary: core.englishSummary, offerHandoff, mentionsRefund: /환불|보상|배상/.test(text) }
+  core.response.answer = signals
+    ? applyCompiledToneToAnswer(core.response.answer, tone, signals, toneOptions)
+    : applyToneToAnswer(core.response.answer, tone, toneOptions)
   if (offerHandoff) {
     core.response.needsHandoff = true
     core.handoffIntent = "support"
@@ -6375,6 +6422,10 @@ function withTopicParticle(word: string) {
 function appendUnansweredSegmentNotice(core: ChatbotCore) {
   const answered = answeredOriginalOf(core)
   if (!answered || isNotFoundResponse(core.response)) return
+  if (legacySegmentNoticeMode() === "split") {
+    appendUnansweredSplitNotices(core, answered)
+    return
+  }
   const segments = segmentQuestion((core.utterance ?? core.question).redacted)
   if (segments.length !== 2) return
   const candidates = segments.map(segmentAnswerOf)
@@ -6409,6 +6460,69 @@ function appendUnansweredSegmentNotice(core: ChatbotCore) {
   ].slice(0, Math.max(3, core.response.suggestedQuestions.length))
 }
 
+// ── legacy 조각 알림 R3 판(a3, 스위치 뒤) ─────────────────────────────────────────────────────────────
+// CHATBOT_LEGACY_SEGMENT_NOTICE=split 이면 위 두 조각 알림을 답 색인과 같은 질문 나누기(splitQuestion v2, 최대 조각 수도 같다) 기준으로
+// 바꾸고, 못 담은 조각마다 복합 답과 같은 머리 꼴(CHATBOT_COMPOUND_HEAD: number "{n}. 이름" 기본 · bracket "【이름】") + 알림 한 줄을
+// 질문 순서 번호로 붙인다. 기본(pair)은 지금 legacy 동작 그대로다(legacy 기본 답이 바뀌지 않는다).
+export type LegacySegmentNoticeMode = "pair" | "split"
+
+export function legacySegmentNoticeMode(env: Record<string, string | undefined> = process.env): LegacySegmentNoticeMode {
+  return env.CHATBOT_LEGACY_SEGMENT_NOTICE?.trim().toLowerCase() === "split" ? "split" : "pair"
+}
+
+function compoundHeadStyle(env: Record<string, string | undefined> = process.env): "number" | "bracket" {
+  return env.CHATBOT_COMPOUND_HEAD?.trim().toLowerCase() === "bracket" ? "bracket" : "number"
+}
+
+// 머리 이름에 손님 글을 쓰지 않을 조각(숫자 4자리 이상·@·주소). 규격 S10 규칙 2.
+const SEGMENT_LABEL_UNSAFE_RE = /\d{4,}|@|https?:\/\/|www\./i
+const SEGMENT_LABEL_MAX = 24
+export const LEGACY_SEGMENT_RETRY_LINE = "이 내용은 따로 한 번 더 물어봐 주세요."
+
+function legacySegmentLabel(segment: string, at: number) {
+  const text = segment.replace(/^(?:그리고|또|및|근데|그런데|추가로)\s+/, "").replace(/[\s?？!.~]+$/u, "").trim()
+  if (!text || text.length > SEGMENT_LABEL_MAX || SEGMENT_LABEL_UNSAFE_RE.test(text)) return `${at + 1}번째 질문`
+  return `'${text}'`
+}
+
+function appendUnansweredSplitNotices(core: ChatbotCore, answered: string) {
+  const segments = splitQuestion((core.utterance ?? core.question).redacted).segments
+  if (segments.length < 2) return
+  const answer = core.response.answer
+  const candidates = segments.map(segmentAnswerOf)
+  const covered = candidates.map(
+    (candidate) => candidate !== null && (candidate.original === answered || (candidate.head.length >= 12 && answer.includes(candidate.head)))
+  )
+  // 정해 둔 답이 서는 조각이 하나뿐이면 이 답(정해 둔 답)은 그 조각의 답이다(두 조각 판과 같은 판단).
+  const known = candidates.flatMap((candidate, at) => (candidate ? [at] : []))
+  if (!covered.some(Boolean) && known.length === 1) covered[known[0]] = true
+  // 이 답이 어느 조각을 답했는지 모르면(다른 주제로 답함) 알리지 않는다.
+  if (!covered.some(Boolean)) return
+  const coveredOriginals = new Set(candidates.filter((candidate, at) => candidate && covered[at]).map((candidate) => candidate!.original))
+  const missing = segments
+    .map((segment, at) => ({ segment, at, candidate: candidates[at] }))
+    .filter(({ segment, at, candidate }) => {
+      if (covered[at]) return false
+      // 같은 정해 둔 답을 고르는 조각은 그 답에 든 것으로 본다.
+      if (candidate) return !coveredOriginals.has(candidate.original)
+      // 정해 둔 답이 서지 않는 조각은 묻는 꼴이고 답이 그 조각을 말하지 않을 때만 알린다.
+      return ASKING_SEGMENT_RE.test(segment.trim()) && !answerMentionsSegment(answer, segment)
+    })
+  if (missing.length === 0) return
+  const style = compoundHeadStyle()
+  const blocks = missing.map(({ segment, at }) => {
+    const label = legacySegmentLabel(segment, at)
+    return `${style === "bracket" ? `【${label}】` : `${at + 1}. ${label}`}\n${LEGACY_SEGMENT_RETRY_LINE}`
+  })
+  if (blocks.every((block) => answer.includes(block))) return
+  core.response.answer = [answer.trimEnd(), ...blocks.filter((block) => !answer.includes(block))].join("\n\n")
+  const chips = missing.map(({ segment }) => segment.replace(/^(?:그리고|또|및|근데|그런데|추가로)\s+/, "").trim()).filter((chip) => chip.length <= 60)
+  core.response.suggestedQuestions = Array.from(new Set([...chips, ...core.response.suggestedQuestions])).slice(
+    0,
+    Math.max(3, core.response.suggestedQuestions.length)
+  )
+}
+
 /**
  * 공개 답의 마지막 층: 두 조각 질문에서 한 조각만 답했으면 답하지 못한 조각을 한 줄로 알리고(공개 경로의 정해 둔 답만),
  * 말투(공감 첫마디·상담 연결 앞세우기·끝 질문)를 입힌다. 답 캐시에는 이 층을 입히기 전 사본을 넣는다(말투는 이번 말로 판단한다).
@@ -6419,6 +6533,14 @@ function applyPublicAnswerLayers(core: ChatbotCore) {
   applyConversationTone(core)
   // R2 B5(결정 8): 옛 낱말 판정이면 즉시 상담으로 끝냈을 기능 질문은 답을 내되 상담 버튼을 남긴다(연결 경로는 그대로).
   if (isNarrowedHandoffQuestion(core.utterance ?? core.question)) core.response.needsHandoff = true
+  // R3 c2: compiled 앞단이 색인에 맡긴 신청 위치·방법 질문도 상담 버튼을 남긴다.
+  if (isCompiledYieldedHandoffCore(core)) core.response.needsHandoff = true
+}
+
+/** compiled 색인이 답한 코어 가운데 즉시 상담 판정이 걸렸지만 앞단이 색인에 맡긴 말(R3 c2). */
+function isCompiledYieldedHandoffCore(core: ChatbotCore) {
+  if (!isCompiledFinalCore(core) || core.answerIndex?.decision === null || core.answerIndex?.decision === undefined) return false
+  return wantsImmediateHumanHandoff(core.question) && !isWeakHandoffSignal(core.question) && compiledHandoffYields(core.question)
 }
 
 async function buildChatbotCore(
@@ -6544,6 +6666,8 @@ function prepareConversationTurn(message: unknown, options: BuildChatbotCoreOpti
   const turn = resolveConversationTurn(utterance.redacted, options.previousTurn ?? null, options.pagePath ?? null, {
     standsAlone: standsAloneForTurn,
     answersNewWords: expansionAnswersNewWords,
+    // R3 a3(규격 4.5): compiled 라우터에서만 "그리고·또·추가로·그럼"으로 여는 말을 새 질문으로 본다(legacy 는 지금 규칙 그대로).
+    leadingConnectiveNewQuestion: getAnswerRouter() === "compiled" && compiledNextTurnMode() === "new",
   })
   if (!turn.expanded) {
     const pageDoc = turn.reason === "page_context" && turn.pageDoc ? findPublicDocForPage(turn.pageDoc) : null
@@ -6608,6 +6732,11 @@ type CompiledRoutePlan =
 // compiled 라우터가 색인으로 정하려면 켜 둔 카드(CHATBOT_COMPILED_DISABLED_CARDS 로 끄지 않은 카드)가 이만큼은 있어야 한다.
 const MIN_ACTIVE_ANSWER_INDEX_CARDS = 1
 
+function isHubCard(index: ReturnType<typeof getRouterAnswerIndex>, cardId: string | null) {
+  const at = cardId === null ? undefined : index.cardById.get(cardId)
+  return at !== undefined && (index.cards[at].card as { role?: string }).role === "hub"
+}
+
 function countActiveAnswerIndexCards(index: ReturnType<typeof getRouterAnswerIndex>) {
   const disabled = disabledCardIds()
   return index.cards.filter((card) => !disabled.has(card.id)).length
@@ -6637,7 +6766,7 @@ function withPreRemainingNotices(core: ChatbotCore, question: NormalizedQuestion
   const pieces = preRemainingPieces(question.redacted)
   if (pieces.length === 0) return core
   const index = getRouterAnswerIndex()
-  const notices: { label: string; line: string; text: string }[] = []
+  const notices: { label: string; line: string; text: string; at: number }[] = []
   pieces.forEach((piece, at) => {
     if (notices.length >= PRE_REMAINING_NOTICE_MAX) return
     if (!isQuestionSentence(piece) && !/[?？]\s*$/.test(piece)) return
@@ -6651,11 +6780,14 @@ function withPreRemainingNotices(core: ChatbotCore, question: NormalizedQuestion
     const cardAt = decision.card ? index.cardById.get(decision.card) : undefined
     const topic = cardAt === undefined ? null : (index.cards[cardAt].card as { topic?: string }).topic ?? null
     const label = absentLabel ?? labelForSegmentText(index, piece) ?? (topic ? shortTopic(topic) : `${at + 1}번째 질문`)
-    notices.push({ label, line: decision.kind === "answer" ? SEGMENT_RETRY_LINE : SEGMENT_ABSENT_LINE, text: piece })
+    notices.push({ label, line: decision.kind === "answer" ? SEGMENT_RETRY_LINE : SEGMENT_ABSENT_LINE, text: piece, at })
   })
   if (notices.length === 0) return core
   const response = core.response
-  response.answer = [response.answer.trimEnd(), ...notices.map((notice) => `【${notice.label}】\n${notice.line}`)].join("\n\n")
+  // 머리 꼴은 복합 답과 같다(R3 a1·a3, CHATBOT_COMPOUND_HEAD): number(기본)면 질문 순서 번호 "{n}. 이름", bracket 이면 "【이름】".
+  const style = compoundHeadStyle()
+  const head = (notice: (typeof notices)[number]) => (style === "bracket" ? `【${notice.label}】` : `${notice.at + 1}. ${notice.label}`)
+  response.answer = [response.answer.trimEnd(), ...notices.map((notice) => `${head(notice)}\n${notice.line}`)].join("\n\n")
   // 따로 물으면 답이 나오는 조각은 추천 질문 맨 앞에 둔다(누르면 그 조각만 묻는다).
   const chips = notices
     .filter((notice) => notice.line === SEGMENT_RETRY_LINE && notice.text.length <= 60)
@@ -6689,13 +6821,15 @@ function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRout
   if (isEnglishSupportRequest(question.redacted)) {
     return { kind: "pre", trace: pre("english"), build: () => buildEnglishSupportCore(question, startedAt) }
   }
-  if (wantsImmediateHumanHandoff(question) && !isWeakHandoffSignal(question)) {
-    return {
-      kind: "pre",
-      trace: pre("handoff"),
-      build: () => withPreRemainingNotices(buildImmediateHandoffCore(question, startedAt), question, wantsImmediateHumanHandoff),
-    }
+  const handoffPlan: CompiledRoutePlan = {
+    kind: "pre",
+    trace: pre("handoff"),
+    build: () => withPreRemainingNotices(buildImmediateHandoffCore(question, startedAt), question, wantsImmediateHumanHandoff),
   }
+  // R3 c2: 신청 위치·방법을 묻는 말은 색인이 카드로 답할 때 색인에 맡긴다(아니면 아래에서 지금처럼 즉시 상담).
+  const handoffFires = wantsImmediateHumanHandoff(question) && !isWeakHandoffSignal(question)
+  const handoffYields = handoffFires && compiledHandoffYields(question)
+  if (handoffFires && !handoffYields) return handoffPlan
   if (isTriedAlreadyUpset(question)) {
     return {
       kind: "pre",
@@ -6703,12 +6837,12 @@ function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRout
       build: () => withPreRemainingNotices(buildTriedAlreadyCore(question, startedAt), question, isTriedAlreadyUpset),
     }
   }
-  if (!inScope) return { kind: "legacy", trace: preIndexTrace(router, "out") }
+  if (!inScope) return handoffYields ? handoffPlan : { kind: "legacy", trace: preIndexTrace(router, "out") }
   const index = getRouterAnswerIndex()
   // 켜 둘 카드가 없는 색인(자료 반영 전·경로나 컴파일이 잘못됨)은 무엇을 묻든 못 찾음만 낸다(decide.ts: 카드 0장이면 언제나 abstain).
   // compiled 라우터는 그런 색인으로 정하지 않고 지금(legacy) 흐름으로 보낸다. 흔적에 unavailable=empty_index 를 남긴다(2026-11-20 조사 G11).
   if (router === "compiled" && countActiveAnswerIndexCards(index) < MIN_ACTIVE_ANSWER_INDEX_CARDS) {
-    return { kind: "legacy", trace: { ...preIndexTrace(router, "in"), unavailable: "empty_index" } }
+    return handoffYields ? handoffPlan : { kind: "legacy", trace: { ...preIndexTrace(router, "in"), unavailable: "empty_index" } }
   }
   const legacySignals = [quick, policyGuard].filter((signal) => signal !== null).map((signal) => ({ gateOriginal: signal.gateOriginal }))
   if (wantsImmediateHumanHandoff(question)) legacySignals.push({ gateOriginal: "handoff:weak-signal" })
@@ -6718,6 +6852,9 @@ function planCompiledRoute(question: NormalizedQuestion, router: AnswerIndexRout
     votes,
     isSymptomReport: (text) => SYMPTOM_REPORT_RE.test(text.toLowerCase()),
   })
+  // 색인이 카드로 답하지 못하면(못 찾음·공백·되묻기) 맡기지 않고 지금처럼 즉시 상담으로 잇는다. 고른 카드가 허브(role: hub, 연락 총괄처럼
+  // 넓은 안내)여도 즉시 상담 답이 더 구체적이라 맡기지 않는다.
+  if (handoffYields && (decision.kind !== "answer" || isHubCard(index, decision.card))) return handoffPlan
   return { kind: "index", decision, analysis, votes }
 }
 
@@ -7551,6 +7688,7 @@ export async function streamChatbotQuery(
         handoffIntent: cached.handoffIntent,
         warning: cached.warning,
         latencyMs: 0,
+        ...(cached.answerIndex ? { answerIndex: cached.answerIndex } : {}),
       }
       applyPublicAnswerLayers(cachedCore)
       cached.handoffIntent = cachedCore.handoffIntent
@@ -7648,7 +7786,14 @@ export async function streamChatbotQuery(
   ) {
     setCachedAnswer(
       question,
-      { response, category, intent, handoffIntent: core.handoffIntent, warning },
+      {
+        response,
+        category,
+        intent,
+        handoffIntent: core.handoffIntent,
+        warning,
+        ...(isCompiledFinalCore(core) && core.answerIndex ? { answerIndex: core.answerIndex } : {}),
+      },
       undefined,
       answerCacheContextKey(core.conversation)
     )
@@ -8553,6 +8698,8 @@ export const __frontDoorForTests = {
         : null,
       handoff: handoff ? (isWeakHandoffSignal(question) ? ("weak" as const) : ("strong" as const)) : null,
       narrowedHandoff: isNarrowedHandoffQuestion(question),
+      // R3 c2: compiled 앞단이 즉시 상담 대신 색인에 맡기는 말인지(색인이 허브 아닌 카드로 답할 때만 실제로 맡긴다).
+      compiledHandoffYield: handoff && !isWeakHandoffSignal(question) && compiledHandoffYields(question),
       tried: isTriedAlreadyUpset(question),
       english: isEnglishSupportRequest(question.redacted),
       angry: tone.angry,

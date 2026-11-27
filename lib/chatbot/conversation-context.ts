@@ -78,7 +78,23 @@ export interface ResolveConversationTurnOptions {
    * 그 답에 새 낱말이 하나도 없으면 false("카메라가 안 켜져요" 뒤 "그러면 출결은요?"). 판단은 부르는 쪽이 결정형으로 한다(모델 호출 없음).
    */
   answersNewWords?: (routingText: string, previousQuestion: string, newWords: string[]) => boolean
+  /**
+   * R3 a3(답 꼴 규격 4.5): "그리고·또·추가로·그럼"으로 시작하는 말을 새 질문으로 본다(카드를 다시 고른다). 부르는 쪽이 compiled 라우터에서만
+   * 켠다(compiledNextTurnMode). 앞 턴의 무엇을 가리키는 말(그거·그걸·거기), 내용 없이 다시 생긴 문제를 알리는 말("또 안 돼요"),
+   * 기기 이름 대답("그럼 아이패드는요"), 봇이 물은 정보의 대답은 지금처럼 잇는다. 끄면(기본) 지금 규칙 그대로다.
+   */
+  leadingConnectiveNewQuestion?: boolean
 }
+
+export type CompiledNextTurnMode = "new" | "off"
+
+/** CHATBOT_COMPILED_NEXT_TURN: new(기본, compiled 라우터에서만 4.5 규칙) · off(지금 규칙 그대로). */
+export function compiledNextTurnMode(env: Record<string, string | undefined> = process.env): CompiledNextTurnMode {
+  return env.CHATBOT_COMPILED_NEXT_TURN?.trim().toLowerCase() === "off" ? "off" : "new"
+}
+
+// 새 질문을 여는 첫 낱말(규격 4.5).
+const LEADING_NEW_QUESTION_RE = /^(?:아\s*|참\s*|아참\s*)?(?:그리고|그리고요|또|또한|추가로|그럼|그럼요|그러면|그러면요)(?=\s|,|$)/
 
 // ─── 입력 검사 ────────────────────────────────────────────────────────────
 
@@ -364,6 +380,16 @@ export function resolveConversationTurn(
   }
   if (compactLength <= SLOT_MESSAGE_MAX && matchesSlotAnswer(previousTurn?.askedSlot, text, shape)) {
     return expand(previousTurn?.askedSlot === "choice" ? "choice" : "slot_answer")
+  }
+  // "그리고 출결은요?", "또 숙제 기능도 있어요?": 새 질문을 여는 말은 새로 고른다(compiled 라우터, 규격 4.5).
+  if (
+    options.leadingConnectiveNewQuestion &&
+    LEADING_NEW_QUESTION_RE.test(text) &&
+    !shape.objectDeictic &&
+    shape.content.length > 0 &&
+    !DEVICE_ANSWER_RE.test(text.toLowerCase())
+  ) {
+    return none
   }
   // "그거 말고 요금은요?": 앞 턴의 것 말고 다른 것을 묻는다.
   if (excluded) return none
