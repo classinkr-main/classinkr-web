@@ -219,9 +219,36 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20261123_partner_settlement_snapshots.sql",
   // 총판 견적서 확인·발행 후 수정(2026-11-24). 미적용이면 새 칸 없이 읽고(42703 폴백) 확인 버튼·발행 후 수정만 막힌다.
   "supabase/migrations/20261124_distributor_settlement_confirm_revise.sql",
+  "supabase/migrations/20261125031832_admin_requests.sql",
+  "supabase/migrations/20261125062633_admin_requests_reporter_review.sql",
+  "supabase/migrations/20261125083325_admin_requests_retry_receipts.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
+  {
+    kind: "table",
+    table: "admin_requests",
+    label: "관리자 요청 재시도 영수증",
+    columns: ["submission_fingerprint", "mutation_receipts"],
+    migration: "supabase/migrations/20261125083325_admin_requests_retry_receipts.sql",
+    impact: "접수와 상태 변경을 저장하거나 안전하게 재시도할 수 없다.",
+  },
+  {
+    kind: "table",
+    table: "admin_requests",
+    label: "요청자 해결 확인과 재확인",
+    columns: ["requester_review", "requester_reviewed_at"],
+    migration: "supabase/migrations/20261125062633_admin_requests_reporter_review.sql",
+    impact: "요청 목록과 처리 결과 확인이 동작하지 않는다.",
+  },
+  {
+    kind: "table",
+    table: "admin_requests",
+    label: "관리자 요청과 캡처 보관",
+    columns: ["id", "reporter_id", "logs", "acknowledged_at", "capture_expires_at", "revision"],
+    migration: "supabase/migrations/20261125031832_admin_requests.sql",
+    impact: "관리자 요청 접수, 답변 및 확인한 캡처의 자동 정리가 동작하지 않는다.",
+  },
   {
     kind: "table",
     table: "quote_documents",

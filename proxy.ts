@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
+import { ADMIN_REQUESTS_HREF, ADMIN_REQUEST_ROLES, requestContextQuery } from "@/lib/admin/requests"
 import { getBlogSlugTokenRewritePath } from "@/lib/blog-slug-route"
 import { getEventSlugTokenRewritePath } from "@/lib/event-slug-route"
 import { updateSupabaseSession, type VerifiedSupabaseUser } from "@/lib/supabase/middleware"
@@ -12,12 +13,14 @@ const ADMIN_LOGIN_PATH = "/admin/login"
 const PROXY_BYPASS_PATHS = new Set(["/api/meta/webhook", "/api/mcp"])
 const ADMIN_PAGE_ROLES = new Set(["ADMIN", "SUPER_ADMIN"])
 const BRANCH_PAGE_ROLES = new Set(["ADMIN", "SUPER_ADMIN", "BRANCH"])
+const REQUEST_PAGE_ROLES = new Set<string>(ADMIN_REQUEST_ROLES)
 
 function isProtectedAdminPath(pathname: string) {
   return pathname.startsWith("/admin") && pathname !== ADMIN_LOGIN_PATH
 }
 
 function getAllowedAdminPageRoles(pathname: string) {
+  if (pathname === ADMIN_REQUESTS_HREF) return REQUEST_PAGE_ROLES
   return pathname === "/admin/branch" || pathname.startsWith("/admin/branch/")
     ? BRANCH_PAGE_ROLES
     : ADMIN_PAGE_ROLES
@@ -178,6 +181,10 @@ function redirectToAdminLogin(request: NextRequest) {
   const url = request.nextUrl.clone()
   url.pathname = ADMIN_LOGIN_PATH
   url.search = ""
+  if (request.nextUrl.pathname === ADMIN_REQUESTS_HREF) {
+    url.search = requestContextQuery(request.nextUrl.searchParams).toString()
+    url.searchParams.set("return", "requests")
+  }
   const response = NextResponse.redirect(url)
   response.cookies.set("admin_session", "", {
     httpOnly: true,

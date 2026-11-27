@@ -430,6 +430,8 @@ export default function HardwareQuotesPanel({
     typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("quote")
   )
   const [showDeleted, setShowDeleted] = useState(false)
+  const showDeletedRef = useRef(false)
+  const changingDeletionRef = useRef(false)
   const [changingDeletionId, setChangingDeletionId] = useState<string | null>(null)
   const [details, setDetails] = useState<Record<string, DetailState>>({})
   const [composerDraft, setComposerDraft] = useState<QuickQuoteDraft | null>(null)
@@ -671,21 +673,23 @@ export default function HardwareQuotesPanel({
   }
 
   async function changeQuoteDeletion(quote: HardwareQuoteRow, deleted: boolean) {
-    if (changingDeletionId) return
+    if (changingDeletionRef.current) return
     const message = deleted
       ? `${quote.quoteNumber} 견적서를 삭제하시겠습니까?\n목록에서 숨기고 공유 링크를 중지합니다. 삭제함에서 복구할 수 있습니다.`
       : `${quote.quoteNumber} 견적서를 복구하시겠습니까?\n유효기간이 남은 기존 공유 링크가 다시 열립니다.`
     if (!window.confirm(message)) return
+    changingDeletionRef.current = true
     setChangingDeletionId(quote.id)
     setNotice(null)
     try {
       await adminFetchJson(`/api/admin/quotes/${quote.id}`, { method: deleted ? "DELETE" : "POST" })
-      setSelectedId(null)
+      setSelectedId((current) => current === quote.id ? null : current)
       setNotice({ tone: "success", message: deleted ? `${quote.quoteNumber}을 삭제했습니다.` : `${quote.quoteNumber}을 복구했습니다.` })
-      await loadQuotes(showDeleted)
+      await loadQuotes(showDeletedRef.current)
     } catch (error) {
       setNotice({ tone: "error", message: error instanceof Error ? error.message : "견적서 상태 변경에 실패했습니다." })
     } finally {
+      changingDeletionRef.current = false
       setChangingDeletionId(null)
     }
   }
@@ -1188,7 +1192,8 @@ export default function HardwareQuotesPanel({
       ) : (
       <div className="space-y-4">
       <button type="button" className={GHOST_BUTTON} aria-pressed={showDeleted} onClick={() => {
-        const next = !showDeleted
+        const next = !showDeletedRef.current
+        showDeletedRef.current = next
         setShowDeleted(next)
         setSelectedId(null)
         setQuotes([])

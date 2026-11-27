@@ -93,9 +93,13 @@ async function loadRoute(
         }),
   }))
 
+  const purgeExpiredRequestCaptures = vi.fn().mockResolvedValue(2)
+  vi.doMock("@/lib/repositories/admin-requests", () => ({ purgeExpiredRequestCaptures }))
+
   const { GET } = await import("@/app/api/cron/dispatch/[slot]/route")
   return {
     GET,
+    purgeExpiredRequestCaptures,
     sendLeadMorningBrief,
     previewLeadMorningBrief,
     runCrmSegmentDaily,
@@ -123,6 +127,7 @@ describe("시간 슬롯 크론 디스패처", () => {
     if (previousCronSecret === undefined) delete process.env.CRON_SECRET
     else process.env.CRON_SECRET = previousCronSecret
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
     vi.resetModules()
   })
 
@@ -143,6 +148,23 @@ describe("시간 슬롯 크론 디스패처", () => {
 
     expect(response.status).toBe(401)
     expect(sendLeadMorningBrief).not.toHaveBeenCalled()
+  })
+
+  it("expires request captures only in the designated production slot", async () => {
+    process.env.CRON_SECRET = "test-cron-secret"
+    vi.stubEnv("VERCEL_ENV", "preview")
+    const { GET, purgeExpiredRequestCaptures } = await loadRoute()
+    await GET(request("03"), context("03"))
+    vi.stubEnv("VERCEL_ENV", "production")
+    await GET(request("04"), context("04"))
+    const dryRun = new NextRequest("https://classin.co.kr/api/cron/dispatch/03?dryRun=true", {
+      headers: { authorization: "Bearer test-cron-secret" },
+    })
+    await GET(dryRun, context("03"))
+    expect(purgeExpiredRequestCaptures).not.toHaveBeenCalled()
+    const response = await GET(request("03"), context("03"))
+    expect(await response.json()).toMatchObject({ requestCaptureCleanup: { status: "ok", purged: 2 } })
+    expect(purgeExpiredRequestCaptures).toHaveBeenCalledOnce()
   })
 
   it("슬롯이 0-23 밖이면 400", async () => {

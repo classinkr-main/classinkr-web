@@ -42,11 +42,13 @@ function warnJsonFallback(action: string, error: SupabaseLikeError) {
   console.warn(`[bugs] Supabase ${action} failed; using JSON fallback: ${error.message ?? error.code ?? "unknown error"}`);
 }
 
-export async function getBugReports(): Promise<BugReport[]> {
-  const { data, error } = await sb()
+export async function getBugReports(signal?: AbortSignal): Promise<BugReport[]> {
+  const query = sb()
     .from("bug_reports")
     .select("*")
     .order("created_at", { ascending: false });
+  if (signal) query.abortSignal(signal);
+  const { data, error } = await query;
   if (error && canUseJsonFallback(error)) {
     warnJsonFallback("read", error);
     return getJsonBugReports();

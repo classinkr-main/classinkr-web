@@ -6,6 +6,7 @@ import { Lock } from "lucide-react"
 import Image from "next/image"
 import { resolveAdminLandingHref } from "@/components/admin/admin-nav-access"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
+import { ADMIN_REQUESTS_HREF, canSubmitAdminRequest, requestContextQuery } from "@/lib/admin/requests"
 import { getAdminAuthErrorMessage } from "@/lib/admin-auth-errors"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
@@ -15,6 +16,15 @@ import { ADMIN_PASSWORD_CHANGED_NOTICE_KEY } from "@/lib/auth/admin-password"
 
 const INVALID_CREDENTIALS_MESSAGE = "이메일 또는 비밀번호가 올바르지 않습니다."
 const UNAUTHORIZED_MESSAGE = "관리자 권한이 있는 계정만 로그인할 수 있습니다."
+
+function adminRequestReturnHref(role: string) {
+  const params = new URLSearchParams(window.location.search)
+  if (params.get("return") === "requests" && canSubmitAdminRequest(role)) {
+    const query = requestContextQuery(params).toString()
+    return query ? `${ADMIN_REQUESTS_HREF}?${query}` : ADMIN_REQUESTS_HREF
+  }
+  return null
+}
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -133,10 +143,8 @@ export default function AdminLoginPage() {
       sessionStorage.setItem("admin_email", signInData.user.email ?? "")
       sessionStorage.removeItem("admin_branch")
 
-      // 착지 화면은 admin-nav-access 의 함수 하나가 정한다 — 숨김 판정과 같은 파일이라 "로그인하자마자
-      // 사이드바에 없는 화면"이 될 수 없다(2026-09-10 사고의 재발 방지, 그 파일 머리 주석).
       const navPreset = (profile as { nav_preset?: string | null }).nav_preset ?? null
-      router.replace(resolveAdminLandingHref({ role: profile.role, preset: navPreset }))
+      router.replace(adminRequestReturnHref(profile.role) ?? resolveAdminLandingHref({ role: profile.role, preset: navPreset }))
       router.refresh()
     } catch (err) {
       console.error("[AdminLogin] 오류:", err)
