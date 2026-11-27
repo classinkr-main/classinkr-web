@@ -100,8 +100,7 @@
     ],
     "covers": "태블릿으로 수업할 때 전용 펜이 꼭 필요한지는 공개 문서에 없다는 것(전자칠판 펜은 장비 설명에 있음)",
     "notCovers": [
-      "전자칠판에서 펜·손가락 필기 → hardware/board-writing-touch",
-      "태블릿·전자칠판에서 AI 칠판 풀이 쓰기 → updates/classin-ai-blackboard-609#2/tablet-pen",
+      "전자칠판에서 펜·손가락 필기 → doc:/docs/hardware/board-writing-touch#1/multi-user-writing",
       "AI 칠판 문항 풀이를 태블릿·전자칠판에서 펜으로 쓰기 → doc:/docs/updates/classin-ai-blackboard-609#2/tablet-pen"
     ],
     "negatives": [
