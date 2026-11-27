@@ -13533,7 +13533,43 @@
       "원생 명단 추출",
       "학생 리스트"
     ],
-    "ambiguous": []
+    "ambiguous": [
+      {
+        "form": "구성원 명단",
+        "notWith": [
+          "C_bulk_import",
+          "C_upload"
+        ]
+      },
+      {
+        "form": "학생 명단",
+        "notWith": [
+          "C_bulk_import",
+          "C_upload"
+        ]
+      },
+      {
+        "form": "명단 엑셀로",
+        "notWith": [
+          "C_bulk_import",
+          "C_upload"
+        ]
+      },
+      {
+        "form": "명단 엑셀",
+        "notWith": [
+          "C_bulk_import",
+          "C_upload"
+        ]
+      },
+      {
+        "form": "학생 리스트",
+        "notWith": [
+          "C_bulk_import",
+          "C_upload"
+        ]
+      }
+    ]
   },
   {
     "id": "C_router",
@@ -15564,7 +15600,16 @@
       {
         "form": "올리기",
         "boundary": "both"
-      }
+      },
+      {
+        "form": "올리면",
+        "boundary": "both"
+      },
+      {
+        "form": "올려도",
+        "boundary": "both"
+      },
+      "올렸는데"
     ],
     "ambiguous": []
   },
@@ -21240,6 +21285,83 @@
       "통화 가능 시간대",
       "연락 시간 예약",
       "전화 약속"
+    ],
+    "ambiguous": [
+      {
+        "form": "통화 가능 시간",
+        "requiresAny": [
+          "C_booking_action"
+        ]
+      },
+      {
+        "form": "전화 가능 시간",
+        "requiresAny": [
+          "C_booking_action"
+        ]
+      },
+      {
+        "form": "통화 가능 시간대",
+        "requiresAny": [
+          "C_booking_action"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "C_booking_action",
+    "kind": "action",
+    "generic": true,
+    "parents": [],
+    "doc": [
+      {
+        "form": "예약",
+        "boundary": "both"
+      },
+      "시간 지정"
+    ],
+    "visitor": [
+      "시간 정해",
+      "시간 맞춰",
+      "시간 잡아",
+      {
+        "form": "약속 잡",
+        "boundary": "both"
+      },
+      {
+        "form": "미리 잡",
+        "boundary": "both"
+      },
+      "남겨 두면",
+      "예약해요",
+      "예약하고"
+    ],
+    "ambiguous": []
+  },
+  {
+    "id": "C_pen_required",
+    "kind": "ask",
+    "generic": false,
+    "parents": [],
+    "doc": [
+      {
+        "form": "펜 필수",
+        "boundary": "both"
+      }
+    ],
+    "visitor": [
+      "펜이 필수",
+      "펜 꼭 필요",
+      {
+        "form": "펜이 꼭",
+        "boundary": "both"
+      },
+      "펜 꼭 있어야",
+      "펜 없으면",
+      "펜까지 사",
+      "펜 꼭 사야",
+      "스타일러스 필수",
+      "펜 없이도",
+      "펜이 필요"
     ],
     "ambiguous": []
   },

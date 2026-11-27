@@ -49021,6 +49021,12 @@
       "p": "의심많은사람",
       "g": "B",
       "m": "haiku"
+    },
+    {
+      "q": "펜 없이 손가락으로 칠판에 써도 돼요?",
+      "p": "tutor",
+      "g": "B",
+      "m": "haiku"
     }
   ],
   "doc:/docs/hardware/board-writing-touch#1/sleeve-precheck": [
@@ -83647,6 +83653,12 @@
       "p": "elder",
       "g": "B",
       "m": "haiku"
+    },
+    {
+      "q": "전자칠판 화면에 일반 마커로 써도 되나요",
+      "p": "parent",
+      "g": "A",
+      "m": "opus"
     }
   ],
   "gap:board/face-blur": [
@@ -84215,12 +84227,6 @@
     {
       "q": "학생 기기 구매 가능한가요",
       "p": "college",
-      "g": "B",
-      "m": "haiku"
-    },
-    {
-      "q": "클래스인 태블릿 있어요?",
-      "p": "it",
       "g": "B",
       "m": "haiku"
     }
@@ -85919,6 +85925,48 @@
       "p": "owner",
       "g": "B",
       "m": "haiku"
+    },
+    {
+      "q": "전자칠판은 어느 나라에서 만들어요",
+      "p": "owner-large",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "전자칠판은 어느 나라에서 만들어요 좀 알려주실래요",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "전자칠판은 어느 나라에서 만들어요 궁금해요",
+      "p": "public-org",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "보드 제조국이 어디예요",
+      "p": "skeptic",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "보드 제조국이 어디예요 좀 알려주실래요",
+      "p": "owner-large",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "보드 제조국이 어디예요 궁금해요",
+      "p": "owner-small",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "제조국이 어디예요",
+      "p": "초등생",
+      "g": "B",
+      "m": "sonnet"
     }
   ],
   "policy:board-delivery-lead-time-penalty": [
