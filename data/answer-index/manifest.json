@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "dataVersion": "ai-c640519cb624",
+  "dataVersion": "ai-44e0a5310839",
   "sources": {
     "app/about/AboutPageClient.tsx": "201307dd2bc22b3b",
     "app/about/layout.tsx": "cbced2f28647c89c",
@@ -271,27 +271,27 @@
       "count": 8
     },
     "cards/account.json": {
-      "sha": "4351d1b077b72229",
-      "count": 112
+      "sha": "e991b7efcdcfacee",
+      "count": 113
     },
     "cards/admin.json": {
-      "sha": "c35b8f6cd5942b21",
+      "sha": "8f88b2c5cd8b0aab",
       "count": 177
     },
     "cards/board.json": {
-      "sha": "e8203af1b80f74e2",
+      "sha": "4f3e00618eafab4f",
       "count": 343
     },
     "cards/classroom.json": {
-      "sha": "92e8c5c41d293457",
+      "sha": "d898e0bb8d80f25d",
       "count": 357
     },
     "cards/company.json": {
-      "sha": "96adb57b9977587f",
+      "sha": "9573aa5a0bc500c0",
       "count": 194
     },
     "cards/course.json": {
-      "sha": "96b1c8aa51b7b2cd",
+      "sha": "292a0eaa039e344a",
       "count": 200
     },
     "cards/gaps-account.json": {
@@ -343,19 +343,19 @@
       "count": 19
     },
     "cards/homework.json": {
-      "sha": "7e7fc6751d161d6a",
+      "sha": "04d6a0b525603f53",
       "count": 223
     },
     "cards/pricing.json": {
-      "sha": "cd9d7f99f9e5c168",
+      "sha": "432cbfe74e7894e8",
       "count": 127
     },
     "cards/recording.json": {
-      "sha": "534c0b3de4a4b8ae",
+      "sha": "f5c67a1ee2b06309",
       "count": 212
     },
     "cards/start.json": {
-      "sha": "aeadbe636265991a",
+      "sha": "c7ad7f42f75ff447",
       "count": 133
     },
     "cards/support.json": {
@@ -363,7 +363,7 @@
       "count": 36
     },
     "cards/trust.json": {
-      "sha": "656b4249ba6b0fc7",
+      "sha": "2712b7725a996fa5",
       "count": 20
     },
     "eval/calibration-set.json": {
@@ -383,7 +383,7 @@
       "count": 1459
     },
     "lexicon.json": {
-      "sha": "852b28eb6d7b701a",
+      "sha": "83024258781db94d",
       "count": 1161
     },
     "site-facts.json": {
@@ -407,27 +407,27 @@
       "count": 869
     },
     "variants/account.json": {
-      "sha": "24023e4faeb38ef7",
-      "count": 120
+      "sha": "78b4a09ba12165e7",
+      "count": 121
     },
     "variants/admin.json": {
-      "sha": "983030e1d9797186",
+      "sha": "2464c41ce1f7fcac",
       "count": 196
     },
     "variants/board.json": {
-      "sha": "0a4af8f54123b154",
+      "sha": "0ee6541259b0fafd",
       "count": 385
     },
     "variants/classroom.json": {
-      "sha": "9b49ffdf7453974e",
+      "sha": "8d46ad2046d623c9",
       "count": 360
     },
     "variants/company.json": {
-      "sha": "c3de37748d4e11da",
+      "sha": "5254fe0d36ab47c2",
       "count": 214
     },
     "variants/course.json": {
-      "sha": "a38e408d90344617",
+      "sha": "a3a23e45b1e71a78",
       "count": 218
     },
     "variants/gaps-account.json": {
@@ -479,19 +479,19 @@
       "count": 19
     },
     "variants/homework.json": {
-      "sha": "4ec31524ddc34858",
+      "sha": "c51ee6a6a9ed6c34",
       "count": 249
     },
     "variants/pricing.json": {
-      "sha": "834365d6c67d70c1",
+      "sha": "a119044c88bfdf7f",
       "count": 150
     },
     "variants/recording.json": {
-      "sha": "124bf8e76e8c72c8",
+      "sha": "a37d242a26ad8e51",
       "count": 225
     },
     "variants/start.json": {
-      "sha": "b6cda0eb92cae26a",
+      "sha": "8ad245c54dc9254f",
       "count": 158
     },
     "variants/support.json": {
