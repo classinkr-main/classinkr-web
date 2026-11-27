@@ -38,6 +38,8 @@
  *   - 없는 개념: 질문의 없는 개념을 그 카드가 모두 덮는다.
  *   - 공백: 결정이 gap 이 아니다(없는 개념·공백 카드 판정은 그대로 둔다). 되묻기·두 조각을 이은 답도 그대로 둔다.
  *   - NODOC: 반례 'none' 자리가 1위가 아니고, 우주 이웃의 'none' 몫이 VOTE_RESCUE_MAX_KNN_NONE(0.5) 미만이다.
+ *   - 보류(R4 P4, voteHeldByTop): 그 자리(원문·조각) 순위 첫 실제 카드가 표 카드가 아니고 확신도가 그 종류 단일 질문 문턱 θ 이상이면 승격하지 않는다
+ *     (원문은 below 일 때만 — override 는 1위가 답한 판정도 바꾸는 방식이라 보류하지 않는다).
  *   - 가드(R2 B2, voteGuardAllows): 증상 판별에서만 나온 표는 주절이 다른 대상의 방법·위치를 물으면 쓰지 않는다.
  * 반례: 상위 5 후보마다 negMargin > 0 이면 탈락, 반례 행선 카드에 NEG_ROUTE_BONUS × 반례 코사인 가산, 행선이 none 이면
  * 탈락한 카드 점수로 'none' 자리를 만든다(1위가 되면 못 찾음).
@@ -662,7 +664,7 @@ export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAn
         const result = headConceptGuard(index, part, resolveSegment(index, part, partThreshold))
         if (!rescueOn || result.kind !== "abstain") return result
         // 조각 승격: 그 조각 글로 센 표 카드가 조각 순위 상위 VOTE_RESCUE_TOP 안에 있고 검사를 통과하면 그 카드로 답한다.
-        const pick = rescueCandidate(index, part, analysis.partVotes[at] ?? [], analysis.partSymptomOnlyVotes[at] ?? new Set())
+        const pick = rescueCandidate(index, part, analysis.partVotes[at] ?? [], analysis.partSymptomOnlyVotes[at] ?? new Set(), threshold)
         if (pick < 0) return result
         const candidate = part.ranked[pick]
         return {
@@ -681,7 +683,7 @@ export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAn
     : null
   const coverage: CoverageOptions | null = analysis.coverage === false ? null : { index, threshold, partThreshold, fallback: analysis.whole.fallback }
   const base = combineSegments(resolveSegment(index, analysis.whole, threshold), parts, analysis.parts, analysis.overflow, cautionsOf(analysis.whole), coverage)
-  const rescued = applyVoteRescue(index, analysis, base)
+  const rescued = applyVoteRescue(index, analysis, base, threshold)
   const decision = annotateSegments(index, analysis, mainClauseRescue(index, analysis, rescued, threshold), threshold)
   return analysis.tried && analysis.tried.length > 0 ? { ...decision, tried: [...analysis.tried] } : decision
 }
@@ -852,13 +854,26 @@ function voteGuardAllows(index: CompiledAnswerIndex, segment: SegmentAnalysis, s
   return true
 }
 
-/** 정해 둔 답 승격으로 고를 순위 자리(없으면 -1). 원문·조각 모두 같은 검사를 쓴다. */
-function rescueCandidate(index: CompiledAnswerIndex, segment: SegmentAnalysis, votes: readonly string[], symptomOnly: ReadonlySet<string>) {
+/**
+ * 정해 둔 답 승격 보류(R4 P4): 순위 첫 실제 카드가 표 카드가 아니고 승격할 수 있는 종류이며 확신도가 그 종류 θ(단일 질문 문턱) 이상이면
+ * 그 자리(원문·조각)에서 승격하지 않는다. 문서 1위가 단일 질문으로는 답할 만한데 나눈 질문이라 못 정한 자리를, 표가 아래 순위 카드로 바꾸지 않게 한다.
+ * 문턱을 θ 보다 낮추는 후보(θ − 0.03·θ − 0.05)는 dev 세 묶음(모델 끔)에서 나빠진 줄이 더 많아 넣지 않았다.
+ */
+function voteHeldByTop(segment: SegmentAnalysis, voted: ReadonlySet<string>, threshold: ThresholdFn | undefined) {
+  if (!threshold || segment.topReal < 0) return false
+  const top = segment.ranked[segment.topReal]
+  if (voted.has(top.id) || !VOTE_RESCUE_KINDS.has(top.kind as AnswerCardKind)) return false
+  return (segment.confs[segment.topReal] ?? 0) >= threshold(top.kind as AnswerCardKind)
+}
+
+/** 정해 둔 답 승격으로 고를 순위 자리(없으면 -1). 원문·조각 모두 같은 검사를 쓴다. threshold 는 단일 질문 문턱 θ(승격 보류 검사). */
+function rescueCandidate(index: CompiledAnswerIndex, segment: SegmentAnalysis, votes: readonly string[], symptomOnly: ReadonlySet<string>, threshold?: ThresholdFn) {
   if (votes.length === 0) return -1
   const { ranked } = segment
   // NODOC: 반례 none 자리가 1위이거나 우주 이웃 대부분이 '문서에 없음'이면 승격하지 않는다.
   if (hasNoDocSignal(segment)) return -1
   const voted = new Set(votes)
+  if (voteHeldByTop(segment, voted, threshold)) return -1
   const askedAbsent = segment.absentTargets.filter((item) => item.target).map((item) => item.match)
   for (let at = 0; at < Math.min(VOTE_RESCUE_TOP, ranked.length); at += 1) {
     const candidate = ranked[at]
@@ -877,13 +892,14 @@ function rescueCandidate(index: CompiledAnswerIndex, segment: SegmentAnalysis, v
  * 그 카드로 답한다(표 카드가 여럿이면 순위가 높은 쪽). 기본(below)은 답하지 않던(abstain) 판정만 바꾸고, override 는 다른 카드로
  * 답한 판정도 바꾼다. 이미 그 카드로 답했거나 검사에 걸리면 원래 판정을 그대로 돌려준다.
  */
-export function applyVoteRescue(index: CompiledAnswerIndex, analysis: QuestionAnalysis, base: AnswerIndexDecision): AnswerIndexDecision {
+export function applyVoteRescue(index: CompiledAnswerIndex, analysis: QuestionAnalysis, base: AnswerIndexDecision, threshold?: ThresholdFn): AnswerIndexDecision {
   if (analysis.voteRescue === "off" || analysis.votes.length === 0 || !analysis.inScope) return base
   // 공백(없는 개념·공백 카드)·되묻기는 그대로 둔다. 답은 override 일 때만, 조각을 이은 답은 언제나 그대로 둔다.
   if (base.kind === "gap" || base.kind === "clarify") return base
   if (base.kind === "answer" && (analysis.voteRescue !== "override" || base.segments)) return base
   const whole = analysis.whole
-  const at = rescueCandidate(index, whole, analysis.votes, analysis.symptomOnlyVotes)
+  // 승격 보류(voteHeldByTop)는 답하지 않던 판정을 살리는 기본(below)에만 건다. override 는 1위가 답한 판정도 표 카드로 바꾸는 방식이다.
+  const at = rescueCandidate(index, whole, analysis.votes, analysis.symptomOnlyVotes, analysis.voteRescue === "override" ? undefined : threshold)
   if (at < 0) return base
   const candidate = whole.ranked[at]
   if (base.kind === "answer" && base.card === candidate.id) return base
