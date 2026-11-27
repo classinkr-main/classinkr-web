@@ -3617,6 +3617,24 @@
       "p": "어르신",
       "g": "B",
       "m": "claude-haiku-5-5"
+    },
+    {
+      "q": "인증하려면 사업자 필요한가요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "사업자등록증 꼭 있어야 인증돼요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "인증 서류에 사업자가 필요한지",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "doc:/docs/admin/billing-upgrade#5/pay-no-verify": [
@@ -21639,6 +21657,54 @@
       "p": "d11",
       "g": "A",
       "m": "opus"
+    },
+    {
+      "q": "한 달 단위로 결제할 수 있어요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "한달 단위로만 쓰고 싶은데 되나요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "한달씩 끊어서 결제하는 건가요",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "1개월 단위로 이용 가능한가요",
+      "p": "parent",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "한 달 단위 결제",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "한달 단위 이용 기간",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "한 달씩 쓰다가 그만둘 수 있나요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "월 단위로 이용 가능한지",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "policy:billing-unit": [
@@ -27647,6 +27713,36 @@
       "p": "middle-high",
       "g": "B",
       "m": "sonnet"
+    },
+    {
+      "q": "대형 학원 요금은 어떻게 돼요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "대형 요금제가 따로 있나요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "큰 기관 요금이 궁금해요",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "대형 교실 요금",
+      "p": "parent",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "대형 학원 요금 기준",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "policy:fit-small-private": [
@@ -28159,6 +28255,42 @@
       "p": "d11",
       "g": "A",
       "m": "opus"
+    },
+    {
+      "q": "소형 학원 요금은 어떻게 돼요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "소형 요금제가 따로 있나요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "작은 공부방 요금이 궁금해요",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "사업자 없이 교습소 운영해도 쓸 수 있나요",
+      "p": "parent",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "사업자 필요한가요 공부방인데",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "소형 교실 요금",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "policy:free-version-scope": [
@@ -28653,6 +28785,54 @@
       "p": "d11",
       "g": "A",
       "m": "opus"
+    },
+    {
+      "q": "회원가입 무료인가요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "회원가입하면 무료로 쓸 수 있나요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "회원가입만 해도 무료예요",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "가입은 무료로 되는 건가요",
+      "p": "parent",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "회원가입 무료 범위",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "회원가입 후 무료로 되는 것",
+      "p": "student",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "가입하고 돈 안 내고 어디까지 써요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "회원가입비 따로 있나요",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "policy:google-classroom-link-partial-price": [
@@ -31649,6 +31829,36 @@
       "p": "d11",
       "g": "A",
       "m": "opus"
+    },
+    {
+      "q": "사업자 없이 개인 과외로 써도 되나요",
+      "p": "owner",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "사업자 필요한가요 개인 강사인데",
+      "p": "teacher",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "사업자등록증 없이 가입할 수 있나요",
+      "p": "it",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "사업자가 아니어도 쓸 수 있어요",
+      "p": "parent",
+      "g": "A",
+      "m": "sonnet"
+    },
+    {
+      "q": "개인은 사업자 없이 인증하나요",
+      "p": "terse",
+      "g": "A",
+      "m": "sonnet"
     }
   ],
   "policy:plan-count-limits": [
