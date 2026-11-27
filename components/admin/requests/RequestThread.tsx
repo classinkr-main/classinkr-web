@@ -1,11 +1,14 @@
 "use client"
 
+import { ClipboardCopy, FileText, Link2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { adminFetchJson } from "@/lib/admin-client"
+import { copyText } from "@/lib/admin-ai/copy"
+import { buildRequestAiBrief } from "@/lib/admin/request-ai-brief"
 import {
-  ADMIN_REQUESTS_API, REQUEST_STATUSES, type AdminRequest, type RequestReview, type RequestStatus,
+  ADMIN_REQUESTS_API, ADMIN_REQUESTS_HREF, REQUEST_STATUSES, type AdminRequest, type RequestReview, type RequestStatus,
 } from "@/lib/admin/requests"
 import { RequestWriteRejection, sendRequestWrite, verifyRequestData } from "./request-write"
 
@@ -25,11 +28,44 @@ type Change = { status: RequestStatus; acknowledge: boolean; reply: string }
 
 type Attempt = { change: Change; revision: number; mutationId: string }
 
+function RequestAiMaterials({ request }: { request: AdminRequest }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState("")
+  const markdownUrl = ADMIN_REQUESTS_API + "?" + new URLSearchParams({ id: request.id, view: "manage", format: "markdown" })
+
+  return (
+    <details className="grid gap-2 rounded-lg border border-line-hair px-3 py-2.5" onToggle={(event) => {
+      if (event.currentTarget.open) setDraft((current) => current ?? buildRequestAiBrief(request))
+    }}>
+      <summary className="cursor-pointer font-semibold text-fg-ink">AI 점검 자료</summary>
+      {draft !== null && (
+        <div className="mt-2 grid gap-2">
+          <label className="grid gap-1.5 font-semibold">
+            공유할 내용
+            <textarea className={FIELD + " font-mono text-xs"} rows={7} value={draft} onChange={(event) => setDraft(event.target.value)} />
+          </label>
+          <p className="text-xs text-fg-muted">공유 전 민감정보가 남아 있는지 확인하세요. 원본 로그와 캡처는 요청 상세에서 확인할 수 있습니다.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={async () => {
+              setFeedback(await copyText(draft) ? "AI 점검 자료를 복사했습니다." : "복사하지 못했습니다. 공유할 내용을 직접 선택해 주세요.")
+            }}><ClipboardCopy aria-hidden="true" /> 점검 자료 복사</Button>
+            <Button asChild variant="ghost">
+              <a href={markdownUrl} target="_blank" rel="noreferrer"><FileText aria-hidden="true" /> Markdown 원본</a>
+            </Button>
+          </div>
+          <span role="status" className="text-xs text-fg-muted">{feedback}</span>
+        </div>
+      )}
+    </details>
+  )
+}
+
 function ThreadContent({
-  request, manage, onChange,
+  request, manage, standalone, onChange,
 }: {
   request: AdminRequest
   manage: boolean
+  standalone: boolean
   onChange: (attempt: Attempt) => Promise<"saved" | "rejected" | "uncertain">
 }) {
   const [editedStatus, setEditedStatus] = useState<RequestStatus | null>(null)
@@ -37,6 +73,7 @@ function ThreadContent({
   const [reply, setReply] = useState("")
   const [busy, setBusy] = useState(false)
   const [retry, setRetry] = useState<Attempt | null>(null)
+  const [linkFeedback, setLinkFeedback] = useState("")
   const working = useRef(false)
 
   async function save(attempt: Attempt) {
@@ -65,6 +102,12 @@ function ThreadContent({
 
   return (
     <div className="grid gap-4 pb-1 pt-4 text-sm">
+      {standalone && (
+        <div className="grid gap-1">
+          <h2 className="break-words text-xl font-semibold text-fg-ink">{request.title}</h2>
+          <p className="text-fg-muted">{REQUEST_STATUSES[request.status]} · {formatDate(request.created_at)}</p>
+        </div>
+      )}
       <p className="whitespace-pre-wrap break-words">{request.description}</p>
       {(request.screen || request.test_version || request.error_code) && (
         <dl className="flex flex-wrap gap-x-5 gap-y-1 break-all text-fg-muted">
@@ -85,6 +128,15 @@ function ThreadContent({
           {request.capture_expires_at && <span className="text-fg-muted">{formatDate(request.capture_expires_at)}까지 열기 가능</span>}
         </div>
       ) : request.capture_expires_at && <p className="text-fg-muted">캡처 보관 기간이 지났습니다.</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="ghost" size="sm" className="px-0" onClick={async () => {
+          const url = new URL(ADMIN_REQUESTS_HREF, window.location.origin)
+          url.searchParams.set("request", request.id)
+          setLinkFeedback(await copyText(url.href) ? "요청 링크를 복사했습니다." : url.href)
+        }}><Link2 aria-hidden="true" /> 요청 링크 복사</Button>
+        <span role="status" className="break-all text-xs text-fg-muted">{linkFeedback}</span>
+      </div>
+      {manage && <RequestAiMaterials key={request.revision} request={request} />}
       <div className="grid gap-2 rounded-lg bg-surface-sunken p-3 text-fg-muted">
         <p>
           {request.acknowledged_at
@@ -162,10 +214,11 @@ function ThreadContent({
 }
 
 export function RequestThread({
-  id, manage, generation, onSaved, onRefresh,
+  id, manage, standalone = false, generation, onSaved, onRefresh,
 }: {
   id: string
   manage: boolean
+  standalone?: boolean
   generation: number
   onSaved: (request: AdminRequest, message: string) => void
   onRefresh: () => void
@@ -210,8 +263,8 @@ export function RequestThread({
   }
 
   return (
-    <div id={`request-${id}`} className="border-t border-line-hair">
-      {request && <ThreadContent request={request} manage={manage} onChange={save} />}
+    <div id={`request-${id}`} className={standalone ? undefined : "border-t border-line-hair"}>
+      {request && <ThreadContent request={request} manage={manage} standalone={standalone} onChange={save} />}
       {error ? (
         <div className="flex flex-wrap items-center gap-2 py-3">
           <p role="alert" className="text-sm text-fg-danger">{error}</p>

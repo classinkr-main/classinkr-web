@@ -2,13 +2,13 @@ import { randomUUID } from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
 
 import { STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
-import { ADMIN_REQUEST_ROLES, cleanRequestErrorCode, cleanRequestScreen, cleanTestVersion, isAdminRequestQueue, isRequestKind, isRequestReview, isRequestStatus, REQUEST_CAPTURE_BYTES, REQUEST_CAPTURE_TYPES } from "@/lib/admin/requests"
+import { buildRequestAiBrief } from "@/lib/admin/request-ai-brief"
+import { ADMIN_REQUEST_ROLES, cleanRequestErrorCode, cleanRequestScreen, cleanTestVersion, isAdminRequestQueue, isRequestId, isRequestKind, isRequestReview, isRequestStatus, REQUEST_CAPTURE_BYTES, REQUEST_CAPTURE_TYPES, REQUEST_SEARCH_MAX_LENGTH } from "@/lib/admin/requests"
 import { countAdminRequestQueues, findAdminRequest, findRequestCapture, insertAdminRequest, listAdminRequests, reviewAdminRequest, updateAdminRequest } from "@/lib/repositories/admin-requests"
 import { getBugReports } from "@/lib/repositories/bugs"
 import { validateImageFile } from "@/lib/server/image-validation"
 
 const PRIVATE_HEADERS = { "Cache-Control": "private, no-store" }
-const UUID = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i
 const MAX_SUBMISSION_BYTES = REQUEST_CAPTURE_BYTES + 128 * 1024
 
 function json(data: unknown, status = 200) {
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
 
   try {
     if (capture !== null) {
-      if (!UUID.test(capture)) return error("첨부를 찾을 수 없습니다.", 404)
+      if (!isRequestId(capture)) return error("첨부를 찾을 수 없습니다.", 404)
       const image = await findRequestCapture(capture, canManage ? null : ownerId)
       if (!image?.capture_data || !image.capture_mime) return error("첨부를 찾을 수 없습니다.", 404)
       return new NextResponse(new Uint8Array(Buffer.from(image.capture_data, "base64")), {
@@ -56,26 +56,43 @@ export async function GET(req: NextRequest) {
     const manage = params.get("view") === "manage"
     if (manage && !canManage) return error("요청 관리 권한이 필요합니다.", 403)
     const id = params.get("id")
+    const markdown = params.get("format") === "markdown"
+    if (markdown && !manage) return error("요청 관리 권한이 필요합니다.", 403)
+    if (markdown && id === null) return error("요청 번호를 확인해 주세요.", 400)
     if (id !== null) {
-      if (!UUID.test(id)) return error("요청을 찾을 수 없습니다.", 404)
+      if (!isRequestId(id)) return error("요청을 찾을 수 없습니다.", 404)
       const request = await findAdminRequest(id, manage ? null : ownerId)
-      return request ? json(request) : error("요청을 찾을 수 없습니다.", 404)
+      if (!request) return error("요청을 찾을 수 없습니다.", 404)
+      if (!markdown) return json(request)
+      return new NextResponse(buildRequestAiBrief(request), {
+        headers: { ...PRIVATE_HEADERS, "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff" },
+      })
     }
     const page = Number(params.get("page") ?? "0")
     if (!Number.isInteger(page) || page < 0 || page > 1000) return error("페이지 번호를 확인해 주세요.", 400)
     const filter = params.get("status")
     if (filter !== null && !isRequestStatus(filter)) return error("요청 상태를 확인해 주세요.", 400)
+    const kind = params.get("kind")
+    if (kind !== null && !isRequestKind(kind)) return error("요청 분류를 확인해 주세요.", 400)
+    const search = params.get("q")?.trim() ?? ""
+    if (search.length > REQUEST_SEARCH_MAX_LENGTH || [...search].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) {
+      return error("검색어를 확인해 주세요.", 400)
+    }
     const queue = params.get("queue")
     if (queue !== null && (!isAdminRequestQueue(queue) || (manage ? queue === "review" : queue !== "review") || filter !== null)) {
       return error("이 목록에서 사용할 수 있는 처리 필터를 선택해 주세요.", 400)
     }
     const scope = manage ? null : ownerId
     const [result, bugs, queueCounts] = await Promise.all([
-      listAdminRequests(scope, page, filter, queue),
-      manage && !queue && page === 0 ? getBugReports(AbortSignal.timeout(2500)).catch(() => null) : null,
+      listAdminRequests(scope, page, filter, queue, { kind: kind ?? undefined, search: search || undefined }),
+      manage && !queue && page === 0 && (!kind || kind === "bug")
+        ? getBugReports(AbortSignal.timeout(2500)).catch(() => null)
+        : null,
       countAdminRequestQueues(scope).catch(() => null),
     ])
-    return json({ ...result, canManage, queueCounts, bugs: bugs && filter ? bugs.filter((bug) => bug.status === filter) : bugs })
+    return json({ ...result, canManage, queueCounts, bugs: bugs?.filter((bug) =>
+      (!filter || bug.status === filter) && (!search || bug.title.toLowerCase().includes(search.toLowerCase()))
+    ) ?? null })
   } catch (cause) {
     return reportFailure(cause)
   }
@@ -99,7 +116,7 @@ export async function POST(req: NextRequest) {
     return error("분류, 제목(120자), 내용(4,000자)을 확인해 주세요.", 400)
   }
   if (logs.length > 8000) return error("관련 로그는 8,000자 이내로 입력해 주세요.", 400)
-  if (submissionId && !UUID.test(submissionId)) return error("접수 번호를 확인해 주세요.", 400)
+  if (submissionId && !isRequestId(submissionId)) return error("접수 번호를 확인해 주세요.", 400)
 
   const file = body.get("capture")
   let capture_data: string | null = null
@@ -136,11 +153,11 @@ export async function PATCH(req: NextRequest) {
   const ownerId = admin.userId
   if (!ownerId) return error("등록된 관리자 계정으로 로그인해 주세요.", 403)
   const body = await req.json().catch(() => null)
-  if (!body || typeof body.id !== "string" || !UUID.test(body.id) || !Number.isInteger(body.revision) ||
+  if (!body || typeof body.id !== "string" || !isRequestId(body.id) || !Number.isInteger(body.revision) ||
       body.revision < 0 || body.revision >= 2147483647 || typeof body.reply !== "string" || body.reply.length > 4000) {
     return error("상태와 답변을 확인해 주세요.", 400)
   }
-  if (body.mutationId !== undefined && (typeof body.mutationId !== "string" || !UUID.test(body.mutationId))) {
+  if (body.mutationId !== undefined && (typeof body.mutationId !== "string" || !isRequestId(body.mutationId))) {
     return error("저장 번호를 확인해 주세요.", 400)
   }
   const base = {

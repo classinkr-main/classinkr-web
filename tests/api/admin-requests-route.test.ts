@@ -45,7 +45,7 @@ beforeEach(() => {
 describe("homepage admin requests", () => {
   it("limits an editor's requests and screenshot lookups to their verified ID", async () => {
     await GET(new NextRequest(URL))
-    expect(mocks.list).toHaveBeenCalledWith(OWNER, 0, null, null)
+    expect(mocks.list).toHaveBeenCalledWith(OWNER, 0, null, null, {})
 
     const manage = await GET(new NextRequest(URL + "?view=manage"))
     expect(manage.status).toBe(403)
@@ -67,14 +67,14 @@ describe("homepage admin requests", () => {
     const response = await GET(new NextRequest(URL + "?view=manage&status=open"))
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     expect(await response.json()).toMatchObject({ canManage: true, bugs: [{ id: "BUG-1" }] })
-    expect(mocks.list).toHaveBeenCalledWith(null, 0, "open", null)
+    expect(mocks.list).toHaveBeenCalledWith(null, 0, "open", null, {})
   })
 
   it("scopes queue counts and filters to the role and applies filtering before pagination", async () => {
     mocks.queueCounts.mockResolvedValueOnce({ review: 2 })
     const mine = await GET(new NextRequest(URL + "?queue=review&page=1"))
     expect(await mine.json()).toMatchObject({ queueCounts: { review: 2 }, bugs: null })
-    expect(mocks.list).toHaveBeenCalledWith(OWNER, 1, null, "review")
+    expect(mocks.list).toHaveBeenCalledWith(OWNER, 1, null, "review", {})
     expect(mocks.queueCounts).toHaveBeenCalledWith(OWNER)
     expect((await GET(new NextRequest(URL + "?queue=unacknowledged"))).status).toBe(400)
     expect((await GET(new NextRequest(URL + "?queue=review&status=resolved"))).status).toBe(400)
@@ -83,7 +83,7 @@ describe("homepage admin requests", () => {
     mocks.queueCounts.mockResolvedValueOnce({ unacknowledged: 3, reopened: 1 })
     const manage = await GET(new NextRequest(URL + "?view=manage&queue=unacknowledged"))
     expect(await manage.json()).toMatchObject({ queueCounts: { unacknowledged: 3, reopened: 1 }, bugs: null })
-    expect(mocks.list).toHaveBeenCalledWith(null, 0, null, "unacknowledged")
+    expect(mocks.list).toHaveBeenCalledWith(null, 0, null, "unacknowledged", {})
     expect(mocks.queueCounts).toHaveBeenCalledWith(null)
     expect(mocks.bugs).not.toHaveBeenCalled()
     expect((await GET(new NextRequest(URL + "?view=manage&queue=review"))).status).toBe(400)
@@ -94,6 +94,34 @@ describe("homepage admin requests", () => {
     const response = await GET(new NextRequest(URL))
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ requests: [], queueCounts: null })
+  })
+
+  it("filters requests by kind and title search before pagination", async () => {
+    mocks.auth.mockResolvedValue({ role: "ADMIN", userId: OWNER })
+    mocks.bugs.mockResolvedValue([{ title: "저장 오류" }, { title: "로그인" }])
+    const query = new URLSearchParams({ view: "manage", q: " 저장 ", kind: "bug" })
+    const response = await GET(new NextRequest(URL + "?" + query))
+    expect(mocks.list).toHaveBeenCalledWith(null, 0, null, null, { kind: "bug", search: "저장" })
+    expect(await response.json()).toMatchObject({ bugs: [{ title: "저장 오류" }] })
+    expect((await GET(new NextRequest(URL + "?kind=typo"))).status).toBe(400)
+  })
+
+  it("serves the AI brief to staff and excludes raw evidence", async () => {
+    const href = URL + "?view=manage&format=markdown&id=" + ID
+    expect((await GET(new NextRequest(href))).status).toBe(403)
+    expect(mocks.detail).not.toHaveBeenCalled()
+    mocks.auth.mockResolvedValue({ role: "ADMIN", userId: OWNER })
+    mocks.detail.mockResolvedValue({
+      id: ID, kind: "bug", title: "저장 오류", description: "qa@example.test Bearer synthetic-secret", status: "open",
+      screen: "/admin/quotes", test_version: "quote-v2", reporter_name: "샘플 이름", logs: "원본 민감 로그", capture_mime: "image/png",
+    })
+    const response = await GET(new NextRequest(href))
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    const brief = await response.text()
+    expect(brief).toContain("https://test.classin.co.kr/tests/quote/")
+    expect(brief).toContain("[email] Bearer [token]")
+    expect(brief).toContain("캡처: 요청 상세에서 확인")
+    expect(brief).not.toMatch(/원본 민감 로그|샘플 이름|qa@example\.test|synthetic-secret/)
   })
 
   it("registers a screenshot and log with validated context and the verified reporter", async () => {

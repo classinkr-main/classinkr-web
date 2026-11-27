@@ -17,6 +17,7 @@ export const REQUEST_STATUSES = {
 export const REQUEST_CAPTURE_TYPES = ["image/png", "image/jpeg", "image/webp"] as const
 export const REQUEST_CAPTURE_BYTES = 2 * 1024 * 1024
 export const REQUEST_PAGE_SIZE = 30
+export const REQUEST_SEARCH_MAX_LENGTH = 100
 export const REQUEST_REPLY_LIMIT = 30
 export const REQUEST_CAPTURE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 export const ADMIN_REQUESTS_HREF = "/admin/requests"
@@ -47,6 +48,8 @@ export interface AdminRequestSummary {
   id: string
   kind: RequestKind
   title: string
+  screen: string | null
+  test_version: string | null
   status: RequestStatus
   reporter_name: string
   acknowledged_at: string | null
@@ -58,8 +61,6 @@ export interface AdminRequestSummary {
 
 export interface AdminRequest extends AdminRequestSummary {
   description: string
-  screen: string | null
-  test_version: string | null
   error_code: string | null
   logs: string | null
   capture_mime: string | null
@@ -102,13 +103,19 @@ export function cleanRequestErrorCode(value: string | null) {
   return value && /^[a-zA-Z0-9_.-]{1,80}$/.test(value) ? value : null
 }
 
+export function isRequestId(value: string | null): value is string {
+  return value !== null && /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value)
+}
+
 export function requestContextQuery(values: Pick<URLSearchParams, "get">) {
   const query = new URLSearchParams()
+  const requestId = values.get("request")
   const screen = cleanRequestScreen(values.get("screen"))
   const version = cleanTestVersion(values.get("testVersion"))
   const errorCode = cleanRequestErrorCode(values.get("errorCode"))
   if (screen) query.set("screen", screen)
   if (version) query.set("testVersion", version)
   if (errorCode) query.set("errorCode", errorCode)
+  if (isRequestId(requestId)) query.set("request", requestId.toLowerCase())
   return query
 }

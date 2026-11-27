@@ -4,14 +4,14 @@ import { createHash } from "node:crypto"
 
 import {
   REQUEST_CAPTURE_RETENTION_MS, REQUEST_PAGE_SIZE, REQUEST_REPLY_LIMIT,
-  type AdminRequest, type AdminRequestQueue, type AdminRequestSummary, type RequestReview, type RequestStatus,
+  type AdminRequest, type AdminRequestQueue, type AdminRequestSummary, type RequestKind, type RequestReview, type RequestStatus,
 } from "@/lib/admin/requests"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 const SUMMARY_COLUMNS =
-  "id, kind, title, status, reporter_name, acknowledged_at, requester_review, created_at, updated_at, revision"
+  "id, kind, title, screen, test_version, status, reporter_name, acknowledged_at, requester_review, created_at, updated_at, revision"
 const REQUEST_COLUMNS = SUMMARY_COLUMNS +
-  ", description, screen, test_version, error_code, logs, capture_mime, acknowledged_by, capture_expires_at, requester_reviewed_at, replies"
+  ", description, error_code, logs, capture_mime, acknowledged_by, capture_expires_at, requester_reviewed_at, replies"
 const REQUEST_DB_TIMEOUT_MS = 10000
 
 function hideExpiredCapture(request: AdminRequest): AdminRequest {
@@ -51,12 +51,15 @@ export async function listAdminRequests(
   page: number,
   status: RequestStatus | null,
   queue: AdminRequestQueue | null = null,
+  { kind, search }: { kind?: RequestKind; search?: string } = {},
 ) {
   const offset = page * REQUEST_PAGE_SIZE
   const query = createSupabaseAdminClient().from("admin_requests").select(SUMMARY_COLUMNS)
   if (ownerId) query.eq("reporter_id", ownerId)
   if (status) query.eq("status", status)
   if (queue) query.filter(...REQUEST_QUEUE_FILTERS[queue])
+  if (kind) query.eq("kind", kind)
+  if (search) query.ilike("title", `%${search.replace(/[\\%_]/g, "\\$&")}%`)
   const { data, error } = await query
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
