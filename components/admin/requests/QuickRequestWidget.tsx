@@ -1,6 +1,6 @@
 "use client"
 
-import { MessageSquarePlus, X } from "lucide-react"
+import { Inbox, MessageSquarePlus, X } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useId, useRef, useState } from "react"
 import { createPortal } from "react-dom"
@@ -47,8 +47,10 @@ export default function QuickRequestWidget({ screen, screenLabel, onClose }: {
             </Button>
           </div>
           <p role="status" className="text-sm font-semibold text-fg-ink">요청이 접수되었습니다.</p>
-          <Button asChild size="md" className="w-fit">
-            <Link href={ADMIN_REQUESTS_HREF} onNavigate={onClose}>내 요청 보기</Link>
+          <Button asChild size="icon-md" variant="ghost" className="[&_svg]:size-5">
+            <Link href={ADMIN_REQUESTS_HREF} aria-label="내 요청 보기" title="내 요청 보기" onNavigate={onClose}>
+              <Inbox aria-hidden="true" />
+            </Link>
           </Button>
         </div>
       ) : (

@@ -182,11 +182,17 @@ export function RequestsWorkspace({ testSite, ...context }: RequestContext & { t
           테스트 화면 열기
         </a>
       </header>
-      <nav aria-label="요청 메뉴" className="flex flex-wrap gap-2 border-b border-line-hair pb-3">
+      <nav aria-label="요청 메뉴" className="flex flex-wrap items-center gap-2 border-b border-line-hair pb-3">
         {views.map(({ id, label, icon: Icon }) => (
-          <Button key={id} type="button" aria-pressed={view === id} variant={view === id ? "default" : "outline"} onClick={() => changeView(id)}>
-            {Icon && <Icon aria-hidden="true" />}
-            {label}
+          <Button
+            key={id} type="button" aria-pressed={view === id}
+            aria-label={Icon ? label : undefined} title={Icon ? label : undefined}
+            size={Icon ? "icon-md" : "default"}
+            variant={Icon ? "ghost" : view === id ? "default" : "outline"}
+            className={Icon ? "text-fg-muted hover:text-fg-accent aria-pressed:text-fg-accent [&_svg]:size-5 aria-pressed:[&_svg]:stroke-[2.5]" : undefined}
+            onClick={() => changeView(id)}
+          >
+            {Icon ? <Icon aria-hidden="true" /> : label}
           </Button>
         ))}
       </nav>

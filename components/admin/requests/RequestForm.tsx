@@ -1,6 +1,6 @@
 "use client"
 
-import { ImageIcon, Inbox, List, MessageSquarePlus, Send, X } from "lucide-react"
+import { ImageIcon, Inbox, List, LoaderCircle, MessageSquarePlus, Send, X } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useId, useRef, useState, type DragEvent, type FormEvent } from "react"
@@ -42,6 +42,7 @@ export function RequestForm({ context, onSubmit, widget }: {
   const captureUrl = capture?.url
   const canAttach = !pending && !retry && !leaveHref
   const showDropTarget = draggingCapture && canAttach
+  const submitLabel = pending ? "접수 중…" : retry ? "접수 다시 확인" : "요청 보내기"
 
   useEffect(() => {
     if (captureUrl) return () => URL.revokeObjectURL(captureUrl)
@@ -334,15 +335,14 @@ export function RequestForm({ context, onSubmit, widget }: {
       {(error || captureError) && <p role="alert" className={compact ? "px-4 text-xs text-fg-danger" : "text-sm text-fg-danger"}>{error || captureError}</p>}
       <footer className={compact ? "flex shrink-0 items-center justify-between gap-2 px-4 pb-3 pt-1.5" : undefined}>
         {widget && (
-          <Button type="button" size="sm" variant="link" className="min-h-11 px-0 text-fg-ink" onClick={() => leaveWidget(ADMIN_REQUESTS_HREF)} disabled={pending}>
+          <Button type="button" size="icon-md" variant="ghost" className="[&_svg]:size-5" aria-label="내 요청" title="내 요청" onClick={() => leaveWidget(ADMIN_REQUESTS_HREF)} disabled={pending}>
             <Inbox aria-hidden="true" />
-            내 요청
           </Button>
         )}
-        <Button type="submit" size={compact ? "md" : "default"} className="w-fit" disabled={pending || !!captureError}>
-          <Send aria-hidden="true" />
-          {pending ? "접수 중…" : retry ? "접수 다시 확인" : "요청 보내기"}
+        <Button type="submit" size="icon-md" variant="ghost" className="[&_svg]:size-5" aria-label={submitLabel} title={submitLabel} disabled={pending || !!captureError}>
+          {pending ? <LoaderCircle className="motion-safe:animate-spin" aria-hidden="true" /> : <Send aria-hidden="true" />}
         </Button>
+        <span className="sr-only" role="status">{pending ? submitLabel : ""}</span>
       </footer>
       <Dialog open={leaveHref !== null} onOpenChange={(open) => { if (!open) setLeaveHref(null) }}>
         <DialogContent className="z-[70]">
