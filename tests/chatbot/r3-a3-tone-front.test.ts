@@ -224,9 +224,9 @@ describe("R3 c2 compiled front door: application place and method go to the inde
     }
   }, 60_000)
 
-  it("answers from a card with the consult button kept, and falls back to the handoff when the index has no card", async () => {
+  it("answers from a card with the consult button kept, and falls back to the handoff when the index has no card or a hub card", async () => {
     vi.stubEnv("CHATBOT_ANSWER_ROUTER", "compiled")
-    const where = await evaluateChatbotQuery("상담 신청은 어디서 하나요?", { generateAnswer: false })
+    const where = await evaluateChatbotQuery("데모 신청은 어디서 해요?", { generateAnswer: false })
     expect(where.answerIndex?.pre ?? null).toBeNull()
     expect(where.answerIndex?.decision).toBe("answer")
     expect(where.needsHandoff).toBe(true)
@@ -235,6 +235,11 @@ describe("R3 c2 compiled front door: application place and method go to the inde
     const fallback = __frontDoorForTests.inspect("데모 수업 신청 어디서 해요")
     expect(fallback.compiledHandoffYield).toBe(true)
     expect(fallback.plan).toMatchObject({ kind: "pre", pre: "handoff" })
+    // 색인이 허브 카드(role: hub, 도입 문의 총괄)로 답하는 말도 즉시 상담이다(R3 b 허브 표시가 들어온 뒤).
+    const hub = await evaluateChatbotQuery("상담 신청은 어디서 하나요?", { generateAnswer: false })
+    expect(__frontDoorForTests.inspect("상담 신청은 어디서 하나요?").compiledHandoffYield).toBe(true)
+    expect(hub.answerIndex?.pre).toBe("handoff")
+    expect(hub.answerMode).toBe("handoff")
   }, 120_000)
 
   it("keeps the immediate handoff when the switch is off, and on the legacy router", async () => {

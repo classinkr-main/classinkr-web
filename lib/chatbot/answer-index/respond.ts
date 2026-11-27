@@ -1210,6 +1210,7 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
       notice: noticeKind !== null,
       ...(noticeKind ? { noticeKind } : {}),
       ...(segment.alone ? { alone: segment.alone } : {}),
+      ...(segment.coverage ? { coverage: segment.coverage } : {}),
     }
   })
   return {

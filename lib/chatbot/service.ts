@@ -6905,7 +6905,14 @@ async function routeCompiledQuestion(
         }
       : {}),
   })
-  const respondContext = { index, host: answerIndexHost, router: "compiled" as const, version: answerIndexVersionOf(index) }
+  // 이미 해 본 동작(R3 S14)은 판정이 질문에서 뽑아 둔 값을 렌더에 넘긴다. 빼기는 CHATBOT_COMPILED_SKIP_TRIED=on 일 때만 한다(기본 끔).
+  const respondContext = {
+    index,
+    host: answerIndexHost,
+    router: "compiled" as const,
+    version: answerIndexVersionOf(index),
+    ...(plan.decision.tried ? { tried: plan.decision.tried } : {}),
+  }
   let built = buildAnswerIndexCore(assisted.decision, question, startedAt, respondContext)
   let assistTrace = assisted.trace
   // 모델이 바꾼 카드를 답으로 만들 수 없으면(문장 해시 어긋남·옛 답 없음) 못 찾음 대신 결정형 판정으로 낸다.
