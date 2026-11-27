@@ -8,7 +8,6 @@ import {
   dropRepeatedLines,
   fixYesNoLead,
   numberedPieceBlocks,
-  pathLineAfterConclusion,
   PIECE_MORE_STEPS_LINE,
   trimPieceBlocks,
 } from "@/lib/chatbot/answer-index/respond"
@@ -161,11 +160,6 @@ describe("R3 rebut: compound render helpers", () => {
     // 물음과 같은 방향이면 그대로 둔다.
     expect(fixYesNoLead("네, 수업 녹화를 켤 수 있어요.", "수업 녹화 되나요?")).toBe("네, 수업 녹화를 켤 수 있어요.")
     expect(fixYesNoLead("네, VPN 없이도 돼요.", "VPN 없이 되나요?")).toBe("네, VPN 없이도 돼요.")
-  })
-
-  it("moves a leading path line after the conclusion sentence", () => {
-    const text = "경로: 로그인 화면 → [비밀번호 변경]\n\n비밀번호는 설치한 프로그램의 로그인 화면에서 바꿔요.\n홈페이지는 관리자용이에요."
-    expect(pathLineAfterConclusion(text)).toBe("비밀번호는 설치한 프로그램의 로그인 화면에서 바꿔요.\n경로: 로그인 화면 → [비밀번호 변경]\n홈페이지는 관리자용이에요.")
   })
 
   it("drops a later plain line that repeats an earlier step", () => {

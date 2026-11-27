@@ -1121,25 +1121,6 @@ function dropHeadingLead(blocks: string[][]): string[][] {
 }
 
 /**
- * 첫 줄이 '경로: …' 줄이고 바로 뒤에 결론 문장이 있으면 경로 줄을 그 문장 다음으로 옮긴다(R3 반박 검토: 첫 줄이 경로 줄이라 결론이 아니었다).
- * 글자는 그대로이고 줄 순서만 바뀐다.
- */
-export function pathLineAfterConclusion(text: string): string {
-  const blocks = toBlocks(text)
-  if (blocks.length === 0 || !/^경로[:：]/.test(blocks[0][0] ?? "")) return text
-  const path = blocks[0][0]
-  if (blocks[0].length > 1 && blockKind(blocks[0].slice(1)) === "plain") {
-    const [, conclusion, ...more] = blocks[0]
-    return fromBlocks([[conclusion, path, ...more], ...blocks.slice(1)])
-  }
-  if (blocks[0].length === 1 && blocks[1] && blockKind(blocks[1]) === "plain") {
-    const [conclusion, ...more] = blocks[1]
-    return fromBlocks([[conclusion, path, ...more], ...blocks.slice(2)])
-  }
-  return text
-}
-
-/**
  * 같은 안내가 두 번 나오는 줄을 뒤쪽에서 뺀다(R3 반박 검토: 증상 안내의 단계와 갈래 문단이 같은 블루투스 안내를 되풀이했다). 앞 18자(공백·문장 부호 뺀
  * 글)가 같은 줄만 겹친 줄로 본다. 목록 항목은 빼지 않는다(번호가 흐트러진다).
  */
@@ -1304,8 +1285,8 @@ export function buildAnswerIndexCore(
     if (form === "r3" && (card.kind === "doc" || card.kind === "howto") && title) options.steps = { max: 5, title }
     if (form === "r3" && card.kind === "howto") response.answer = dropRepeatedLines(response.answer)
     response.answer = shapeAnswer(response.answer, options).text
-    // R3 반박 검토: 경로 줄로 시작하면 결론 문장 다음으로, 예/아니오 극성이 물음과 어긋나면 '네,·아니요,'를 뗀다(사람이 쓴 정책 글은 그대로).
-    if (form === "r3" && !isPolicyGoverned(card)) response.answer = fixYesNoLead(pathLineAfterConclusion(response.answer), question.redacted)
+    // R3 반박 검토: 예/아니오 극성이 물음과 어긋나면 '네,·아니요,'를 뗀다(사람이 쓴 정책 글은 그대로).
+    if (form === "r3" && !isPolicyGoverned(card)) response.answer = fixYesNoLead(response.answer, question.redacted)
   }
   // 이미 해 본 동작 단계 빼기(규격 S14, 스위치 기본 off).
   if (shape && compiledSkipTried(env) && ctx.tried && ctx.tried.length > 0 && !isPolicyGoverned(card)) response.answer = skipTriedSteps(response.answer, ctx.tried)
@@ -1373,7 +1354,7 @@ function buildCompound(decision: AnswerIndexDecision, segments: AnswerIndexSegme
     let blocks = closed.blocks
     // number 머리(R3 반박 검토): 사람이 쓴 정책 글이 아니면 제목 같은 첫 줄을 빼고, 조각 물음과 상관없는 뒤 문단을 덜고, 예/아니오 극성을 맞춘다.
     if (input.head === "number" && !isPolicyGoverned(card)) {
-      blocks = trimPieceBlocks(dropHeadingLead(toBlocks(pathLineAfterConclusion(fromBlocks(blocks)))), [...pieceContentWords(segment.text), ...pieceContentWords(segment.label ?? "")])
+      blocks = trimPieceBlocks(dropHeadingLead(blocks), [...pieceContentWords(segment.text), ...pieceContentWords(segment.label ?? "")])
       if (blocks[0] && blockKind(blocks[0]) === "plain") blocks[0] = fixYesNoLead(blocks[0].join("\n"), segment.text).split("\n")
     }
     pieces.push({ kind: "answer", label, blocks, closing: closed.closing, card, parts: result.value.parts })
