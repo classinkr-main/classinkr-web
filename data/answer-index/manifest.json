@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "dataVersion": "ai-02ee82eef434",
+  "dataVersion": "ai-f7c6f1bc5a94",
   "sources": {
     "app/about/AboutPageClient.tsx": "201307dd2bc22b3b",
     "app/about/layout.tsx": "cbced2f28647c89c",
@@ -143,7 +143,7 @@
       "count": 47
     },
     "audit/C-05.jsonl": {
-      "sha": "82975e76c78ff0c4",
+      "sha": "dd7059148a869f68",
       "count": 47
     },
     "audit/C-06.jsonl": {
@@ -283,7 +283,7 @@
       "count": 343
     },
     "cards/classroom.json": {
-      "sha": "5fe1b97e24d21acc",
+      "sha": "92e8c5c41d293457",
       "count": 357
     },
     "cards/company.json": {
