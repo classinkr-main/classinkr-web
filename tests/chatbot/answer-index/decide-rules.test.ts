@@ -202,35 +202,6 @@ describe("R07 정해 둔 답 승격(옛 정규식 표 카드가 상위 3 안이�
   })
 })
 
-describe("R4 P4 승격 보류: 순위 첫 카드가 단일 질문 문턱 θ 이상이면 표가 아래 순위 카드로 바꾸지 않는다", () => {
-  const question = "녹화 되나요? 그리고 학생 강퇴도 돼요?"
-
-  it("조각: 첫 카드가 θ 이상(θ + 여유 밑)이면 그 조각은 승격하지 않고, θ 밑이면 표 카드로 승격한다", () => {
-    const analysis = analyzeQuestion(index, question, { env: {} })
-    const kickPart = analysis.parts![1]
-    expect(kickPart.ranked[kickPart.topReal].id).toBe(CARDS.kick)
-    const kick = kickPart.confs[kickPart.topReal]
-    const below = kickPart.ranked.slice(0, VOTE_RESCUE_TOP).find((candidate) => candidate.id === CARDS.chat)
-    expect(below).toBeDefined()
-    const withVote = { ...analysis, partVotes: [[], [CARDS.chat]], partSymptomOnlyVotes: [new Set<string>(), new Set<string>()] }
-    // θ ≤ 강퇴 조각 확신도 < θ + 여유: 조각 판정으로는 답하지 않고, 표(채팅 금지)로도 바꾸지 않는다.
-    const held = resolveDecision(index, withVote, () => kick - SEGMENT_CONF_MARGIN / 2)
-    expect(held.segments?.[1]?.card).not.toBe(CARDS.chat)
-    expect(held.segments?.[1]?.rescue).toBeUndefined()
-    // 강퇴 조각 확신도 < θ: 지금처럼 표 카드로 승격한다.
-    const rescued = resolveDecision(index, withVote, () => kick + 0.01)
-    expect(rescued.segments?.[1]).toMatchObject({ kind: "answer", card: CARDS.chat })
-  })
-
-  it("첫 카드가 표 카드 자신이면 보류하지 않는다", () => {
-    const analysis = analyzeQuestion(index, question, { env: {} })
-    const kick = analysis.parts![1].confs[analysis.parts![1].topReal]
-    const withVote = { ...analysis, partVotes: [[], [CARDS.kick]], partSymptomOnlyVotes: [new Set<string>(), new Set<string>()] }
-    const decision = resolveDecision(index, withVote, () => kick - SEGMENT_CONF_MARGIN / 2)
-    expect(decision.segments?.[1]).toMatchObject({ kind: "answer", card: CARDS.kick })
-  })
-})
-
 describe("R3 a2 덮임 점검(규격 4.4, CHATBOT_SEGMENT_COVERAGE)", () => {
   const ON = {}
   const OFF = { CHATBOT_SEGMENT_COVERAGE: "off" }

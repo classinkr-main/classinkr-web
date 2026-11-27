@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { prepareQuery, type IndexQuery } from "@/lib/chatbot/answer-index/compile"
 import {
   applyRankYield,
-  GAP_YIELD_CLOSE_DELTA,
   GAP_YIELD_DELTA,
   HUB_YIELD_RATIO,
   notCoversTarget,
@@ -112,8 +111,7 @@ describe("공백 양보", () => {
   it("점수 차가 δ 보다 크거나, 이어짐·같은 개념이 없거나, 질문이 그 공백의 없는 개념을 말했으면 양보하지 않는다", () => {
     const { index, at, candidate } = freshIndex()
     const gap = candidate(CARDS.gapHours, 0.4)
-    // 근접 양보(GAP_YIELD_CLOSE_DELTA) 밖, GAP_YIELD_DELTA 안의 점수 차.
-    const near = candidate(CARDS.chat, 0.4 - GAP_YIELD_CLOSE_DELTA - 0.02)
+    const near = candidate(CARDS.chat, 0.35)
     const same = () => 0.5
     expect(rankYieldReason(index, emptyQuery(), gap, near, same)).toBeNull()
     index.cards[at(CARDS.gapHours)].card.notCovers = [`채팅 금지 설정 → ${CARDS.chat}`]
@@ -127,7 +125,7 @@ describe("공백 양보", () => {
   it("이어지지 않았으면 질문의 비일반 개념을 둘 다 설명하고 덮임이 공백 이상일 때만 양보한다", () => {
     const { index, at, candidate } = freshIndex()
     const gap = candidate(CARDS.gapHours, 0.4)
-    const near = candidate(CARDS.chat, 0.4 - GAP_YIELD_CLOSE_DELTA - 0.02)
+    const near = candidate(CARDS.chat, 0.35)
     index.cards[at(CARDS.gapHours)].conceptClosure.add("C_chat_ban")
     index.cards[at(CARDS.gapHours)].ownConcepts.push("C_chat_ban")
     const query = emptyQuery({ conceptIds: ["C_chat_ban"] })
@@ -136,36 +134,6 @@ describe("공백 양보", () => {
     const concept = index.lexicon.concepts.get("C_chat_ban")!
     index.lexicon.concepts.set("C_chat_ban", { ...concept, generic: true })
     expect(rankYieldReason(index, query, gap, near, () => 0.5)).toBeNull()
-  })
-})
-
-describe("공백 근접 양보(R4 P4)", () => {
-  it("점수 차가 GAP_YIELD_CLOSE_DELTA 이하면 이어짐·같은 개념·덮임 없이 양보한다(다음 카드 확신도는 보지 않는다)", () => {
-    const { index, at, candidate } = freshIndex()
-    const gap = candidate(CARDS.gapHours, 0.4)
-    const close = candidate(CARDS.chat, 0.4 - GAP_YIELD_CLOSE_DELTA + 0.01)
-    // 덮임이 공백보다 낮아도 된다.
-    expect(rankYieldReason(index, emptyQuery(), gap, close, (card) => (card === at(CARDS.gapHours) ? 0.9 : 0))).toBe("gap")
-    const list = [gap, close, candidate(CARDS.kick, 0.1)]
-    expect(applyRankYield(index, emptyQuery(), list, () => 0)).toEqual([{ card: CARDS.gapHours, to: CARDS.chat, reason: "gap" }])
-    expect(list.map((item) => item.id)).toEqual([CARDS.chat, CARDS.kick, CARDS.gapHours])
-  })
-
-  it("근접해도 다음 후보가 공백·허브이거나 질문이 그 공백의 없는 개념을 말했으면 양보하지 않는다", () => {
-    const { index, at, candidate } = freshIndex()
-    const gap = candidate(CARDS.gapHours, 0.4)
-    const close = candidate(CARDS.chat, 0.39)
-    index.absent.byId.set("A_hours", { id: "A_hours", label: "운영 시간", forms: ["운영 시간"], area: "support", gapCard: CARDS.gapHours, verified: {} } as never)
-    const asked = emptyQuery({ absent: [{ id: "A_hours", form: "운영 시간", start: 0, end: 4 }] })
-    expect(rankYieldReason(index, asked, gap, close, () => 1)).toBeNull()
-    index.cards[at(CARDS.chat)].card.role = "hub"
-    expect(rankYieldReason(index, emptyQuery(), gap, close, () => 1)).toBeNull()
-  })
-
-  it("근접 밖이고 이어짐·같은 개념이 없으면 양보하지 않는다", () => {
-    const { index, candidate } = freshIndex()
-    const gap = candidate(CARDS.gapHours, 0.4)
-    expect(rankYieldReason(index, emptyQuery(), gap, candidate(CARDS.chat, 0.4 - GAP_YIELD_CLOSE_DELTA - 0.01), () => 1)).toBeNull()
   })
 })
 

@@ -292,11 +292,6 @@ export const HUB_YIELD_RATIO = 0.5
 export const HUB_YIELD_COVERAGE_GAIN = 0.15
 /** 공백 양보: 공백 점수와 같은 개념 다음 후보 점수의 차가 이 값 이하. */
 export const GAP_YIELD_DELTA = 0.12
-/**
- * 공백 근접 양보(R4 P4): 공백 점수와 다음 실제 후보(공백·허브 아님) 점수의 차가 이 값 이하면 같은 개념·덮임 조건 없이 양보한다.
- * 미리 정한 후보 0.03·0.05·0.08 가운데 dev 세 묶음(모델 끔) 바뀐 줄 쌍으로 골랐다(0.05 와 0.08 이 같아 작은 값).
- */
-export const GAP_YIELD_CLOSE_DELTA = 0.05
 /** 공백 양보: 공백 카드 notCovers 가 가리키는 카드는 덮임이 공백보다 이만큼 낮아도 된다(이어지지 않은 카드는 덮임이 공백 이상이어야 한다). */
 export const GAP_YIELD_LINK_COVERAGE_SLACK = 0.15
 /** 한 질의에서 양보를 되풀이하는 최대 횟수(허브가 공백에게, 공백이 문서에게처럼 이어질 수 있다). */
@@ -343,8 +338,8 @@ type YieldSide = Pick<ScoredCandidate, "card" | "id" | "kind" | "s">
 /**
  * 1위 카드가 양보할지(바로 다음 실제 후보 하나만 본다). 양보하면 사유, 아니면 null.
  * - 허브(role hub): 다음 후보가 허브·공백이 아니고, 점수 ≥ 허브 × HUB_YIELD_RATIO, 덮임 ≥ 허브 덮임 + HUB_YIELD_COVERAGE_GAIN.
- * - 공백(kind gap): 질문이 그 공백의 없는 개념을 말하지 않았고, 다음 후보가 허브·공백이 아니고, 점수 차 ≤ GAP_YIELD_CLOSE_DELTA 이거나,
- *   점수 차 ≤ GAP_YIELD_DELTA 이고 같은 개념(notCovers 연결 또는 질문 개념 공유)이고 덮임 ≥ 공백 덮임(연결이면 − GAP_YIELD_LINK_COVERAGE_SLACK).
+ * - 공백(kind gap): 질문이 그 공백의 없는 개념을 말하지 않았고, 다음 후보가 허브·공백이 아니고, 점수 차 ≤ GAP_YIELD_DELTA,
+ *   같은 개념(notCovers 연결 또는 질문 개념 공유)이고, 덮임 ≥ 공백 덮임(연결이면 − GAP_YIELD_LINK_COVERAGE_SLACK).
  */
 export function rankYieldReason(
   index: CompiledAnswerIndex,
@@ -359,11 +354,7 @@ export function rankYieldReason(
     return coverage(next.card) >= coverage(top.card) + HUB_YIELD_COVERAGE_GAIN ? "hub" : null
   }
   if (top.kind !== "gap") return null
-  if (gapAsked(index, query, top.id)) return null
-  // 근접 양보(R4 P4): 점수 차가 아주 작으면 같은 개념·덮임을 보지 않고 양보한다. 양보받은 카드의 확신도는 보지 않는다 —
-  // 문턱 밑이면 못 찾음이 된다(R3 반박 #3: 문턱 밑이면 공백 답으로 되돌리게 해 보니 사실과 다른 '확인되지 않았어요'가 늘었다).
-  if (top.s - next.s <= GAP_YIELD_CLOSE_DELTA) return "gap"
-  if (top.s - next.s > GAP_YIELD_DELTA) return null
+  if (top.s - next.s > GAP_YIELD_DELTA || gapAsked(index, query, top.id)) return null
   const link = gapRivalLink(index, query, top.card, next.card)
   if (!link) return null
   const slack = link === "link" ? GAP_YIELD_LINK_COVERAGE_SLACK : 0
