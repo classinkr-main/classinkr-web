@@ -1,5 +1,5 @@
 /**
- * 답 색인 자료 검사 V-1~V-13(사양 §6). CI 필수: npm run answer-index:verify
+ * 답 색인 자료 검사 V-1~V-15(사양 §6, V-14·V-15 는 R3 카드 꼴·변형 검사). CI 필수: npm run answer-index:verify
  *
  * 실행:
  *   npx tsx scripts/answer-index/verify.ts [--only <자료 파일>]… [--strict] [--require-blind]

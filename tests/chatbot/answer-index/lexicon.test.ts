@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
 import { compileAbsent, compileLexicon, conceptIdsOf, matchAbsent, matchConcepts } from "@/lib/chatbot/answer-index/lexicon"
@@ -99,5 +101,38 @@ describe("문서에 없는 개념 맞추기", () => {
     expect(matchAbsent(normalizeText("정보보호인증 있어요"), compiled).map((match) => match.id)).toEqual(["A_isms"])
     expect(matchAbsent(normalizeText("api 연동 되나요"), compiled).map((match) => match.id)).toEqual(["A_api"])
     expect(matchAbsent(normalizeText("apiary 견학"), compiled)).toEqual([])
+  })
+})
+
+describe("저장소 사전의 방향 낱말 대조(R3 c1)", () => {
+  const root = join(__dirname, "..", "..", "..", "data", "answer-index")
+  const repoLexicon = compileLexicon(JSON.parse(readFileSync(join(root, "lexicon.json"), "utf8")) as LexiconConcept[])
+  const repoAbsent = compileAbsent(JSON.parse(readFileSync(join(root, "absent.json"), "utf8")) as AbsentConcept[])
+  const repoIds = (text: string) => conceptIdsOf(matchConcepts(normalizeText(text), repoLexicon))
+
+  it("내려받기/올리기: 명단 낱말은 올리기·일괄 등록과 같이 오면 명단 내려받기로 보지 않는다", () => {
+    expect(repoIds("학생 명단 엑셀로 내려받기 돼요")).toContain("C_roster_export")
+    expect(repoIds("구성원 명단 보고 싶어요")).toContain("C_roster_export")
+    const upload = repoIds("학생 명단 엑셀을 올리면 비밀번호가 생기나요")
+    expect(upload).toContain("C_upload")
+    expect(upload).not.toContain("C_roster_export")
+    expect(repoIds("학생 명단 업로드 방법")).not.toContain("C_roster_export")
+  })
+
+  it("예약/가능 여부: '통화 가능 시간'은 예약·시간 지정 동작이 있을 때만 통화 예약이다", () => {
+    expect(repoIds("통화 가능 시간 알려주세요")).not.toContain("C_callback_booking")
+    expect(repoIds("통화 가능 시간 예약하고 싶어요")).toContain("C_callback_booking")
+    expect(repoIds("콜백 예약 돼요")).toContain("C_callback_booking")
+  })
+
+  it("필수/선택: 펜이 꼭 있어야 하는지 묻는 말에만 펜 필수 표지가 붙는다", () => {
+    expect(repoIds("아이패드 펜 필수인가요")).toContain("C_pen_required")
+    expect(repoIds("태블릿 펜 없으면 판서 못 해요")).toContain("C_pen_required")
+    expect(repoIds("태블릿으로 필기하면서 수업 가능한가요")).not.toContain("C_pen_required")
+  })
+
+  it("현금영수증은 문서에 없는 개념이다", () => {
+    expect(matchAbsent(normalizeText("현금영수증도 끊어주나요"), repoAbsent).map((match) => match.id)).toEqual(["absent:pricing/cash-receipt"])
+    expect(matchAbsent(normalizeText("결제 영수증 어디서 받아요"), repoAbsent).map((match) => match.id)).not.toContain("absent:pricing/cash-receipt")
   })
 })

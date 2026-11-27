@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 
 import {
   compiledShapeEnabled,
@@ -16,7 +16,16 @@ import { findSafetyViolations } from "@/lib/chatbot/answer-index/safety-rules"
 /**
  * 답 꼴 다듬기(shape.ts) 시험. 새로 쓴 문장만 쓴다(실제 상담 글을 옮기지 않는다).
  * 지키는 것: 글자·순서 불변(contentSignature), 위젯 규칙(빈 줄로 덩이, 줄이 전부 "1." 이거나 전부 "-" 일 때만 목록), 빈 리드·겹친 끝맺음만 삭제.
+ * 아래 R2 시험은 R3 스위치를 모두 끈 상태(CHATBOT_COMPILED_ARROW=gt, CHATBOT_COMPILED_TONE=off, CHATBOT_COMPILED_FORM=r2)에서 R2 기대값을 바이트까지 지킨다.
+ * R3 꼴(→·「문서 제목」·현행 메뉴 이름·요체)은 shape-r3.test.ts 가 본다.
  */
+beforeAll(() => {
+  vi.stubEnv("CHATBOT_COMPILED_ARROW", "gt")
+  vi.stubEnv("CHATBOT_COMPILED_TONE", "off")
+  vi.stubEnv("CHATBOT_COMPILED_FORM", "r2")
+})
+afterAll(() => vi.unstubAllEnvs())
+
 describe("shape: switch", () => {
   it("is on by default and off for off/0/false", () => {
     expect(compiledShapeEnabled({})).toBe(true)

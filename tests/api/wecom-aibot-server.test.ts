@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-const hoisted = vi.hoisted(() => ({ buildServerOrchestratorDeps: vi.fn<(options: { sub: string; canReadConsultations: boolean; customerContacts?: boolean }) => object>(() => ({ knowledge: { evidence: async () => ({}), consultationCount: async () => 1 }, consultations: async () => ({}) })), postJson: vi.fn<(...args: unknown[]) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>>(async () => ({ ok: true, status: 200, json: async () => ({ errcode: 0 }), text: async () => "" })) }))
+const hoisted = vi.hoisted(() => ({ buildServerOrchestratorDeps: vi.fn<(options: { sub: string; canReadConsultations: boolean; customerContacts?: boolean; internalEvidence?: boolean }) => object>(() => ({ knowledge: { evidence: async () => ({}), consultationCount: async () => 1 }, consultations: async () => ({}) })), postJson: vi.fn<(...args: unknown[]) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }>>(async () => ({ ok: true, status: 200, json: async () => ({ errcode: 0 }), text: async () => "" })) }))
 
 vi.mock("@/lib/admin-ai/server/deps", () => ({ buildServerOrchestratorDeps: hoisted.buildServerOrchestratorDeps, serverOpsDeps: {} }))
 vi.mock("@/lib/wecom/aibot-accounts", () => ({ lookupAdminByEmail: async () => ({ ok: false, reason: "not_found" }) }))
@@ -57,6 +57,16 @@ describe("조율기 연결", () => {
     deps.orchestratorDeps(admin, "group")
     deps.orchestratorDeps(admin, "single")
     const calls = hoisted.buildServerOrchestratorDeps.mock.calls.map(([options]) => options.customerContacts)
+    expect(calls).toEqual([false, true])
+  })
+
+  it("묻기 근거 — 단체방은 내부 근거를 끈 연결(공개 문서만), 1:1 은 켠다", () => {
+    hoisted.buildServerOrchestratorDeps.mockClear()
+    const deps = buildWecomBridgeDeps({ token: "t", key: Buffer.alloc(32), botId: "b", userMap: new Map(), allowedChatIds: new Set() })
+    const admin = { source: "supabase" as const, role: "ADMIN", userId: "user-1", capabilities: [] }
+    deps.orchestratorDeps(admin, "group")
+    deps.orchestratorDeps(admin, "single")
+    const calls = hoisted.buildServerOrchestratorDeps.mock.calls.map(([options]) => options.internalEvidence)
     expect(calls).toEqual([false, true])
   })
 

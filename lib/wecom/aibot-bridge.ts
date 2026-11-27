@@ -3,7 +3,8 @@
 // 경계(총괄 기본값, docs/active/wecom-aibot-bridge.md §방에서 보이는 것):
 //  - 연결표에 없는 사람: 자료 없이 "연결되지 않은 계정입니다 — 어드민에서 써 주세요"만.
 //  - 연결된 사람: 그 어드민 계정의 역할로 조율기를 부른다. 비활성·역할 없음·갈매봇 역할 밖이면 거절.
-//  - 단체방(chattype group): 답이 방 전체에 보인다 — 클래스인 정보 답·링크·사내 역할 담당 안내만. 조회 도구·쓰기 미리보기·
+//  - 단체방(chattype group): 답이 방 전체에 보인다 — 클래스인 정보 답·링크·사내 역할 담당 안내만. 정보 답의 근거는 공개 문서만
+//    (정리 지식·선례·내부 문서는 싣지 않는다 — 서버 연결이 내부 문서 검색을 끄고, 여기서 한 번 더 거른다). 조회 도구·쓰기 미리보기·
 //    고객사 담당(CRM 담당·딜 담당·고객 키)·상담 내역(목록·요지·건수, 묻기 답의 "관련 상담 n건" 줄까지)·고객 이력(CRM 활동 기록·담당 영업)은
 //    "1:1 로 물어봐 주세요". 행위자 범위도 비운다(이중 잠금). 담당자 찾기는
 //    행위자 범위를 보지 않으므로 deps 에서 따로 막는다(서버는 고객 조회를 끄고, 여기서 고객사 카드를 바꾼다).
@@ -12,6 +13,7 @@
 //  - 연락처 원문(pii 범위)은 위컴으로 내보내지 않는다 — 역할과 상관없이 가린 값.
 import type { StaffIdentity } from "@/lib/admin-ai/server/actor"
 import { GALMAE_CHAT_ROLES, staffActor } from "@/lib/admin-ai/server/actor"
+import { publicOnlyEvidence } from "@/lib/admin-ai/server/knowledge"
 import type { OrchestratorDeps, TurnInput, WriteTurnResult } from "@/lib/admin-ai/server/orchestrator"
 import type { OpsDeps } from "@/lib/admin-ai/server/tools"
 import type { AiBlock, OrderTicket } from "@/lib/admin-ai/types"
@@ -166,7 +168,7 @@ export const GROUP_CONSULTATIONS_DENY: AiBlock = groupDeny("상담 내역")
  */
 export const GROUP_CUSTOMER_HISTORY_DENY: AiBlock = groupDeny("고객 이력")
 
-/** 단체방 — 조회 도구·쓰기 미리보기·고객 담당 조회·상담 내역·고객 이력을 막는 deps. */
+/** 단체방 — 조회 도구·쓰기 미리보기·고객 담당 조회·상담 내역·고객 이력을 막고, 묻기 근거를 공개 문서로 좁히는 deps. */
 export function groupScopedDeps(base: OrchestratorDeps): OrchestratorDeps {
   const ops: OpsDeps = {
     ...base.ops,
@@ -181,8 +183,10 @@ export function groupScopedDeps(base: OrchestratorDeps): OrchestratorDeps {
     },
     describeError: async (error) => (error instanceof GroupScopeError ? GROUP_SCOPE_TEXT : base.ops.describeError(error)),
   }
-  const { consultationCount: _consultationCount, ...knowledge } = base.knowledge
+  const { consultationCount: _consultationCount, ...rest } = base.knowledge
   void _consultationCount
+  // 묻기 근거 — 공개 문서만(정리 지식·선례·내부 문서·내부 초안을 뗀다). 서버 연결도 단체방에서는 내부 문서 검색을 끈다(이중 잠금).
+  const knowledge = { ...rest, evidence: async (question: string) => publicOnlyEvidence(await base.knowledge.evidence(question)) }
   return {
     ...base,
     knowledge,

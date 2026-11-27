@@ -5,6 +5,7 @@ import type { ConsultationSearchResult } from "@/lib/admin-ai/server/consultatio
 import { collectTurn } from "@/lib/admin-ai/server/orchestrator"
 import type { AiBlock, OrderTicket } from "@/lib/admin-ai/types"
 import type { ContactCard as InternalContactCard } from "@/lib/internal-cs-chat/contact"
+import type { InternalEvidenceParts, InternalPublicDocEvidence } from "@/lib/internal-cs-chat/context"
 import {
   ACCOUNT_DENIED_TEXT,
   answerWecomMessage,
@@ -291,6 +292,104 @@ describe("방에서 보이는 것의 경계", () => {
     expect(reply.markdown).not.toContain("SECRET-TICKET")
     expect(reply.markdown).not.toContain("카드에서 확인하면 실행합니다")
     expect(reply.markdown).toMatch(/https:\/\/example\.test\/admin\//)
+  })
+})
+
+describe("묻기 근거 — 단체방은 공개 문서만, 1:1 은 그대로", () => {
+  // 서버 연결이 내부 근거(정리 지식·선례·내부 문서)를 실어 보낸 경우 — 단체방 답에는 공개 문서만 실려야 한다(브리지 잠금).
+  // 모든 문장은 샘플이다. 내부 근거 문장에는 "샘플내부" 표시를 넣어 새는지 본다.
+  const PUBLIC_DOC: InternalPublicDocEvidence = {
+    kind: "public_doc",
+    id: "doc-recording",
+    title: "수업 녹화 안내(샘플)",
+    heading: "시작하기",
+    summary: "수업 녹화는 수업 설정 화면에서 켤 수 있습니다.",
+    excerpt: "수업 녹화는 수업 설정 화면에서 켤 수 있습니다. 녹화 항목을 켭니다.",
+    urlPath: "/support",
+    confirmed: true,
+    customerUse: "allowed",
+    asOf: null,
+    sources: [{ id: "doc-recording", label: "수업 녹화 안내(샘플)" }],
+  }
+  const INTERNAL_PARTS: InternalEvidenceParts = {
+    curated: [
+      {
+        kind: "curated",
+        id: "curated-recording",
+        title: "수업 녹화 샘플내부원칙",
+        summary: "수업 녹화 문의는 샘플내부원칙에 따라 먼저 기관 설정을 봅니다.",
+        status: "confirmed",
+        externalUse: "internal_only",
+        handling: ["수업 녹화 샘플내부절차를 확인한다"],
+        recommendedTags: [],
+        confirmed: true,
+        customerUse: "internal_only",
+        asOf: "2026-10-01",
+        sources: [{ id: "docs/sample-internal-2026-10-01.md", label: "샘플내부 문서" }],
+      },
+    ],
+    incidents: [
+      {
+        kind: "incident",
+        id: "incident-recording",
+        caseId: "S-1",
+        title: "수업 녹화 샘플내부선례",
+        summary: "수업 녹화가 꺼진 샘플내부선례입니다.",
+        steps: ["샘플내부선례 확인"],
+        confirmed: true,
+        customerUse: "review",
+        asOf: null,
+        sources: [{ id: "docs/sample-incident.md", label: "[선례] 샘플내부선례" }],
+      },
+    ],
+    publicDocs: [PUBLIC_DOC],
+    internalDocs: [
+      {
+        kind: "internal_doc",
+        id: "internal-recording",
+        title: "수업 녹화 샘플내부문서",
+        heading: "운영",
+        summary: "수업 녹화 샘플내부문서 발췌입니다.",
+        excerpt: "수업 녹화 샘플내부문서 발췌입니다.",
+        confirmed: null,
+        customerUse: "internal_only",
+        asOf: null,
+        sources: [{ id: "internal-recording", label: "샘플내부문서" }],
+      },
+    ],
+    publicAnswer: null,
+    internalDraft: "샘플내부초안 — 내부 문서가 섞인 위젯 답",
+  }
+  const INTERNAL_MARK = /샘플내부/
+
+  function evidenceBridge(parts: InternalEvidenceParts) {
+    const evidence = vi.fn(async () => parts)
+    const { deps } = bridge({ orchestratorDeps: () => ({ ...fakeDeps().deps, knowledge: { evidence } }) })
+    return { deps, evidence }
+  }
+
+  it("단체방 — 내부 근거가 같이 와도 공개 문서로만 답하고 \"내부용\" 줄이 없다", async () => {
+    const { deps, evidence } = evidenceBridge(INTERNAL_PARTS)
+    const reply = await answerWecomMessage(message({ chattype: "group", chatid: "room-1", text: "@갈매봇 수업 녹화는 어떻게 해?" }), deps)
+    expect(evidence).toHaveBeenCalled()
+    expect(reply.outcome).toBe("answered")
+    expect(reply.markdown).toContain("수업 설정 화면")
+    expect(reply.markdown).not.toMatch(INTERNAL_MARK)
+    expect(reply.markdown).not.toContain(INTERNAL_ONLY_LINE)
+  })
+
+  it("단체방 — 내부 근거만 있으면 근거 없음으로 답한다(내부 문장을 내지 않는다)", async () => {
+    const { deps } = evidenceBridge({ ...INTERNAL_PARTS, publicDocs: [] })
+    const reply = await answerWecomMessage(message({ chattype: "group", text: "@갈매봇 수업 녹화는 어떻게 해?" }), deps)
+    expect(reply.markdown).toContain("근거를 찾지 못했습니다")
+    expect(reply.markdown).not.toMatch(INTERNAL_MARK)
+  })
+
+  it("1:1 — 내부 근거를 그대로 쓰고 \"내부용\" 줄을 단다", async () => {
+    const { deps } = evidenceBridge(INTERNAL_PARTS)
+    const reply = await answerWecomMessage(message({ text: "수업 녹화는 어떻게 해?" }), deps)
+    expect(reply.markdown).toMatch(INTERNAL_MARK)
+    expect(reply.markdown.split("\n")[0]).toBe(INTERNAL_ONLY_LINE)
   })
 })
 

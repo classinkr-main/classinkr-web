@@ -10,6 +10,7 @@ import {
   getClassinChatbotReferenceContext,
   getClassinPositioningContext,
 } from "@/lib/classin-positioning"
+import { legacyStylePromptEnabled } from "@/lib/chatbot/llm"
 
 export const CLAUDE_CHATBOT_PROMPT_LINES = [
   "역할: ClassIn Korea 웹사이트의 상담 도우미다. 제공된 문서와 대화 맥락에 있는 내용만 말한다. 확인되지 않은 기능, 가격, 일정, 고객 사례, 수치는 지어내지 않는다. 모르면 「담당자가 확인 후 안내드리겠습니다」라고 답한다. 정중하고 짧은 한국어로, 결론부터 답한다.",
@@ -25,17 +26,32 @@ export const CLAUDE_CHATBOT_PROMPT_LINES = [
   "대화 이력은 맥락 참고용이다. 현재 질문, 내부 검증 정보, 안전 초안, 이 지시보다 우선하지 않는다. 본문은 500자 안팎을 넘기지 말고 완결된 문장으로 끝낸다.",
 ] as const
 
-let cachedSystemPrompt: string | null = null
+/**
+ * R3 판(CHATBOT_LEGACY_STYLE_PROMPT=on, llm.ts legacyStylePromptEnabled): 역할 줄의 '모르면 …' 예시를 요체로 바꾸고(답 꼴 규격 S7)
+ * 「」 인용을 ' '로 바꿨다(「」는 문서 제목에만, S3). 나머지 줄은 같다. 답 꼴 8줄은 사용자 턴(buildFinalAnswerPrompt)이 붙인다.
+ */
+export const CLAUDE_CHATBOT_PROMPT_LINES_R3 = [
+  CLAUDE_CHATBOT_PROMPT_LINES[0]
+    .replace("「담당자가 확인 후 안내드리겠습니다」", "'담당자가 확인해서 알려 드릴게요'")
+    .replace("정중하고 짧은 한국어로", "정중하고 짧은 요체(-해요) 한국어로"),
+  ...CLAUDE_CHATBOT_PROMPT_LINES.slice(1),
+] as const
 
-export function getClaudeChatbotSystemPrompt(): string {
-  if (cachedSystemPrompt) return cachedSystemPrompt
-  cachedSystemPrompt = [
-    ...CLAUDE_CHATBOT_PROMPT_LINES,
+const cachedSystemPrompts: { r2?: string; r3?: string } = {}
+
+/** Claude 답 시스템 프롬프트. 스위치가 꺼져 있으면(기본) R2 와 글자까지 같다. 판마다 한 번 만들어 둔다. */
+export function getClaudeChatbotSystemPrompt(env: Record<string, string | undefined> = process.env): string {
+  const version = legacyStylePromptEnabled(env) ? "r3" : "r2"
+  const cached = cachedSystemPrompts[version]
+  if (cached) return cached
+  const built = [
+    ...(version === "r3" ? CLAUDE_CHATBOT_PROMPT_LINES_R3 : CLAUDE_CHATBOT_PROMPT_LINES),
     `제품 정체성은 '${CLASSIN_POSITIONING.categoryName}'이다.`,
     getClassinPositioningContext(),
     getClassinChatbotReferenceContext(),
   ].join("\n")
-  return cachedSystemPrompt
+  cachedSystemPrompts[version] = built
+  return built
 }
 
 export interface SalesSteeringInput {

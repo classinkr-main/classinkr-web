@@ -4785,7 +4785,12 @@
             "507210cb3ee2d062"
           ]
         }
-      ]
+      ],
+      "first": {
+        "unit": "doc:/docs/admin/billing-upgrade#5",
+        "i": 14,
+        "hash": "507210cb3ee2d062"
+      }
     },
     "sources": [
       {
@@ -6826,7 +6831,8 @@
         "field:chatbot-discount-claim"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:payment-cycle-termination-terms",
@@ -6901,7 +6907,8 @@
         "field:payment-cycle-termination"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:board-installment-rental",
@@ -6971,7 +6978,8 @@
         "field:board-installment"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:branch-account-invoice-split",
@@ -7042,7 +7050,8 @@
         "field:branch-account-invoice"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:plan-upgrade-proration-terms",
@@ -7113,7 +7122,8 @@
         "field:plan-upgrade-proration"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:board-bundled-software-period",
@@ -7184,7 +7194,8 @@
         "field:software-included-period"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:ai-feature-price-included",
@@ -7251,7 +7262,8 @@
         "field:ai-feature-pricing"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:zoom-switch-remaining-discount",
@@ -7317,7 +7329,8 @@
         "field:zoom-remaining-discount"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:trial-card-register-autobill",
@@ -7384,7 +7397,8 @@
         "field:trial-card-autobill"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:trial-demo-english-support",
@@ -7459,7 +7473,8 @@
         "field:friend-trial-english-demo"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:price-difference-other-academy",
@@ -7526,7 +7541,8 @@
         "field:price-difference-refund"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:plan-downgrade-features-records",
@@ -7597,7 +7613,8 @@
         "field:plan-downgrade-features"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:board-without-subscription-meet",
@@ -7663,7 +7680,8 @@
         "field:board-without-subscription"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:group-purchase-bulk-price",
@@ -7730,7 +7748,8 @@
         "field:group-purchase"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:google-classroom-link-partial-price",
@@ -7797,7 +7816,8 @@
         "field:google-classroom-split-pricing"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:installation-fee-waive-request",
@@ -7868,7 +7888,8 @@
         "field:installation-fee-waive"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:admin-view-private-chat",
@@ -7877,8 +7898,8 @@
     "area": "pricing",
     "topic": "학원 관리자가 강사·학생 개인 채팅을 열람할 수 있는지(공개 안내에 없음)",
     "answer": {
-      "text": "학원 관리자가 강사와 학생의 개인 채팅을 열람할 수 있는지는 공개 안내에 정리돼 있지 않아요. 볼 수 있다, 없다를 단정하지 않을게요. 상담 채널에 확인해 주세요.",
-      "textHash": "1b0fed4b9ce51949"
+      "text": "학원 관리자가 강사와 학생의 개인 채팅을 열람할 수 있는지는 공개 안내에서 확인되지 않았어요.\n볼 수 있다, 없다를 단정하지 않을게요. 상담 채널에 확인해 주세요.",
+      "textHash": "43e6e2cd1fe9ac64"
     },
     "auditRef": "audit/C-07.jsonl#field:private-chat-admin",
     "asks": [
@@ -7999,7 +8020,8 @@
         "field:internal-price-list-request"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:monthly-to-yearly-switch",
@@ -8078,7 +8100,8 @@
         "field:monthly-to-yearly-switch"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:board-price-comparison-discount",
@@ -8149,7 +8172,8 @@
         "field:board-price-comparison-discount"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:board-pen-charge",
@@ -8158,8 +8182,8 @@
     "area": "pricing",
     "topic": "전자칠판 펜 충전 여부(공개 안내에 없음)와 적외선 터치 확인 순서",
     "answer": {
-      "text": "이 칠판은 적외선 터치 방식이라, 칠판이 펜이나 손가락처럼 빛을 가리는 물체를 인식해서 써져요. 펜을 충전해야 하는지는 공개 안내에 따로 나와 있지 않아요.\n\n이렇게 확인해 봐요.\n1. 손가락으로 칠판에 써지는지 봐요.\n2. 칠판 테두리에 먼지나 물건이 닿아 있으면 인식이 안 될 수 있어요.\n\n다 확인했는데도 터치가 계속 이상하거나 수업 중 화면이 가끔 멈추면, 증상을 영상으로 찍어 A/S에 접수합니다.",
-      "textHash": "36c3c830ea971479"
+      "text": "펜을 충전해야 하는지는 공개 안내에 따로 나와 있지 않아요.\n이 칠판은 적외선 터치 방식이라 펜이나 손가락처럼 빛을 가리는 물체를 인식해서 써져요.\n\n1. 손가락으로 칠판에 써지는지 봐요.\n2. 칠판 테두리에 먼지나 물건이 닿아 있으면 인식이 안 될 수 있으니 치워요.\n\n다 확인했는데도 터치가 계속 이상하거나 수업 중 화면이 가끔 멈추면 증상을 영상으로 찍어 A/S에 접수해 주세요.",
+      "textHash": "7d75a93887f04d9b"
     },
     "auditRef": "audit/C-08.jsonl#field:board-pen-charge",
     "asks": [
@@ -8283,7 +8307,8 @@
         "field:peer-average-price"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:board-return-trial-before-buy",
@@ -8354,7 +8379,8 @@
         "field:board-return-trial-before-buy"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:autopay-cancel-where",
@@ -8424,7 +8450,8 @@
         "field:autopay-cancel-where"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:service-expiry-auto-renewal",
@@ -8496,7 +8523,8 @@
         "field:service-expiry-auto-renewal"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "fixed:student-private-notes-on-tablet",
@@ -8505,8 +8533,8 @@
     "area": "pricing",
     "topic": "학생이 자기만 보는 필기(공개 안내에 없음)와 학생 칠판 쓰기 권한·판서 학습 보고서",
     "answer": {
-      "text": "확인된 것만 쉽게 말씀드릴게요.\n\n1) 아이만 보는 메모·밑줄: 수업 화면 위에 아이만 볼 수 있게 메모하는 기능은 공개 안내에 나와 있지 않아요.\n2) 다른 사람에게 보이는 경우: 공개 안내 기준으로 학생은 선생님이 권한을 줘야 수업 칠판에 쓸 수 있어요. 권한을 받으면 아이 카메라 위에 왕관 표시가 생기고, 그때 쓴 건 선생님과 친구들 화면에도 보여요.\n\n따라 적는 부담은 이렇게 줄일 수 있어요. 선생님이 칠판에 쓴 판서는 수업이 끝나면 학습 보고서에 담겨 학생에게 가요(코스에서 끝난 수업 > [학습 보고서]). 다시보기가 열리는지는 녹화 여부와 학원 설정에 달려 있습니다.",
-      "textHash": "5465632efd26749d"
+      "text": "수업 화면 위에 아이만 볼 수 있게 메모하는 기능은 공개 안내에서 확인되지 않았어요.\n학생은 선생님이 권한을 줘야 수업 칠판에 쓸 수 있고, 그때 쓴 건 선생님과 친구들 화면에도 보여요.\n권한을 받으면 아이 카메라 위에 왕관 표시가 생겨요.\n\n선생님이 칠판에 쓴 판서는 수업이 끝나면 학습 보고서에 담겨 학생에게 가요.\n코스에서 끝난 수업 → [학습 보고서]에서 보고, 다시보기가 열리는지는 녹화 여부와 학원 설정에 달려 있어요.",
+      "textHash": "c0eb955425e9fe42"
     },
     "auditRef": "audit/C-08.jsonl#field:student-private-notes-on-tablet",
     "asks": [
@@ -8631,7 +8659,8 @@
         "field:board-trade-in-discount"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "doc:/docs/admin/teacher-onboarding#3/subaccount-finance-permission",
@@ -8857,8 +8886,8 @@
     "area": "classroom",
     "topic": "학원·강사가 학생 1:1 채팅을 볼 수 있는지(공개 안내에 없음)",
     "answer": {
-      "text": "학원이나 쌤이 1:1 채팅을 볼 수 있는지는 공개 안내에 안 나와 있어요. 못 본다고도, 본다고도 말 못 해요.",
-      "textHash": "53fc3668cd22d76f"
+      "text": "학원이나 선생님이 1:1 채팅을 볼 수 있는지는 공개 안내에서 확인되지 않았어요.\n그래서 볼 수 있다고도, 없다고도 말씀드리기 어려워요.",
+      "textHash": "37f82fcb4df36dab"
     },
     "auditRef": "audit/C-09.jsonl#field:student-private-chat-visible-to-teacher",
     "asks": [
@@ -8992,7 +9021,8 @@
       "actions": [
         "review 카드 점검 2026-11-20: 그대로 review: 사양 §7.4 — 핵심 문장 '보증 연장·유상 유지보수·그 비용은 공개 안내에 없다'(주장 3, policy)가 HQ-1001(보증 연장·유지보수 비용 안내 범위) 결정 대상. 틀린 주장은 없음"
       ]
-    }
+    },
+    "toneLocked": true
   },
   {
     "id": "doc:/docs/hardware/board-s-series-safe-use#6/usb-ports-charging",
@@ -9152,7 +9182,8 @@
         "field:teacher-ambassador-referral-discount"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:cost-supply-price-internal",
@@ -9226,7 +9257,8 @@
         "basics:basics-cost-supply-price"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:discount-by-quantity-quote",
@@ -9307,7 +9339,8 @@
         "basics:basics-discount-haggling"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "policy:why-expensive-compare",
@@ -9376,7 +9409,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-why-expensive"
+    "auditRef": "audit/C-11.jsonl#basics:basics-why-expensive",
+    "toneLocked": true
   },
   {
     "id": "policy:class-capacity-and-duration",
@@ -9445,7 +9479,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-capacity-and-duration"
+    "auditRef": "audit/C-11.jsonl#basics:basics-capacity-and-duration",
+    "toneLocked": true
   },
   {
     "id": "policy:max-participants",
@@ -9469,8 +9504,6 @@
       "최대 참여 인원",
       "한 수업 몇 명",
       "들어올 수 있는 인원",
-      "온스테이지 인원",
-      "1v12",
       "2,000명"
     ],
     "covers": "한 수업에 들어올 수 있는 최대 인원은 요금제마다 다르고 소개 자료에 최대 2,000명 안내가 있다는 것, 온스테이지 인원은 수업을 만들 때 1v0부터 1v12까지 정한다는 것",
@@ -9478,7 +9511,9 @@
       "요금제 표의 수업 참여자 뜻과 한도 → doc:/docs/software/software-pricing-quote-bundle-faq#3/participant-limit",
       "온스테이지 뜻과 스테이지 밖 학생이 하는 일 → doc:/docs/software/software-pricing-quote-bundle-faq#3/onstage-limit",
       "수업 최대 시간 → policy:class-duration-limit",
-      "반(코스) 개수 한도와 수업 시작 뒤 온스테이지 인원 변경 → doc:/docs/start/pre-adoption-faq-22-questions#6/class-count-size-limit"
+      "반(코스) 개수 한도와 수업 시작 뒤 온스테이지 인원 변경 → doc:/docs/start/pre-adoption-faq-22-questions#6/class-count-size-limit",
+      "화면에 보이는 인원·온스테이지 1v0~1v12 → doc:/docs/software/classroom-tools#5/onstage-count",
+      "웹 라이브 시청자 수·동시 접속 → doc:/docs/admin/web-live-playback#5/viewer-detail"
     ],
     "negatives": [
       {
@@ -9523,7 +9558,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-max-participants"
+    "auditRef": "audit/C-11.jsonl#basics:basics-max-participants",
+    "toneLocked": true
   },
   {
     "id": "policy:class-duration-limit",
@@ -9606,7 +9642,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-duration-limit"
+    "auditRef": "audit/C-11.jsonl#basics:basics-duration-limit",
+    "toneLocked": true
   },
   {
     "id": "policy:plan-count-limits",
@@ -9677,7 +9714,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-plan-count-limits"
+    "auditRef": "audit/C-11.jsonl#basics:basics-plan-count-limits",
+    "toneLocked": true
   },
   {
     "id": "policy:contract-auto-renewal",
@@ -9747,7 +9785,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-contract-auto-renewal"
+    "auditRef": "audit/C-11.jsonl#basics:basics-contract-auto-renewal",
+    "toneLocked": true
   },
   {
     "id": "policy:trial-auto-billing",
@@ -9816,7 +9855,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-trial-auto-billing"
+    "auditRef": "audit/C-11.jsonl#basics:basics-trial-auto-billing",
+    "toneLocked": true
   },
   {
     "id": "policy:billing-unit",
@@ -9894,7 +9934,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-billing-unit"
+    "auditRef": "audit/C-11.jsonl#basics:basics-billing-unit",
+    "toneLocked": true
   },
   {
     "id": "policy:billing-period-term",
@@ -9919,7 +9960,6 @@
       "월 결제 연 결제",
       "결제 주기",
       "최소 계약 기간",
-      "한 달만 써보기",
       "충전형 미리 충전",
       "약정 기간"
     ],
@@ -9929,7 +9969,8 @@
       "계약 자동 연장 → policy:contract-auto-renewal",
       "결제 수단 → policy:payment-methods",
       "연 결제로 하면 할인되는지·월에서 연으로 바꿀 때 → policy:monthly-to-yearly-switch",
-      "중도 해지·위약금 기준 → policy:payment-cycle-termination-terms"
+      "중도 해지·위약금 기준 → policy:payment-cycle-termination-terms",
+      "한 달만 써 보기·무료 체험 → doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
     ],
     "negatives": [
       {
@@ -9974,7 +10015,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-billing-period-term"
+    "auditRef": "audit/C-11.jsonl#basics:basics-billing-period-term",
+    "toneLocked": true
   },
   {
     "id": "policy:payment-methods",
@@ -10047,7 +10089,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-payment-methods"
+    "auditRef": "audit/C-11.jsonl#basics:basics-payment-methods",
+    "toneLocked": true
   },
   {
     "id": "policy:fit-small-private",
@@ -10122,7 +10165,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-fit-small-private"
+    "auditRef": "audit/C-11.jsonl#basics:basics-fit-small-private",
+    "toneLocked": true
   },
   {
     "id": "policy:fit-large-academy",
@@ -10191,7 +10235,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#basics:basics-fit-large-academy"
+    "auditRef": "audit/C-11.jsonl#basics:basics-fit-large-academy",
+    "toneLocked": true
   },
   {
     "id": "policy:free-version-scope",
@@ -10265,7 +10310,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#svc:free-scope"
+    "auditRef": "audit/C-11.jsonl#svc:free-scope",
+    "toneLocked": true
   },
   {
     "id": "policy:personal-tutor-use",
@@ -10333,7 +10379,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#svc:personal-use"
+    "auditRef": "audit/C-11.jsonl#svc:personal-use",
+    "toneLocked": true
   },
   {
     "id": "policy:discount-negotiation",
@@ -10414,7 +10461,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#svc:discount"
+    "auditRef": "audit/C-11.jsonl#svc:discount",
+    "toneLocked": true
   },
   {
     "id": "policy:web-live-plan-cost",
@@ -10483,7 +10531,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#template:웹 라이브 요금과 사용 조건"
+    "auditRef": "audit/C-11.jsonl#template:웹 라이브 요금과 사용 조건",
+    "toneLocked": true
   },
   {
     "id": "policy:software-plan-overview",
@@ -10557,7 +10606,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#template:소프트웨어 요금과 플랜 안내"
+    "auditRef": "audit/C-11.jsonl#template:소프트웨어 요금과 플랜 안내",
+    "toneLocked": true
   },
   {
     "id": "policy:trial-pilot-check",
@@ -10627,7 +10677,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#template:체험·파일럿 확인"
+    "auditRef": "audit/C-11.jsonl#template:체험·파일럿 확인",
+    "toneLocked": true
   },
   {
     "id": "policy:plan-limit-trial-scope",
@@ -10696,7 +10747,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#template:요금제 한도·체험 범위 확인"
+    "auditRef": "audit/C-11.jsonl#template:요금제 한도·체험 범위 확인",
+    "toneLocked": true
   },
   {
     "id": "policy:receipt-payment-proof",
@@ -10729,7 +10781,8 @@
     "notCovers": [
       "세금계산서·영수증·환불은 결제 전에 상담 → doc:/docs/admin/billing-upgrade#1/invoice-before-pay",
       "학원 수업료·원비 결제 기능 → doc:/docs/start/value-and-cost-framing#4/tuition-payment",
-      "부가세 표기 → fixed:billing-vat"
+      "부가세 표기 → fixed:billing-vat",
+      "현금영수증 발급 → gap:pricing/cash-receipt"
     ],
     "negatives": [
       {
@@ -10765,7 +10818,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#template:영수증과 결제 증빙 확인"
+    "auditRef": "audit/C-11.jsonl#template:영수증과 결제 증빙 확인",
+    "toneLocked": true
   },
   {
     "id": "policy:tutor-plan-recommend",
@@ -10833,7 +10887,8 @@
       ]
     },
     "policyGoverned": true,
-    "auditRef": "audit/C-11.jsonl#self:tutor_pricing_recommend"
+    "auditRef": "audit/C-11.jsonl#self:tutor_pricing_recommend",
+    "toneLocked": true
   },
   {
     "id": "fixed:billing-vat",
@@ -10921,8 +10976,8 @@
     "area": "pricing",
     "topic": "학생이 수업에 들어갈 때 내는 접속 비용 여부",
     "answer": {
-      "text": "학생이 수업에 들어갈 때 따로 내는 접속 비용이 있다는 안내는 공개 안내에 없어요. 학생은 앱을 설치해 가입한 뒤 학원이 초대한 코스에 들어가 수업을 들어요.\n\n공개 안내로 확인되는 건 학원(기관)이 유료 계정으로 전환해 쓰는 구조이고, 소프트웨어 요금은 강사·운영 계정 수를 기준으로 안내된다는 것이에요.",
-      "textHash": "3d5f6b3c54168b98"
+      "text": "학생이 수업에 들어갈 때 따로 내는 접속 비용이 있다는 안내는 공개 안내에 없어요.\n학생은 앱을 설치해 가입한 뒤 학원이 초대한 코스에 들어가 수업을 들어요.\n\n공개 안내로 확인되는 건 학원(기관)이 유료 계정으로 전환해 쓰는 구조이고, 소프트웨어 요금은 강사·운영 계정 수를 기준으로 안내된다는 거예요.",
+      "textHash": "7137d62f77706dc2"
     },
     "asks": [
       "yesno",
@@ -11069,8 +11124,8 @@
     "area": "pricing",
     "topic": "결제했는데 무료 계정으로 보일 때 확인할 것",
     "answer": {
-      "text": "결제했는데 아직 무료 계정으로 보이면, 결제한 아이디와 지금 로그인한 아이디가 같은지부터 확인해 주세요. 결제는 메인 관리자로 쓸 아이디로 한 것이 학원 계정에 반영됩니다.\n\n1. 강사 개인 아이디로 결제했는데 그 강사가 그만두면서 메인 관리자 계정을 쓸 수 없게 됩니다. 처음부터 원장 본인이나 학원 공용 아이디로 로그인하세요.\n2. 학생이나 강사가 공식 홈페이지에서 가입하거나 로그인했다가 요금제 선택 화면을 보고 체험판을 눌러 버립니다. 홈페이지 로그인은 기관 관리자용이고, 학생과 강사는 앱을 설치해 가입합니다. 이미 잘못 등록됐다면 상담 채널로 문의하세요.\n\n아래 [실시간 상담 연결]로 결제 반영 확인을 요청해 주세요.",
-      "textHash": "acb842cfbb5bab42"
+      "text": "결제했는데 무료 계정으로 보이면 결제한 아이디와 지금 로그인한 아이디가 같은지부터 확인해 주세요.\n결제는 메인 관리자로 쓸 아이디로 한 것이 학원 계정에 반영돼요.\n\n이런 경우가 있어요.\n- 강사 개인 아이디로 결제하면 그 강사가 그만둘 때 메인 관리자 계정을 쓸 수 없게 돼요.\n- 학생이나 강사가 공식 홈페이지에서 로그인했다가 요금제 선택 화면에서 체험판을 눌러 버려요.\n\n처음부터 원장 본인이나 학원 공용 아이디로 로그인하고, 학생과 강사는 앱을 설치해 가입하게 해 주세요.\n이미 잘못 등록됐다면 아래 [실시간 상담 연결]로 결제 반영 확인을 요청해 주세요.",
+      "textHash": "e12e3853a02a81a4"
     },
     "asks": [
       "symptom",

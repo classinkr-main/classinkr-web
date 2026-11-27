@@ -2868,6 +2868,27 @@
     }
   },
   {
+    "id": "absent:pricing/cash-receipt",
+    "label": "현금영수증 발급",
+    "forms": [
+      "현금영수증",
+      "현금 영수증"
+    ],
+    "area": "pricing",
+    "gapCard": "gap:pricing/cash-receipt",
+    "verified": {
+      "grep": [
+        "현금영수증",
+        "현금 영수증",
+        "현영"
+      ],
+      "unitHits": 0,
+      "siteHits": 0,
+      "checkedAt": "2026-11-27",
+      "checker": "agent:r3-c1"
+    }
+  },
+  {
     "id": "absent:admin/admin-audit-log",
     "label": "관리자 작업 기록(감사 로그)",
     "forms": [

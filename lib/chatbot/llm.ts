@@ -397,23 +397,69 @@ const THIRD_PARTY_ADOPTION_REQUIREMENT =
 const WEAK_GROUNDING_REQUIREMENT =
   "근거 없음 주의: 이 질문에 맞는 내부 검증 정보가 없다. 질문이 묻는 기능·설정·목록이 있는지 확인되지 않았으면 있다고도 없다고도 말하지 말고, 첫 문장에서 '공개 안내에서 확인되지 않았어요'라고 밝혀. 기능 목록·메뉴 이름·옵션·단축키·지원 형식·수치·사례·도입 추세 같은 세부를 새로 지어내지 마. 시스템 지시에 있는 Classin 기본 지식(제품 정체성, 도입 흐름, 수업 운영 흐름)을 묻는 질문일 때만 그 범위에서 한두 문장으로 답해. 끝에는 확인 질문 하나 또는 상담 연결을 안내해."
 
+type PromptEnv = Record<string, string | undefined>
+
 /**
  * CHATBOT_LEGACY_MULTI_PROMPT=on 일 때만 legacy 생성 지시문에 복합 질문 한 줄을 붙인다. 기본은 꺼짐이다: 스위치를 켜지 않은 운영
  * 지시문은 R2 이전(58e340270)과 글자까지 같다(tests/chatbot/answer-index/legacy-final-prompt.test.ts 가 평가셋 전 문항으로 고정한다).
  * legacy 쪽 적용은 service.ts 묶음(B5)에서 답 캐시 판 올림·520자 상한 조정과 함께 켠다.
  */
-export function legacyMultiPromptEnabled(env: Record<string, string | undefined> = process.env): boolean {
+export function legacyMultiPromptEnabled(env: PromptEnv = process.env): boolean {
   return env.CHATBOT_LEGACY_MULTI_PROMPT?.trim().toLowerCase() === "on"
 }
 
+/**
+ * CHATBOT_LEGACY_STYLE_PROMPT=on 일 때만 legacy 생성 지시문을 R3 답 꼴(채널톡 가이드식)로 바꾼다. 기본은 꺼짐이다.
+ * 켜면: 사용자 턴에 답 꼴 8줄(GUIDE_STYLE_REQUIREMENT)과 복합 질문 한 줄(multiQuestionRequirement, 번호 머리)을 붙이고, 기능 한계 요구사항의
+ * 예시 어조와 Claude 시스템 프롬프트의 '모르면 …' 예시를 요체로 바꾼다. 꺼져 있으면 사용자 턴·허용 글·Claude 시스템 프롬프트가 R2 와 글자까지
+ * 같다(legacy-final-prompt.test.ts·assist-multi.test.ts). 답 캐시 판 올림은 service.ts 묶음이 스위치를 운영에 켤 때 같이 한다.
+ */
+export function legacyStylePromptEnabled(env: PromptEnv = process.env): boolean {
+  return env.CHATBOT_LEGACY_STYLE_PROMPT?.trim().toLowerCase() === "on"
+}
+
+/**
+ * 복합 답 머리 꼴(CHATBOT_COMPOUND_HEAD, 답 색인 렌더와 같은 스위치): bracket 이면 R2 【주제】, number(numbered)면 R3 "1. 주제"(결정 D2).
+ * 값이 없으면 R3 답 꼴 스위치(CHATBOT_LEGACY_STYLE_PROMPT=on)를 켰을 때만 번호 머리다. R2 스위치(CHATBOT_LEGACY_MULTI_PROMPT=on)만 켠 운영은
+ * 지금처럼 R2 글을 글자 그대로 받는다(R3 반박 검토: 이미 쓰던 스위치 값의 동작을 말없이 바꾸지 않는다).
+ */
+function legacyCompoundHead(env: PromptEnv): "number" | "bracket" {
+  const value = env.CHATBOT_COMPOUND_HEAD?.trim().toLowerCase()
+  if (value === "bracket") return "bracket"
+  if (value === "number" || value === "numbered") return "number"
+  return legacyStylePromptEnabled(env) ? "number" : "bracket"
+}
+
+/**
+ * R3 답 꼴(답 꼴 규격 S1~S12 요약). CHATBOT_LEGACY_STYLE_PROMPT=on 일 때만 사용자 턴에 붙인다(buildFinalAnswerPrompt).
+ * 사용자 턴 한 곳에서 조립하므로 Gemini 일반·스트림과 Claude 제공자가 같은 글을 받는다. 시스템 지시(BASE·FINAL)는 바꾸지 않고,
+ * 그 안의 꼴 규칙('- ' 불릿 2~4개·번호 4개·E.Q.E 공감 먼저·'-습니다' 예시)과 겹치면 이 꼴이 앞선다고 적는다.
+ * 사실·근거·안전·금지 표현 규칙은 건드리지 않는다.
+ */
+export const GUIDE_STYLE_REQUIREMENT = [
+  "답 꼴(시스템 지시·요구사항의 말투·목록·문단 규칙과 겹치면 이 꼴을 따른다. 사실·근거·안전·금지 표현 규칙은 그대로 지킨다):",
+  "1. 첫 줄은 결론 한 문장(60자 이하)이다. 예/아니오는 '네, …'·'아니요, …', 방법은 위치나 첫 행동, 원인은 원인, 규정·수치는 값, 증상은 가장 흔한 원인의 첫 확인을 쓴다. 인사·예고('안내해 드릴게요')·질문 되풀이·배경 설명으로 시작하지 않는다.",
+  "2. 순서가 있는 조작은 '1.'~'5.' 번호 줄로, 한 줄에 행동 하나씩 쓴다. 순서 없는 항목은 '- ' 줄로 쓰고, 한 덩이에 번호 줄과 '- ' 줄을 섞지 않는다.",
+  "3. 근거에 적힌 버튼·메뉴·탭 이름만 [ ]로 감싸고, 경로는 [A] → [B]처럼 →로 잇는다. 화면 문구는 ' '로, 「 」는 문서 제목에만 쓴다. 메뉴는 지금 이름으로 쓴다([기관 관리]는 [학사 관리]).",
+  "4. 한 줄에 한 문장, 60자 안팎으로 쓰고 120자를 넘기지 않는다. 빈 줄로 나뉜 덩이는 4개까지다.",
+  "5. 주의는 '주의:'·'※' 없이 평서문 한 줄로 쓴다. 안 되는 것은 '…은 …할 수 없어요'와 이유 한 줄, 다음 줄의 '대신 …' 대안으로 쓴다.",
+  "6. 어미는 요체 한 가지(-해요·-돼요·-예요·-세요·-드릴게요)로 쓰고 '-습니다'와 섞지 않는다. 지시문 예시가 '-습니다'여도 요체로 바꿔 쓴다.",
+  "7. 공감·사과로 시작하지 않는다(E.Q.E 요구사항도 결론 줄을 먼저 쓴다). 화남, 같은 문제 반복 실패, 수업 직전 같은 시간 압박이 보일 때만 결론 바로 앞에 30자 안팎 공감 한 줄을 쓰고 빈 줄 없이 결론을 잇는다.",
+  "8. 마무리는 증상·일부만 답함·확인 필요일 때만 맨 끝 한 줄로 상담 연결을 안내한다(예: 그래도 안 되면 \"상담원 연결\"이라고 남겨 주세요.). 아이디·전화번호·비밀번호를 채팅에 적어 달라고 하지 않고, URL·링크·'스크린샷 참고'는 쓰지 않는다.",
+].join("\n")
+
 // R2 B3(운영 담당 지시 "질문 2개를 한 번에 하면 하나로 쏠린다"): 스위치를 켰고, 묻는 문장(물음표·묻는 어미 문장, 번호·점 목록 항목)이
 // 둘 이상일 때만 순서대로 모두 답하게 한다. 답 색인의 잇는 말 나누기(쉼표·'이랑'·'-고')는 쓰지 않는다(한 질문을 잘게 쪼갤 수 있다).
-// 머리 줄 【주제】는 결정 4, 상담 안내 한 줄은 결정 2.
-export function multiQuestionRequirement(question: string, env: Record<string, string | undefined> = process.env): string | null {
-  if (!legacyMultiPromptEnabled(env)) return null
+// 상담 안내 한 줄은 결정 2. 머리 줄은 R3 결정 D2 로 "1. 주제" + 바로 아래 결론 줄(답 꼴 규격 S10)이고(R3 답 꼴 스위치 또는 CHATBOT_COMPOUND_HEAD=number),
+// R2 스위치만 켰거나 CHATBOT_COMPOUND_HEAD=bracket 이면 R2 글(【주제】, 결정 4)을 글자 그대로 낸다. CHATBOT_LEGACY_STYLE_PROMPT=on 이어도 붙는다.
+export function multiQuestionRequirement(question: string, env: PromptEnv = process.env): string | null {
+  if (!legacyMultiPromptEnabled(env) && !legacyStylePromptEnabled(env)) return null
   const count = explicitQuestionCount(question)
   if (count < 2) return null
-  return `질문 여러 개 주의: 이 질문에는 물음이 ${count}개 있다. 하나만 답하지 말고 질문 순서대로 모두 답해. 물음마다 【주제】 머리 줄 한 줄을 쓰고 그다음 첫 문장에 결론을 쓴다. 근거에 없는 물음은 빼지 말고 그 물음 자리에 '공개 안내에 없어요'라고 밝힌다. 길이는 물음마다 4줄 이내(전체 10줄 이내)로 하고, 상담 안내는 필요할 때만 맨 끝에 한 줄.`
+  if (legacyCompoundHead(env) === "bracket") {
+    return `질문 여러 개 주의: 이 질문에는 물음이 ${count}개 있다. 하나만 답하지 말고 질문 순서대로 모두 답해. 물음마다 【주제】 머리 줄 한 줄을 쓰고 그다음 첫 문장에 결론을 쓴다. 근거에 없는 물음은 빼지 말고 그 물음 자리에 '공개 안내에 없어요'라고 밝힌다. 길이는 물음마다 4줄 이내(전체 10줄 이내)로 하고, 상담 안내는 필요할 때만 맨 끝에 한 줄.`
+  }
+  return `질문 여러 개 주의: 이 질문에는 물음이 ${count}개 있다. 하나만 답하지 말고 질문 순서대로 모두 답해. 물음마다 '1. 주제'처럼 번호 머리 줄(주제는 그 물음을 짧은 명사구로 되받은 것)을 쓰고, 바로 아랫줄에 그 물음의 결론 한 문장을 쓴다. 머리 줄만 있는 덩이는 만들지 않는다. 단계가 있으면 결론 줄 아래 '- ' 줄로 2개까지 쓰고, 물음 사이는 빈 줄 하나로 나눈다. 근거에 없는 물음도 빼지 말고 그 번호 자리에 '공개 안내에는 없는 내용이라 상담으로 확인해 드릴게요.'라고 쓴다. 번호는 1부터 ${count}까지 물음 수만큼 쓴다. 길이는 물음마다 머리 줄을 넣어 4줄 이내(전체 500자 안팎)로 하고, 상담 안내는 필요할 때만 맨 끝에 한 줄.`
 }
 
 interface GenerateArgs {
@@ -1414,8 +1460,13 @@ export async function requestAnswerCardPick(args: {
   return (await requestGeminiAnswerCardPick(args)).outcome
 }
 
-// 분류·인텐트별 요구사항 문장. 스트리밍과 비스트리밍이 같은 문장을 쓴다.
-function pickFinalAnswerRequirement(category: string, intent?: string) {
+const FEATURE_LIMIT_REQUIREMENT =
+  "요구사항: 클래스인이 제공하지 못하는 기능(학원비 결제·수납·정산 기능, 오프라인 지문인식/출석 카드 장비 등)에 대한 질문이 들어왔을 때, 일체 지원하지 않음을 '~~는 지원하지 않습니다'의 어조로 솔직하고 단호하게 선을 그어 답해라. API 연동으로 가능할 것처럼 우회 설명하지 말고 담백하게 대답해라."
+// R3(CHATBOT_LEGACY_STYLE_PROMPT=on): 예시 어조만 요체로 바꾼다(답 꼴 규격 S7·S11). 나머지 글자는 같다.
+const FEATURE_LIMIT_REQUIREMENT_R3 = FEATURE_LIMIT_REQUIREMENT.replace("'~~는 지원하지 않습니다'의 어조로", "'~~는 지원하지 않아요'처럼 요체로")
+
+// 분류·인텐트별 요구사항 문장. 스트리밍과 비스트리밍이 같은 문장을 쓴다. env 는 CHATBOT_LEGACY_STYLE_PROMPT 를 읽는다.
+function pickFinalAnswerRequirement(category: string, intent?: string, env: PromptEnv = process.env) {
   if (category === "concern") {
     return "요구사항: 고객의 막연한 고민(concern)에 대해 E.Q.E(공감 -> 유도 질문 1개 -> 격려와 희망) 프레임워크를 적용하여 따뜻하게 응대해줘. 스펙 위주 설명이나 강요하는 느낌을 주지 마."
   }
@@ -1426,7 +1477,7 @@ function pickFinalAnswerRequirement(category: string, intent?: string) {
     return "요구사항: 개인강사/과외 요금제 추천(tutor_pricing_recommend)은 공식 안내 기준으로 1인 강사에게 프로(Pro) 요금제를, 강사가 2명 이상인 학원에 비즈니스 요금제를 추천해라. 실제 금액·할인·결제 방식은 단정하지 말고 2주 무료 체험과 도입 상담으로 안내해라. 질문이 단답형이나 거칠더라도 친절하게 답하고, 학생 수나 수업 방식(대면·온라인)처럼 추천을 좁힐 정보 하나를 마지막에 물어라."
   }
   if (intent === "feature_limit_consulting") {
-    return "요구사항: 클래스인이 제공하지 못하는 기능(학원비 결제·수납·정산 기능, 오프라인 지문인식/출석 카드 장비 등)에 대한 질문이 들어왔을 때, 일체 지원하지 않음을 '~~는 지원하지 않습니다'의 어조로 솔직하고 단호하게 선을 그어 답해라. API 연동으로 가능할 것처럼 우회 설명하지 말고 담백하게 대답해라."
+    return legacyStylePromptEnabled(env) ? FEATURE_LIMIT_REQUIREMENT_R3 : FEATURE_LIMIT_REQUIREMENT
   }
   if (intent === "zoom_vs_classin") {
     return "요구사항: 줌과의 비교(zoom_vs_classin)에 대해 수업 전(화면공유 준비 및 화면설정 불필요), 수업 중(학생이 판서에 참여하는 적극적 상호작용), 수업 후(수업 즉시 생성되는 플레이백 복습 비디오)의 3대 운영 흐름 메리트를 E.Q.E 프레임워크로 감성적이면서도 논리적으로 설명해라."
@@ -1444,22 +1495,26 @@ function pickFinalAnswerRequirement(category: string, intent?: string) {
  * 모델 글 대조(generated-answer.ts checkGeneratedAnswer 의 allowList)에 넘기는 허용 글: 이 요청에서 모델에게 사실로 준 시스템 지시와
  * 분류·인텐트별 요구사항. 모델이 여기 적힌 사실(Classin 기본 지식, [도입 상담 남기기] 버튼 이름 등)을 쓴 문장은 근거 밖으로 보지 않는다.
  */
-export function getFinalAnswerAllowList(category: string, intent?: string): string[] {
-  return [FINAL_SYSTEM_INSTRUCTION, pickFinalAnswerRequirement(category, intent)]
+export function getFinalAnswerAllowList(category: string, intent?: string, env: PromptEnv = process.env): string[] {
+  return [FINAL_SYSTEM_INSTRUCTION, pickFinalAnswerRequirement(category, intent, env)]
 }
 
 /**
  * 최종 답변 프롬프트(사용자 턴). generateGeminiFinalAnswer·streamGeminiFinalAnswer 와 Claude 제공자가 함께 쓴다.
  * 한쪽만 고쳐 경로·제공자마다 답이 갈리는 일이 없도록 여기 한 곳에서만 조립한다.
+ * CHATBOT_LEGACY_STYLE_PROMPT=on 이면 근거·고객사 주의 줄 뒤, 복합 질문 줄 앞에 답 꼴(GUIDE_STYLE_REQUIREMENT)을 넣는다. 꺼져 있으면 R2 와 같은 글.
  */
-export function buildFinalAnswerPrompt({
-  question,
-  category,
-  intent,
-  answerMode,
-  draftAnswer,
-  sources = [],
-}: Pick<FinalGenerateArgs, "question" | "category" | "intent" | "answerMode" | "draftAnswer" | "sources">): string {
+export function buildFinalAnswerPrompt(
+  {
+    question,
+    category,
+    intent,
+    answerMode,
+    draftAnswer,
+    sources = [],
+  }: Pick<FinalGenerateArgs, "question" | "category" | "intent" | "answerMode" | "draftAnswer" | "sources">,
+  env: PromptEnv = process.env
+): string {
   // 근거가 약하면 그 문서 조각을 '검증 정보'로 넘기지 않는다(질문과 상관없는 조각일 가능성이 높다).
   const weakGrounding = hasWeakGrounding(answerMode)
   const context = weakGrounding ? "" : formatInternalContext(sources)
@@ -1469,10 +1524,11 @@ export function buildFinalAnswerPrompt({
     context ? `내부 검증 정보(사용자에게 직접 언급 금지):\n${context}` : "내부 검증 정보: 없음",
     `안전 초안(제약 조건, 필요하면 표현만 다듬기):\n${formatDraftForPrompt(draftAnswer)}`,
     `고객 질문: ${question}`,
-    pickFinalAnswerRequirement(category, intent),
+    pickFinalAnswerRequirement(category, intent, env),
     weakGrounding ? WEAK_GROUNDING_REQUIREMENT : GROUNDED_ANSWER_REQUIREMENT,
     asksAboutThirdPartyAdoption(question) ? THIRD_PARTY_ADOPTION_REQUIREMENT : null,
-    multiQuestionRequirement(question),
+    legacyStylePromptEnabled(env) ? GUIDE_STYLE_REQUIREMENT : null,
+    multiQuestionRequirement(question, env),
   ]
     .filter(Boolean)
     .join("\n\n")

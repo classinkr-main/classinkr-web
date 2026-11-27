@@ -27,6 +27,11 @@ export interface FollowUpInput {
   topicId?: string
   /** false면 영업용 되묻기(규모·교실·도입 시기)를 붙이지 않는다. */
   allowSalesFollowUp?: boolean
+  /**
+   * 여러 물음을 번호로 답한 답(compiled 복합 답)이면 기기 되묻기를 붙이지 않는다(R3 반박 검토: 이미 답한 조각에 대한 기기 되묻기가 답 끝에 붙었다).
+   * compiled 라우터 답에만 넘긴다(legacy 답은 지금 그대로).
+   */
+  compound?: boolean
 }
 
 // 답을 어떻게 이해했는지 밝혀 오해를 막는다. 원 질문에 이 말이 있을 때만.
@@ -209,7 +214,7 @@ function pickQuestion(input: FollowUpInput): string | null {
   // 2) 정보가 부족할 때
   if (input.topicFollowUp) return input.topicFollowUp
   const troubleshooting = input.category === "troubleshooting" || input.handoffIntent === "support"
-  if (troubleshooting && !DEVICE_RE.test(input.question) && DEVICE_SPLIT_ANSWER_RE.test(input.answer)) {
+  if (troubleshooting && !input.compound && !DEVICE_RE.test(input.question) && DEVICE_SPLIT_ANSWER_RE.test(input.answer)) {
     return DEVICE_LINE
   }
 

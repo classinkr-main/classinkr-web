@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto"
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { __setRouterAnswerIndexForTests, resetRouterAnswerIndex } from "@/lib/chatbot/answer-index"
@@ -23,12 +25,16 @@ import type { CompiledAnswerIndex } from "@/lib/chatbot/answer-index/compile"
 import { decideWithAnalysis } from "@/lib/chatbot/answer-index/decide"
 import type { AnswerCard } from "@/lib/chatbot/answer-index/types"
 import { buildClaudeCardPickRequest } from "@/lib/chatbot/claude/card-pick"
+import { CLAUDE_CHATBOT_PROMPT_LINES, CLAUDE_CHATBOT_PROMPT_LINES_R3, getClaudeChatbotSystemPrompt } from "@/lib/chatbot/claude/prompt"
 import {
   __resetModelCircuitForTests,
   buildAnswerCardPickGenerationConfig,
   buildFinalAnswerPrompt,
+  getFinalAnswerAllowList,
+  GUIDE_STYLE_REQUIREMENT,
   isAnswerCardMultiPickRequestBody,
   isAnswerCardPickRequestBody,
+  legacyStylePromptEnabled,
   multiQuestionRequirement,
   parseAnswerCardPicks,
   readAnswerCardPickResult,
@@ -43,6 +49,7 @@ import { CARDS, compileFixture } from "./index-fixture"
  * - 조각별 후보(몫 5·5 / 5·3·2, "← 조각 n")와 입력(답함 표시·주의 줄), 조각별 받아들이기, 결정형이 답한 조각 보존.
  * - 정책 주제 거절은 개념 겹침·허용 표시, 없는 개념은 묻는 대상(상황 절 밖)일 때만.
  * - 설정값: 후보 수·대역·단일 지시문 판. legacy 생성 지시문의 복합 질문 한 줄.
+ * - R3 d: legacy 생성 지시문 답 꼴 스위치(CHATBOT_LEGACY_STYLE_PROMPT)와 기본 바이트 고정.
  */
 
 // 픽스처 색인: 앞 조각(녹화 다시보기)은 결정형이 답하고, 뒤 조각(강퇴)은 문턱 아래다.
@@ -465,19 +472,151 @@ describe("legacy generation: one compound-question line (CHATBOT_LEGACY_MULTI_PR
 
   it("is off by default (legacy prompt unchanged)", () => {
     vi.stubEnv("CHATBOT_LEGACY_MULTI_PROMPT", undefined)
+    vi.stubEnv("CHATBOT_LEGACY_STYLE_PROMPT", undefined)
     expect(multiQuestionRequirement(MIXED)).toBeNull()
+  })
+
+  it("keeps the R2 【주제】 line when only the R2 switch is on (R3 rebut: the existing switch value keeps its behavior)", () => {
+    vi.stubEnv("CHATBOT_LEGACY_MULTI_PROMPT", "on")
+    vi.stubEnv("CHATBOT_LEGACY_STYLE_PROMPT", undefined)
+    vi.stubEnv("CHATBOT_COMPOUND_HEAD", undefined)
+    expect(multiQuestionRequirement(MIXED)).toContain("물음마다 【주제】 머리 줄 한 줄을 쓰고")
+    expect(multiQuestionRequirement(MIXED)).not.toContain("'1. 주제'처럼 번호 머리 줄")
+    // R3 답 꼴 스위치를 켜면 번호 머리가 기본이다.
+    vi.stubEnv("CHATBOT_LEGACY_STYLE_PROMPT", "on")
+    expect(multiQuestionRequirement(MIXED)).toContain("'1. 주제'처럼 번호 머리 줄")
   })
 
   it("adds the line only when the switch is on and the question has two question sentences", () => {
     vi.stubEnv("CHATBOT_LEGACY_MULTI_PROMPT", "on")
+    vi.stubEnv("CHATBOT_LEGACY_STYLE_PROMPT", undefined)
+    vi.stubEnv("CHATBOT_COMPOUND_HEAD", "number")
     expect(multiQuestionRequirement("녹화 영상 다시보기 어디서 봐요")).toBeNull()
     const line = multiQuestionRequirement(MIXED)
     expect(line).toContain("물음이 2개")
-    expect(line).toContain("【주제】")
+    // R3 결정 D2: "1. 주제" 번호 머리 + 바로 아래 결론 줄, 못 답한 물음은 그 번호 자리에, 번호 수 = 물음 수.
+    expect(line).toContain("'1. 주제'처럼 번호 머리 줄")
+    expect(line).toContain("바로 아랫줄에 그 물음의 결론 한 문장")
+    expect(line).toContain("머리 줄만 있는 덩이는 만들지 않는다")
+    expect(line).toContain("그 번호 자리에 '공개 안내에는 없는 내용이라 상담으로 확인해 드릴게요.'")
+    expect(line).toContain("번호는 1부터 2까지 물음 수만큼")
+    expect(line).not.toContain("【주제】")
     const base = { category: "support", intent: undefined, answerMode: "direct_answer" as const, draftAnswer: "초안", sources: [] }
     const single = buildFinalAnswerPrompt({ ...base, question: "녹화 영상 다시보기 어디서 봐요" })
     expect(single).not.toContain("질문 여러 개 주의")
     const multi = buildFinalAnswerPrompt({ ...base, question: MIXED })
     expect(multi.endsWith(line!)).toBe(true)
+    // 이 스위치만 켜면 답 꼴 8줄은 붙지 않는다.
+    expect(multi).not.toContain(GUIDE_STYLE_REQUIREMENT)
+  })
+
+  it("keeps the R2 【주제】 line byte for byte with CHATBOT_COMPOUND_HEAD=bracket", () => {
+    vi.stubEnv("CHATBOT_LEGACY_MULTI_PROMPT", "on")
+    vi.stubEnv("CHATBOT_COMPOUND_HEAD", "bracket")
+    expect(multiQuestionRequirement(MIXED)).toBe(
+      "질문 여러 개 주의: 이 질문에는 물음이 2개 있다. 하나만 답하지 말고 질문 순서대로 모두 답해. 물음마다 【주제】 머리 줄 한 줄을 쓰고 그다음 첫 문장에 결론을 쓴다. 근거에 없는 물음은 빼지 말고 그 물음 자리에 '공개 안내에 없어요'라고 밝힌다. 길이는 물음마다 4줄 이내(전체 10줄 이내)로 하고, 상담 안내는 필요할 때만 맨 끝에 한 줄."
+    )
+  })
+})
+
+/**
+ * R3 묶음 d: legacy 생성 지시문 답 꼴(CHATBOT_LEGACY_STYLE_PROMPT=on). 끄면(기본) 사용자 턴·허용 글·Claude 시스템 프롬프트가 R2 와 글자까지 같다.
+ * 아래 해시는 이 묶음 앞(21f7fff7c)의 코드로 같은 계산을 해서 얻은 값이다. 평가셋 전 문항 사용자 턴 고정은 legacy-final-prompt.test.ts 가 한다
+ * (그 시험은 분류 support 만 본다. 여기서는 분류·인텐트별 요구사항 갈래를 모두 본다).
+ */
+describe("legacy generation style prompt (CHATBOT_LEGACY_STYLE_PROMPT, R3 d)", () => {
+  const COMBOS: [string, string | undefined][] = [
+    ["support", undefined],
+    ["concern", undefined],
+    ["event", undefined],
+    ["onboarding", "onboarding"],
+    ["billing", "tutor_pricing_recommend"],
+    ["general", "feature_limit_consulting"],
+    ["general", "zoom_vs_classin"],
+    ["general", "parent_feedback_consulting"],
+    ["consultation", "sales_consulting"],
+  ]
+  const sha = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 16)
+  const promptsOf = (env?: Record<string, string | undefined>) =>
+    COMBOS.flatMap(([category, intent]) =>
+      ["direct_answer", "fallback"].map((answerMode) =>
+        buildFinalAnswerPrompt({ question: "녹화는 어떻게 켜요? 출석은 어디서 봐요?", category, intent, answerMode, draftAnswer: "초안", sources: [] }, env)
+      )
+    )
+  const allowOf = (env?: Record<string, string | undefined>) => COMBOS.map(([category, intent]) => getFinalAnswerAllowList(category, intent, env).join("\u0001"))
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it("is off by default and keeps every R2 byte (user turn per category·intent, allow list, Claude system prompt)", () => {
+    vi.stubEnv("CHATBOT_LEGACY_MULTI_PROMPT", undefined)
+    vi.stubEnv("CHATBOT_LEGACY_STYLE_PROMPT", undefined)
+    vi.stubEnv("CHATBOT_COMPOUND_HEAD", undefined)
+    expect(legacyStylePromptEnabled()).toBe(false)
+    expect(sha(promptsOf().join("\u0000"))).toBe("9b00cdb956fa4821")
+    expect(sha(allowOf().join("\u0000"))).toBe("d4dc9735a59ba34f")
+    expect(sha(getClaudeChatbotSystemPrompt())).toBe("9e065e5e5ec997f5")
+    // "off"·빈 값도 꺼짐이다.
+    for (const value of ["off", "", "yes"]) expect(legacyStylePromptEnabled({ CHATBOT_LEGACY_STYLE_PROMPT: value })).toBe(false)
+    expect(legacyStylePromptEnabled({ CHATBOT_LEGACY_STYLE_PROMPT: " ON " })).toBe(true)
+  })
+
+  it("adds the eight-line answer shape to the user turn only when the switch is on (one assembly point for Gemini and Claude)", () => {
+    const env = { CHATBOT_LEGACY_STYLE_PROMPT: "on" }
+    const lines = GUIDE_STYLE_REQUIREMENT.split("\n")
+    expect(lines).toHaveLength(9)
+    expect(lines.slice(1).map((line) => line.slice(0, 3))).toEqual(["1. ", "2. ", "3. ", "4. ", "5. ", "6. ", "7. ", "8. "])
+    // 규격 S1~S12 요약: 첫 줄 결론(꼴별)·번호 단계·[ ] 와 →·줄 길이·주의 한 줄·요체·공감은 강한 신호만·조건부 마무리·URL 금지.
+    for (const cue of ["첫 줄은 결론 한 문장", "'네, …'", "'1.'~'5.'", "[A] → [B]", "「 」는 문서 제목에만", "[학사 관리]", "60자", "120자", "'주의:'·'※' 없이", "요체 한 가지", "공감·사과로 시작하지 않는다", "수업 직전", "상담원 연결", "URL"]) {
+      expect(GUIDE_STYLE_REQUIREMENT, cue).toContain(cue)
+    }
+    const single = buildFinalAnswerPrompt({ question: "녹화 영상 다시보기 어디서 봐요", category: "support", answerMode: "direct_answer", draftAnswer: "초안", sources: [] }, env)
+    expect(single.endsWith(GUIDE_STYLE_REQUIREMENT)).toBe(true)
+    expect(single).not.toContain("질문 여러 개 주의")
+    const off = buildFinalAnswerPrompt({ question: "녹화 영상 다시보기 어디서 봐요", category: "support", answerMode: "direct_answer", draftAnswer: "초안", sources: [] }, {})
+    expect(single).toBe(`${off}\n\n${GUIDE_STYLE_REQUIREMENT}`)
+    // 복합 질문: 답 꼴 다음 맨 끝에 번호 머리 복합 줄(스위치 하나로 R3 꼴 전체가 켜진다).
+    const multi = buildFinalAnswerPrompt({ question: MIXED, category: "support", answerMode: "direct_answer", draftAnswer: "초안", sources: [] }, env)
+    const multiLine = multiQuestionRequirement(MIXED, env)
+    expect(multiLine).toContain("'1. 주제'처럼 번호 머리 줄")
+    expect(multi.endsWith(`${GUIDE_STYLE_REQUIREMENT}\n\n${multiLine}`)).toBe(true)
+  })
+
+  it("rewrites only the feature-limit example tone to 요체 and keeps the other requirement lines", () => {
+    const on = { CHATBOT_LEGACY_STYLE_PROMPT: "on" }
+    const r2 = getFinalAnswerAllowList("general", "feature_limit_consulting", {})[1]
+    const r3 = getFinalAnswerAllowList("general", "feature_limit_consulting", on)[1]
+    expect(r2).toContain("'~~는 지원하지 않습니다'의 어조로")
+    expect(r3).toContain("'~~는 지원하지 않아요'처럼 요체로")
+    expect(r3).not.toContain("습니다")
+    expect(r3.replace("'~~는 지원하지 않아요'처럼 요체로", "")).toBe(r2.replace("'~~는 지원하지 않습니다'의 어조로", ""))
+    // 허용 글(모델 글 대조)도 같은 판의 요구사항을 싣는다. 다른 갈래는 그대로다.
+    for (const [category, intent] of COMBOS.filter(([, intent]) => intent !== "feature_limit_consulting")) {
+      expect(getFinalAnswerAllowList(category, intent, on)).toEqual(getFinalAnswerAllowList(category, intent, {}))
+    }
+  })
+
+  it("switches the Claude system prompt's role line to 요체 and leaves every other line as is", () => {
+    const r2 = getClaudeChatbotSystemPrompt({})
+    const r3 = getClaudeChatbotSystemPrompt({ CHATBOT_LEGACY_STYLE_PROMPT: "on" })
+    expect(r2).toContain("「담당자가 확인 후 안내드리겠습니다」")
+    expect(r3).not.toContain("안내드리겠습니다")
+    expect(CLAUDE_CHATBOT_PROMPT_LINES_R3[0]).toContain("모르면 '담당자가 확인해서 알려 드릴게요'라고 답한다. 정중하고 짧은 요체(-해요) 한국어로, 결론부터 답한다.")
+    expect(CLAUDE_CHATBOT_PROMPT_LINES_R3.slice(1)).toEqual(CLAUDE_CHATBOT_PROMPT_LINES.slice(1))
+    expect(r3.split("\n").slice(1)).toEqual(r2.split("\n").slice(1))
+    // 판마다 한 번 만든 글을 다시 준다(같은 env 면 같은 글).
+    expect(getClaudeChatbotSystemPrompt({})).toBe(r2)
+    expect(getClaudeChatbotSystemPrompt({ CHATBOT_LEGACY_STYLE_PROMPT: "on" })).toBe(r3)
+  })
+
+  it("leaves the card-pick instructions as they are: the compound one already asks per fragment and one card for two asks only when it answers both", () => {
+    // 계획서 d-4 문구("조각마다 그 조각을 실제로 답하는 카드 · 같은 카드는 두 물음을 모두 답할 때만")는 R2 B3 복합 지시문 규칙 1·2에 이미 있다.
+    expect(ANSWER_CARD_MULTI_PICK_INSTRUCTION).toContain("1. 조각마다 그 조각의 핵심 물음에 답하는 카드 번호 하나를 고른다.")
+    expect(ANSWER_CARD_MULTI_PICK_INSTRUCTION).toContain("2. 같은 카드는 두 조각을 모두 답할 때만 두 번 쓴다. 한 조각에 맞는 카드를 다른 조각에 억지로 쓰지 않는다.")
+    expect(ANSWER_CARD_PICK_INSTRUCTION_V2).not.toContain("조각")
+    // Claude 고르기 요청은 같은 지시문 글을 그대로 system 블록에 싣는다(card-pick.ts 에 따로 둔 지시문이 없다).
+    const claude = buildClaudeCardPickRequest({ instruction: ANSWER_CARD_MULTI_PICK_INSTRUCTION, input: "x", model: "claude-haiku-5-5", expect: "picks" })
+    expect(claude.system[0].text).toBe(ANSWER_CARD_MULTI_PICK_INSTRUCTION)
   })
 })
