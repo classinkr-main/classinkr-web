@@ -244,7 +244,8 @@ describe("crm-today-contacts 원천 조립", () => {
   it("Home 연락 인덱스가 실패해도 던지지 않는다 — homeContactsOk=false · 경고", async () => {
     mocks.loadHomeContactIndex.mockRejectedValue(new Error("boom"))
     const { getCrmTodayContacts } = await loadRepository()
-    const result = await getCrmTodayContacts({})
+    // 기준 시각을 고정한다 — 실제 시계로 돌리면 픽스처(9월 말)가 조회 창을 벗어나는 날부터 행이 0건이 된다(2026-11-27 에 실패 시작).
+    const result = await getCrmTodayContacts({ now: NOW })
     expect(result.sources.homeContactsOk).toBe(false)
     expect(result.rows.length).toBeGreaterThan(0)
   })
