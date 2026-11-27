@@ -164,6 +164,35 @@ describe("V-7 평가 질문 겹침", () => {
     expect(errorsOf(result.findings, "V-7")).toHaveLength(2)
   })
 
+  it("카드 anchors 가 개발용 질문과 겹치면 경고한다(실패는 아님)", async () => {
+    const devSet = { name: "dev-fixture", questions: ["학생 화면 공유는 어디서 끄나요?"], sha: "0".repeat(16) }
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/course.json": [memberCard({ anchors: ["멤버 삭제", "학생 화면 공유는 어디서 끄나요"] })],
+      "variants/course.json": memberVariants(),
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [devSet] })
+    expect(errorsOf(result.findings, "V-7")).toHaveLength(0)
+    const warnings = result.findings.filter((finding) => finding.rule === "V-7" && finding.level === "warning")
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0].message).toContain("anchor")
+    expect(warnings[0].message).not.toContain("어디서 끄나요?")
+  })
+
+  it("낱말만 떼거나 바꾼 근사 사본 변형·반례는 경고한다", async () => {
+    const devSet = { name: "dev-fixture", questions: ["클래스인 누구를 위한 서비스예요"], sha: "0".repeat(16) }
+    const dir = fixture({
+      ...baseFiles(units, siteFacts),
+      "cards/course.json": [memberCard({ negatives: [{ q: "누구를 위한 서비스예요 클래스", route: "none" }] })],
+      "variants/course.json": memberVariants(["누구를 위한 서비스예요", "우리 학원 원장님이 쓰는 서비스인가요"]),
+    })
+    const result = await runVerify({ dir, current: currentSources(units, siteFacts), devSets: [devSet] })
+    expect(errorsOf(result.findings, "V-7")).toHaveLength(0)
+    const near = result.findings.filter((finding) => finding.rule === "V-7" && finding.level === "warning" && finding.message.includes("근사 사본"))
+    expect(near.map((finding) => finding.file).sort()).toEqual(["cards/course.json", "variants/course.json"])
+    expect(near.every((finding) => !finding.message.includes("클래스인 누구를"))).toBe(true)
+  })
+
   it("확정용 묶음은 겹친 개수만 찍고 글은 찍지 않는다", async () => {
     const secret = "이 문장은 확정용 묶음 시험에만 쓰는 문장입니다"
     const dir = fixture({

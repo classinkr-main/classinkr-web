@@ -26,5 +26,16 @@ describe("겹침 검사", () => {
 
   it("관계없는 글은 걸리지 않는다", () => {
     expect(index.find("녹화본은 어디서 내려받나요")).toBeNull()
+    expect(index.findNear("녹화본은 어디서 내려받나요")).toBeNull()
+  })
+
+  it("근사 사본: 자료 글 3-gram 80% 가 한 질문 안에 있으면(낱말을 떼거나 조금 바꿈) 잡는다", () => {
+    // 낱말 하나를 뗀 글(자료 3-gram 이 모두 질문 안)
+    expect(index.findNear("화면 공유는 어디서 끄나요")).toMatchObject({ index: 1, containment: 1 })
+    // 짧은 질문을 통째로 담고 낱말을 붙인 글은 보지 않는다(자연스러운 질문에 흔함)
+    expect(index.findNear("우리 반 학생 화면 공유는 어디서 끄나요 선생님")).toBeNull()
+    // 짧은 글(정규화 6자 미만)은 보지 않는다
+    expect(index.findNear("줌 연동")).toBeNull()
+    expect(index.findNear("화면 공유 끄는 곳이 어디예요")).toBeNull()
   })
 })

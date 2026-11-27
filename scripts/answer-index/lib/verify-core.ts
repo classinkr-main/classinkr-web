@@ -5,6 +5,7 @@
  * - 자료가 아직 없는 영역(카드·nav 표시가 하나도 없는 영역)은 덮기 검사(V-9)·옛 id 대응 검사(V-10)를 알림으로만 낸다.
  *   --strict 면 모든 영역에 적용한다(전체 자료 단계의 완료 기준).
  * - 평가 질문 겹침(V-7·V-8)은 겹친 자료 쪽 글만 찍고 평가 질문 글은 찍지 않는다. 확정용 묶음(--with-holdout)은 개수만 찍는다.
+ *   카드 anchors 겹침과 변형·반례의 근사 사본(3-gram 80% 가 한 질문 안)은 경고다(기존 자료에 걸리는 것이 있어 실패로 두지 않는다).
  * - V-14(카드 꼴·말투)·V-15(변형 한 줄에 물음 하나)는 R3 축약 카드 조각(cards/<영역>.team<4자리>.json, 합친 뒤에는
  *   provenance.unit 이 team<4자리>)만 오류로 보고, 기존 카드는 카드마다 경고 한 줄로 묶는다(자료 묶음이 --only 로 자기 파일을 본다).
  */
@@ -44,7 +45,7 @@ export const VERIFY_RULES = [
   { rule: "V-4", title: "변형: 두 카드에 같은 변형 없음, 길이 2~60자, 카드 등급별 최소 개수" },
   { rule: "V-5", title: "공백 카드·없는 개념이 문서와 겹치는지(경고)" },
   { rule: "V-6", title: "사전: 모호 규칙 없는 형태 충돌, 4어절 이상 형태, 짧은 형태 경계 표시" },
-  { rule: "V-7", title: "변형·우주·사전·반례·보정 묶음이 평가·개발용 질문과 겹치지 않음(확정용은 개수만)" },
+  { rule: "V-7", title: "변형·우주·사전·반례·보정 묶음이 평가·개발용 질문과 겹치지 않음(확정용은 개수만). anchors 겹침·변형·반례의 근사 사본(3-gram 80% 가 한 질문 안)은 경고" },
   { rule: "V-8", title: "보정 묶음 문항이 변형·우주와 겹치지 않음" },
   { rule: "V-9", title: "공개 단위가 카드 하나 이상에 덮이거나 nav 표시" },
   { rule: "V-10", title: "옛 정해 둔 답 id 가 legacy-alias.json 에 있음(카드 또는 null)" },
@@ -660,12 +661,35 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
   const calibrationItems = data.calibrationSet && isObject(data.calibrationSet.value) && Array.isArray(data.calibrationSet.value.items) ? data.calibrationSet.value.items : []
   for (const item of calibrationItems) if (isObject(item) && typeof item.q === "string") checked.push({ file: data.calibrationSet!.file, label: `보정 ${item.id}`, text: item.q, substring: false })
 
+  // anchors 는 중심 벡터와 덮임에 들어가므로 같은 기준(8자 연속 일치 포함)으로 본다. 기존 anchors 에 개발 질문과 같은 짧은 질문 꼴이
+  // 남아 있어 경고로 둔다(R4 검토 OV-2). 변형·반례는 근사 사본(3-gram 포함률 0.8, R4 계획 §4-3)도 경고로 본다.
+  // anchors 는 짧은 구라 질문 안에 그대로 들어 있는 것이 자연스러워 근사 사본으로 보지 않는다.
+  const anchorItems: { file: string; label: string; text: string }[] = []
+  for (const card of cards) {
+    const anchors = (card.value as { anchors?: unknown }).anchors
+    if (isStringArray(anchors)) for (const anchor of anchors) anchorItems.push({ file: card.file, label: `${card.value.id} anchor`, text: anchor })
+  }
+  const nearCandidate = (item: { label: string }) => item.label.endsWith(" 변형") || item.label.endsWith(" 반례")
+  const nearChecked = checked.filter(nearCandidate)
+
   if (devTexts.length > 0) {
     const devIndex = new OverlapIndex(devTexts, { substrings: true })
+    const near = (item: { file: string; label: string; text: string }) => {
+      const found = devIndex.findNear(item.text)
+      if (found) add("V-7", "warning", item.file, `${item.label} "${short(item.text)}"이(가) 개발용 질문의 근사 사본일 수 있음(3-gram ${Math.round(found.containment * 100)}%가 한 질문 안에 있음, 묶음 ${devOwner[found.index]}) — 낱말만 바꾼 글이면 지운다`)
+    }
     for (const item of checked) {
       const hit = devIndex.find(item.text, { substring: item.substring })
-      if (!hit) continue
+      if (!hit) {
+        if (nearCandidate(item)) near(item)
+        continue
+      }
       add("V-7", "error", item.file, `${item.label} "${short(item.text)}"이(가) 개발용 질문과 겹침(${REASON_LABEL[hit.reason]}, 묶음 ${devOwner[hit.index]}) — 지우거나 다시 쓴다`)
+    }
+    for (const item of anchorItems) {
+      const hit = devIndex.find(item.text, { substring: true })
+      if (!hit) continue
+      add("V-7", "warning", item.file, `${item.label} "${short(item.text)}"이(가) 개발용 질문과 겹침(${REASON_LABEL[hit.reason]}, 묶음 ${devOwner[hit.index]}) — anchors 는 중심 벡터에 들어가니 개발 질문 구절을 옮기지 않는다`)
     }
   }
   const holdoutSets = options.holdoutSets ?? []
@@ -678,6 +702,11 @@ export async function runVerify(options: VerifyOptions = {}): Promise<VerifyResu
     const total = Array.from(byFile.values()).reduce((sum, count) => sum + count, 0)
     for (const [file, count] of byFile) add("V-7", "error", file, `확정용 묶음과 겹치는 항목 ${count}개(내용은 찍지 않음)`)
     add("V-7", total > 0 ? "error" : "info", null, `확정용 묶음 ${holdoutSets.length}개(${holdoutSets.reduce((sum, set) => sum + set.questions.length, 0)}문항)와 겹침 ${total}건`)
+    let anchorTotal = 0
+    let nearTotal = 0
+    for (const item of anchorItems) if (holdoutIndex.find(item.text, { substring: true })) anchorTotal += 1
+    for (const item of nearChecked) if (holdoutIndex.findNear(item.text)) nearTotal += 1
+    if (anchorTotal + nearTotal > 0) add("V-7", "warning", null, `확정용 묶음과 겹치는 anchors ${anchorTotal}개·근사 사본 의심 ${nearTotal}개(내용은 찍지 않음)`)
   }
   if (calibrationItems.length > 0) {
     const calibrationIndex = new OverlapIndex(calibrationItems.map((item) => (isObject(item) && typeof item.q === "string" ? item.q : "")))
