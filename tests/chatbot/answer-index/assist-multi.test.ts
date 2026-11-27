@@ -7,7 +7,9 @@ import {
   ANSWER_CARD_MULTI_PICK_INSTRUCTION,
   ANSWER_CARD_PICK_INSTRUCTION,
   ANSWER_CARD_PICK_INSTRUCTION_V2,
+  assistAbstainBandLo,
   assistBand,
+  assistSkipReason,
   assistCandidateCount,
   assistCandidates,
   assistPartCandidates,
@@ -170,6 +172,20 @@ describe("settings", () => {
     expect(assistBand(index, { CHATBOT_ASSIST_BAND_LO: "0.1", CHATBOT_ASSIST_BAND_HI: "0.7" })).toEqual([0.1, 0.7])
     expect(assistBand(index, { CHATBOT_ASSIST_BAND_LO: "0.8" })).toEqual([0.45, 0.62])
     expect(assistBand(index, { CHATBOT_ASSIST_BAND_LO: "x" })).toEqual([0.45, 0.62])
+  })
+
+  it("abstain-only band floor: off by default, lowers only abstain decisions", () => {
+    const index = { ...compileFixture(), assist: { enabled: true, band: [0.45, 0.62] as [number, number] } }
+    const abstain = { kind: "abstain", conf: 0.25, absentHit: null } as never
+    const answer = { kind: "answer", conf: 0.25, absentHit: null } as never
+    expect(assistAbstainBandLo(index, {})).toBeNull()
+    expect(assistAbstainBandLo(index, { CHATBOT_ASSIST_ABSTAIN_BAND_LO: "x" })).toBeNull()
+    expect(assistAbstainBandLo(index, { CHATBOT_ASSIST_ABSTAIN_BAND_LO: "0.8" })).toBeNull()
+    expect(assistAbstainBandLo(index, { CHATBOT_ASSIST_ABSTAIN_BAND_LO: "0.2" })).toBe(0.2)
+    expect(assistSkipReason("band", index, abstain, undefined, {})).toBe("out_of_band")
+    expect(assistSkipReason("band", index, abstain, undefined, { CHATBOT_ASSIST_ABSTAIN_BAND_LO: "0.2" })).toBeNull()
+    expect(assistSkipReason("band", index, abstain, undefined, { CHATBOT_ASSIST_ABSTAIN_BAND_LO: "0.3" })).toBe("out_of_band")
+    expect(assistSkipReason("band", index, answer, undefined, { CHATBOT_ASSIST_ABSTAIN_BAND_LO: "0.2" })).toBe("out_of_band")
   })
 
   it("splits the candidate quota 5+5 / 5+3+2 (and keeps proportions for 15·20)", () => {
