@@ -9062,7 +9062,8 @@
         "field:school-after-school-on-academy-account"
       ]
     },
-    "policyGoverned": true
+    "policyGoverned": true,
+    "toneLocked": true
   },
   {
     "id": "doc:/docs/start/pc-install#summary/internet-speed-guide",
