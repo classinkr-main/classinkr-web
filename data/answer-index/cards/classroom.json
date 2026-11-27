@@ -4396,7 +4396,13 @@
       "교재 뷰어",
       "메모",
       "공유 화면에 필기",
-      "실습 화면"
+      "실습 화면",
+      "공유 화면 위에 쓰기",
+      "화면 위 판서",
+      "화면 공유 필기",
+      "공유 화면에 그림",
+      "화이트보드처럼 쓰기",
+      "화면 쉐어"
     ],
     "covers": "화면 공유·미러링·VNC가 교재 뷰어·외부 프로그램·실습 화면을 보여 줄 때 쓰이고, 공유 중에도 [메모]로 그 위에 판서할 수 있다는 점",
     "notCovers": [
@@ -18655,7 +18661,10 @@
     "notCovers": [
       "과제 제출 → none",
       "화면 캡처 → doc:/docs/student/chat#1/chat-screenshot",
-      "판서를 드라이브에 저장 → doc:/docs/software/classroom-tools#3/edb-open-save"
+      "판서를 드라이브에 저장 → doc:/docs/software/classroom-tools#3/edb-open-save",
+      "채팅 끄기·채팅 금지 → doc:/docs/student/chat#4/chat-banned",
+      "공유 화면·칠판에 쓰기 → doc:/docs/software/classroom-tools#2/screen-share-memo",
+      "화면 공유 → doc:/docs/software/classroom-tools#2/screen-share-memo"
     ],
     "negatives": [
       {
@@ -19553,7 +19562,11 @@
       "선생님 설정",
       "글이 안 써짐",
       "채팅 막아 둠",
-      "학원에 문의"
+      "학원에 문의",
+      "채팅 끄기",
+      "채팅 꺼짐",
+      "채팅 비활성화",
+      "채팅 못 치게 함"
     ],
     "covers": "학생 입장에서 코스 채팅에 글이 안 써질 때 선생님이 코스 관리의 '전체 학생 채팅 금지'를 켜 두었을 수 있으니 필요하면 학원에 물어보라는 안내",
     "notCovers": [
