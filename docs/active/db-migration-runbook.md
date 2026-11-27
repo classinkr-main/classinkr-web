@@ -347,6 +347,17 @@ npm run check:db --  --strict
 - 롤백 파일은 `supabase/rollbacks/20261127_*.rollback.sql` 이다.
 - 이 변경으로 닫히지 않는 것: `admin_profiles` 의 "Admins can update profiles" UPDATE 정책(점검 문서 §6-4 N-1) — 별도 결정.
 
+### 2026-11-27 `admin_profiles` 관리자 수정 정책 삭제 — 서울 프로젝트 미적용
+
+[어드민·Compass 점검(2026-11-25)](admin-compass-audit-2026-11-25.md) §6-4 N-1(2026-11-27 승인). 코드와 순서가 무관하다 — 프로필 수정은 서버의 service role API 를 거친다.
+
+| 파일 | 하는 일 | 미적용 시 | 확인 |
+| --- | --- | --- | --- |
+| `20261127_admin_profiles_drop_admin_update_policy.sql` | UPDATE 허용 정책 "Admins can update profiles" 를 지운다. 최고 관리자 전용 정책은 남긴다. 멱등 | 일반 관리자가 브라우저 토큰으로 자기 역할을 SUPER_ADMIN 으로 바꿀 수 있다 | `select policyname from pg_policies where tablename = 'admin_profiles' and cmd = 'UPDATE'` 가 "Super admin updates profiles" 한 행 |
+
+- 2026-11-27 에 적용을 시도했으나 DB 도구의 사용자 확인이 오지 않아 적용되지 않았다. 확인을 받아 다시 적용한다.
+- 롤백 파일은 `supabase/rollbacks/20261127_admin_profiles_drop_admin_update_policy.rollback.sql` 이다.
+
 ## 적용 보류 중인 마이그레이션
 
 `check:db`에 걸리지 않는(프로브가 없는) 파일이라도, 아래 파일은 **파일명 순서대로 일괄 적용하지 않는다.**

@@ -16,13 +16,13 @@ import { previewLeadMorningBrief, sendLeadMorningBrief } from "@/lib/server/lead
 export const maxDuration = 60
 
 /**
- * 시간 슬롯 크론 — vercel.json 이 UTC 시간대마다 이 경로를 하루 한 번씩 깨운다
- * (`/api/cron/dispatch/02` = `0 2 * * *`). 어떤 잡을 실제로 돌릴지는 여기서
+ * 시간 슬롯 크론의 본문 — 슬롯(UTC 시) 하나에서 돌 잡을 정해 실행한다. 어떤 잡을 실제로 돌릴지는 여기서
  * site_settings 의 스케줄을 읽어 정한다. 그래서 발송 시각을 바꿀 때 배포가 필요없다.
  *
- * 이 구조는 Vercel Hobby(크론 경로당 하루 1회, 트리거 ±59분) 시절 설계라 슬롯이 "시" 단위다.
- * 2026-09-14 Pro 전환 뒤에는 분 단위 정시 실행이 되므로 슬롯 통합을 재검토할 대상이다
- * (docs/superpowers/specs/2026-09-14-vercel-pro-cron-freshness-design.md).
+ * 크론이 깨우는 것은 이 경로가 아니라 `/api/cron/dispatch`(매시 정각 한 줄, 2026-11-27)다 — 그 라우트가 슬롯을
+ * 시계에서 구해 이 GET 을 부른다. 예전에는 vercel.json 에 `/api/cron/dispatch/00`~`/23` 24줄이 있었다
+ * (Vercel Hobby 의 경로당 하루 1회 시절 설계). 이 경로는 수동 재시도·미리보기용으로 남는다
+ * (`GET /api/cron/dispatch/02?dryRun=true`). 슬롯 단위는 여전히 "시"다.
  *
  * 인증은 `Authorization: Bearer ${CRON_SECRET}` 하나뿐이다 — Vercel 이 크론에
  * 붙이는 게 그 헤더이지 x-vercel-cron 이 아니다(AGENTS.md 배포/Cron 안전 규칙).

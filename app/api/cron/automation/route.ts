@@ -8,9 +8,10 @@
  *
  * 실행 흐름:
  *   1. trigger_type = 'scheduled' 인 active 규칙 전체 조회
- *   2. 각 규칙의 마지막 실행 로그를 확인하여 실행 여부 결정
- *      - 일간 cron("0 9 * * *"): 마지막 실행이 23시간 이전이면 실행
- *      - 기타 cron 또는 로그 없음: 무조건 실행
+ *   2. 규칙마다 실행 여부 결정
+ *      - 규칙의 cron 식이 가리키는 날이 오늘(UTC)이 아니면 건너뜀(매주·매월 규칙)
+ *      - 마지막 실행이 23시간 안이면 건너뜀
+ *      - 읽지 못하는 식은 실행하지 않고 errors 에 싣는다
  *   3. executeRule(rule.id) 호출 (규칙 단위 오류 격리)
  *   4. { ran, skipped, errors } 반환
  */
@@ -27,6 +28,7 @@ import {
   getDueDelayItems,
   updateDelayItemStatus,
 } from "@/lib/repositories/automation-delay"
+import { matchScheduledDay } from "@/lib/automation-schedule"
 import type { AutomationRule } from "@/lib/automation-types"
 
 export const maxDuration = 300
@@ -36,35 +38,34 @@ const DELAY_QUEUE_BUDGET_MS = 120_000
 /** 한 번에 동시에 보내는 지연 발송 수. */
 const DELAY_QUEUE_CONCURRENCY = 5
 
-const DAILY_CRON = "0 9 * * *"
 const TWENTY_THREE_HOURS_MS = 23 * 60 * 60 * 1000
 
 /**
  * 규칙이 지금 실행되어야 하는지 판단.
- * 일간 cron 이면 마지막 실행 후 23시간 경과 여부 확인.
- * 그 외 cron 이거나 로그가 전혀 없으면 실행.
+ *  1) 규칙의 cron 식이 가리키는 날이 오늘(UTC)인가 — "매주 월요일"·"매월 1일" 규칙은 그날에만 돈다.
+ *  2) 마지막 실행 뒤 23시간이 지났는가 — 같은 날 크론이 두 번 깨도 한 번만 보낸다.
+ * 읽지 못하는 식은 보내지 않고 오류로 알린다(예전에는 "매일 09시"가 아닌 식은 무조건 실행해 매일 발송됐다).
  */
-async function isDue(rule: AutomationRule): Promise<boolean> {
+async function isDue(rule: AutomationRule, now: Date): Promise<boolean> {
   const triggerConfig = rule.triggerConfig
 
   // scheduled 타입이 아닌 경우 방어적 skip
   if (triggerConfig.type !== "scheduled") return false
 
-  const cron = triggerConfig.cron
+  const dayMatch = matchScheduledDay(triggerConfig.cron, now)
+  if (dayMatch === "unsupported") {
+    throw new Error(`지원하지 않는 예약 식이라 실행하지 않았습니다: "${triggerConfig.cron}"`)
+  }
+  if (dayMatch === "not_due") return false
 
-  // 일간 cron 이 아닌 경우 — 단순히 실행 (복잡한 cron 파싱 없이)
-  if (cron !== DAILY_CRON) return true
-
-  // 일간 cron: 마지막 성공 로그 기준 23시간 경과 확인
   try {
-    const logs = await getAllLogs(rule.id)
-    if (logs.length === 0) return true
+    // 실패한 실행은 "이미 보냈다"가 아니다 — 실패 기록이 그날 몫(매주·매월 규칙이면 한 주·한 달)을 막지 않게 뺀다.
+    // 실행 중(pending)·성공(sent)만 본다. getAllLogs 는 triggered_at DESC 정렬이다.
+    const lastLog = (await getAllLogs(rule.id)).find((log) => log.status !== "failed")
+    if (!lastLog) return true
 
-    // 가장 최근 로그 (getAllLogs는 triggered_at DESC 정렬)
-    const lastLog = logs[0]
     const lastRanAt = new Date(lastLog.triggeredAt).getTime()
-    const elapsed = Date.now() - lastRanAt
-
+    const elapsed = now.getTime() - lastRanAt
     return elapsed > TWENTY_THREE_HOURS_MS
   } catch {
     // 로그 조회 실패 시 안전하게 실행
@@ -103,6 +104,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   // ── 규칙별 실행 ───────────────────────────────────────────
+  const runStartedAt = new Date()
   let ran = 0
   let skipped = 0
   const errors: string[] = []
@@ -110,7 +112,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   await Promise.allSettled(
     rules.map(async (rule) => {
       try {
-        const due = await isDue(rule)
+        const due = await isDue(rule, runStartedAt)
         if (!due) {
           skipped++
           return
@@ -125,6 +127,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         errors.push(`[${rule.id}] ${rule.name}: ${message}`)
+        // 응답 본문만으로는 아무도 보지 못한다 — 런타임 로그에 규칙 id 와 함께 남긴다.
+        console.error(`[cron/automation] 규칙 실행 실패 — id=${rule.id}:`, message)
       }
     })
   )

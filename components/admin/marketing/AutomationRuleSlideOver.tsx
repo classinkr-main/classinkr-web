@@ -272,6 +272,12 @@ export default function AutomationRuleSlideOver({ open, templates, initial, onSa
                         />
                       )}
                     </label>
+                    {useCustomCron ? (
+                      <p className="px-1 text-[11px] leading-relaxed text-[#1a1a1a]/55">
+                        다섯 칸(분 시 일 월 요일)으로 적습니다. 하루 한 번 실행되며 일·월·요일 칸으로 도는 날을 정합니다
+                        (*, 숫자, 1,15, 1-5). 읽을 수 없는 식은 저장되지 않습니다.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               )}

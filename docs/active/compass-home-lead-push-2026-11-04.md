@@ -76,7 +76,7 @@
 
 설계자 "실시간 연동 + 최소 하루 3번 싱크". 실시간 전달은 제출 순간 한 번뿐이라 Compass 가 잠깐 내려가면 그 리드가 빠졌다. 그래서 매시 다시 맞춘다.
 
-- 실행: `app/api/cron/dispatch/[slot]` 매 슬롯 맨 앞(하루 24회 — 크론 자리가 40개로 차 있어 새 크론 없이 디스패처에 얹었다). 결과는 응답 `compassLeadReconcile` 칸(`ran` 과 따로), `failed` 면 응답 500.
+- 실행: `app/api/cron/dispatch/[slot]` 매 슬롯 맨 앞(하루 24회 — 당시 크론 자리가 40개로 차 있어 새 크론 없이 디스패처에 얹었다. 2026-11-27 디스패처를 한 줄로 합쳐 지금은 17개다). 결과는 응답 `compassLeadReconcile` 칸(`ran` 과 따로), `failed` 면 응답 500.
 - 본체: `lib/server/compass-lead-reconcile.ts` `reconcileCompassLeadPush`.
   - 대상 = 최근 72시간에 저장된 홈페이지 폼 리드(`isCompassPushSource`) 중 Compass 링크(`compass_lead_refs_v` `home_lead`)가 없는 것. 방금(10분 이내) 들어온 리드는 실시간 전달 몫이라 뺀다.
   - 본문은 저장된 행으로 다시 짓고(`compassPayloadFromLeadRow` — 행사 slug 는 notes `[event:…]` 토큰), `event_id` 는 실시간과 같은 `lead:<id>` — 겹쳐 가도 Compass 가 한 번만 받는다.
