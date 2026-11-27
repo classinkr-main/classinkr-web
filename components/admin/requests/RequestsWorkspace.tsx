@@ -16,7 +16,6 @@ import { RequestForm, type RequestContext } from "./RequestForm"
 const API = ADMIN_REQUESTS_API
 const PANEL = "rounded-xl border border-line-hair bg-surface-sheet p-4 sm:p-6"
 const FIELD = "min-h-11 w-full rounded-lg border border-line-control bg-surface-sheet px-3 py-2 font-normal"
-const DATE = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Seoul" })
 
 type View = "new" | "mine" | "manage"
 
@@ -37,70 +36,67 @@ function RequestList({
   onRefresh: () => void
 }) {
   const entries = [
-    ...data.requests.map((request) => ({ key: request.id, createdAt: request.created_at, request })),
-    ...(data.bugs ?? []).map((bug) => ({ key: "bug-" + bug.id, createdAt: bug.createdAt, bug })),
+    ...data.requests.map((request) => ({
+      key: request.id, createdAt: request.created_at, title: request.title, kind: REQUEST_KINDS[request.kind],
+      status: request.requester_review === "reopened" ? "재확인 요청" : REQUEST_STATUSES[request.status],
+      unacknowledged: !request.acknowledged_at, request, bug: null,
+    })),
+    ...(data.bugs ?? []).map((bug) => ({
+      key: "bug-" + bug.id, createdAt: bug.createdAt, title: bug.title, kind: "기존 버그",
+      status: bug.status === "resolved" ? "해결" : REQUEST_STATUSES[bug.status],
+      unacknowledged: false, request: null, bug,
+    })),
   ].sort((first, second) => second.createdAt.localeCompare(first.createdAt))
 
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-2">
       {showLegacyFallback && data.bugs === null && (
         <p className="text-sm text-fg-muted">기존 버그 리포트는 <Link href="/admin/dev?tab=bugs" className="text-fg-accent underline">개발 도구</Link>에서도 확인할 수 있습니다.</p>
       )}
-      {entries.length === 0 && <p className={PANEL + " text-sm text-fg-muted"}>이 조건에 맞는 요청이 없습니다.</p>}
-      {entries.map((entry) => {
-        if ("request" in entry) {
-          const request = entry.request
-          const expanded = openId === request.id
-          const needsReview = request.status === "resolved" || request.requester_review === "reopened"
-          return (
-            <article key={entry.key} className="rounded-xl border border-line-hair bg-surface-sheet px-4 sm:px-6">
-              <button
-                type="button"
-                aria-expanded={expanded}
-                aria-controls={expanded ? `request-${request.id}` : undefined}
-                onClick={() => onOpen(expanded ? null : request.id)}
-                className="group flex min-h-11 w-full items-start gap-3 break-words py-3.5 text-left"
-              >
-                <span className="grid min-w-0 flex-1 gap-1.5">
-                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="min-w-0 font-semibold text-fg-ink group-hover:underline [overflow-wrap:anywhere]">{request.title}</span>
-                    <span className={needsReview ? "text-xs font-semibold text-fg-accent" : "text-xs text-fg-muted"}>
-                      {request.requester_review === "reopened" ? "재확인 요청" : REQUEST_STATUSES[request.status]}
-                    </span>
-                  </span>
-                  <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-fg-muted">
-                    <span>{REQUEST_KINDS[request.kind]} · {request.reporter_name} · {DATE.format(new Date(entry.createdAt))}</span>
-                    {!request.acknowledged_at && <span className="font-semibold text-fg-ink">미확인</span>}
-                  </span>
-                  {(request.screen || request.test_version) && (
-                    <span className="flex flex-wrap gap-x-2 gap-y-1 break-all text-xs text-fg-muted">
-                      {request.screen && <span>{request.screen}</span>}
-                      {request.test_version && <span>{request.test_version}</span>}
-                    </span>
-                  )}
-                </span>
-                {expanded ? <ChevronDown className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden="true" /> : <ChevronRight className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden="true" />}
-              </button>
-              {expanded && (
-                <RequestThread key={request.id} id={request.id} manage={manage} generation={generation} onSaved={onSaved} onRefresh={onRefresh} />
-              )}
-            </article>
-          )
-        }
+      {entries.length === 0 ? (
+        <p className={PANEL + " text-sm text-fg-muted"}>이 조건에 맞는 요청이 없습니다.</p>
+      ) : (
+        <ul aria-label="요청 목록" className="overflow-hidden divide-y divide-line-hair rounded-xl border border-line-hair bg-surface-sheet">
+          {entries.map((entry) => {
+            const expanded = openId === entry.key
+            const { request, bug, title, kind, status, unacknowledged } = entry
+            const detailId = `request-${entry.key}`
+            const Chevron = expanded ? ChevronDown : ChevronRight
 
-        return (
-          <details key={entry.key} className={PANEL}>
-            <summary className="cursor-pointer break-words font-semibold">
-              {entry.bug.title}
-              <span className="block pt-1 text-sm font-normal text-fg-muted">
-                기존 버그 · {entry.bug.status === "resolved" ? "해결" : REQUEST_STATUSES[entry.bug.status]} · {entry.bug.severity} · {entry.bug.assignee || "담당 미지정"}
-              </span>
-            </summary>
-            <p className="whitespace-pre-wrap break-words py-3 text-sm">{entry.bug.description}</p>
-            <Link href="/admin/dev?tab=bugs" className="text-sm font-semibold text-fg-accent underline">버그 리포트에서 관리</Link>
-          </details>
-        )
-      })}
+            return (
+              <li key={entry.key}>
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  aria-controls={expanded ? detailId : undefined}
+                  onClick={() => onOpen(expanded ? null : entry.key)}
+                  className="flex min-h-11 w-full items-center gap-2 px-3 text-left hover:bg-surface-sunken focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-fg-accent sm:gap-3 sm:px-4"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-fg-ink" title={title}>{title}</span>
+                  {unacknowledged && <span className="hidden shrink-0 text-xs font-semibold text-fg-ink sm:inline">미확인</span>}
+                  <span className="hidden shrink-0 text-xs text-fg-muted sm:inline">{kind}</span>
+                  <span className="shrink-0 text-xs text-fg-muted">{status}</span>
+                  <Chevron className="size-4 shrink-0 text-fg-muted" aria-hidden="true" />
+                </button>
+                {expanded && (
+                  request ? (
+                    <div className="px-3 pb-4 sm:px-4">
+                      <RequestThread key={request.id} id={request.id} manage={manage} generation={generation} onSaved={onSaved} onRefresh={onRefresh} />
+                    </div>
+                  ) : bug && (
+                    <div id={detailId} className="grid gap-2 border-t border-line-hair px-3 py-3 text-sm sm:px-4">
+                      <h2 className="break-words font-semibold text-fg-ink">{bug.title}</h2>
+                      <p className="text-xs text-fg-muted">기존 버그 · {bug.severity} · {bug.assignee || "담당 미지정"}</p>
+                      <p className="whitespace-pre-wrap break-words">{bug.description}</p>
+                      <Link href="/admin/dev?tab=bugs" className="w-fit font-semibold text-fg-accent underline">버그 리포트에서 관리</Link>
+                    </div>
+                  )
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }
@@ -203,7 +199,7 @@ export function RequestsWorkspace({ testSite, initialCanManage, initialRequest, 
   }
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-5 px-4 py-6 sm:px-6">
+    <div className="mx-auto grid max-w-5xl gap-4 px-4 py-5 sm:px-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-bold text-fg-ink">요청</h1>
         <a href={testSite} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-lg border border-line-control px-3 text-sm font-semibold text-fg-accent">

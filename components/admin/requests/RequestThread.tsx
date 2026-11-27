@@ -8,7 +8,7 @@ import { adminFetchJson } from "@/lib/admin-client"
 import { copyText } from "@/lib/admin-ai/copy"
 import { buildRequestAiBrief } from "@/lib/admin/request-ai-brief"
 import {
-  ADMIN_REQUESTS_API, ADMIN_REQUESTS_HREF, REQUEST_STATUSES, type AdminRequest, type RequestReview, type RequestStatus,
+  ADMIN_REQUESTS_API, ADMIN_REQUESTS_HREF, REQUEST_KINDS, REQUEST_STATUSES, type AdminRequest, type RequestReview, type RequestStatus,
 } from "@/lib/admin/requests"
 import { RequestWriteRejection, sendRequestWrite, verifyRequestData } from "./request-write"
 
@@ -102,12 +102,12 @@ function ThreadContent({
 
   return (
     <div className="grid gap-4 pb-1 pt-4 text-sm">
-      {standalone && (
-        <div className="grid gap-1">
-          <h2 className="break-words text-xl font-semibold text-fg-ink">{request.title}</h2>
-          <p className="text-fg-muted">{REQUEST_STATUSES[request.status]} · {formatDate(request.created_at)}</p>
-        </div>
-      )}
+      <div className="grid gap-1">
+        <h2 className={`break-words font-semibold text-fg-ink ${standalone ? "text-xl" : "text-base"}`}>{request.title}</h2>
+        <p className="text-xs text-fg-muted">
+          {REQUEST_KINDS[request.kind]} · {REQUEST_STATUSES[request.status]} · {request.reporter_name} · {formatDate(request.created_at)}
+        </p>
+      </div>
       <p className="whitespace-pre-wrap break-words">{request.description}</p>
       {(request.screen || request.test_version || request.error_code) && (
         <dl className="flex flex-wrap gap-x-5 gap-y-1 break-all text-fg-muted">
