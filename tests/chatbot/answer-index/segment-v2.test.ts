@@ -11,6 +11,7 @@ import {
   isAskingSegment,
   isQuestionSentence,
   prepareText,
+  segmentLimit,
   segmentQuestion,
   segmentStandsAlone,
   splitQuestion,
@@ -171,6 +172,51 @@ describe("질문 나누기 v2", () => {
     const filler = "수업 준비를 하면서 여러 가지를 해 보았는데 잘 모르겠어서 이렇게 적어 봅니다 ".repeat(8)
     const split = splitQuestion(`${filler.trim()}. 녹화 되나요? 출석은 어디서 봐요?`)
     expect(split.segments).toEqual(["녹화 되나요?", "출석은 어디서 봐요?"])
+  })
+})
+
+describe("질문 나누기 v2 — R3 a2 분별", () => {
+  it("띄어 쓴 요청·반말 요청·'궁금합니다' 꼬리도 명사 목록에 나눠 붙인다", () => {
+    expect(segments("녹화 위치, 출석 기록, 숙제 마감 기준 알려줘")).toEqual(["녹화 위치 알려줘", "출석 기록 알려줘", "숙제 마감 기준 알려줘"])
+    expect(segments("녹화 위치, 출석 기록 알려 주세요")).toEqual(["녹화 위치 알려 주세요", "출석 기록 알려 주세요"])
+    expect(segments("녹화, 출석 궁금합니다")).toEqual(["녹화 궁금합니다", "출석 궁금합니다"])
+    // '…있는지 알려주세요'는 전처럼 '알려주세요'만 나눠 붙인다("화면 공유 있는지 알려주세요"가 되지 않게).
+    expect(segments("화면 공유, 퀴즈 기능 있는지 알려주세요")).toEqual(["화면 공유 알려주세요", "퀴즈 기능 있는지 알려주세요"])
+  })
+
+  it("'사이'는 낱말로 설 때만 관계 말이다('사이즈'·'사이트'는 아니다)", () => {
+    expect(segments("카메라 사이즈와 화질, 가격이 궁금해요.")).toEqual(["카메라 사이즈와 화질 궁금해요.", "가격이 궁금해요."])
+    expect(segments("교사랑 학생 사이 채팅 되나요")).toEqual(["교사랑 학생 사이 채팅 되나요"])
+    expect(segments("반 사이에 자료 이동, 복사 되나요?")).toEqual(["반 사이에 자료 이동, 복사 되나요?"])
+  })
+
+  it("다음 문장이 '그리고·또·추가로'로 새 물음을 꺼내면 앞 요청·문제 서술도 따로 조각이다", () => {
+    expect(segments("숙제를 반별로 나눠 내고 싶어요. 그리고 마감 지난 숙제도 받을 수 있나요?")).toEqual([
+      "숙제를 반별로 나눠 내고 싶어요.",
+      "마감 지난 숙제도 받을 수 있나요?",
+    ])
+    expect(segments("마이크 소리가 잘 안 잡혀요. 그리고 마이크 바꾸는 방법도 알려 주세요.")).toEqual([
+      "마이크 소리가 잘 안 잡혀요.",
+      "마이크 바꾸는 방법도 알려 주세요.",
+    ])
+    // 접속어 없이 이어지면 요청 문장은 다음 질문을 풀어 말한 것이다(R2 규칙 그대로). 상황 서술은 접속어가 있어도 맥락이다.
+    expect(segments("숙제를 반별로 나눠 내고 싶어요. 어떻게 하나요?")).toEqual(["숙제를 반별로 나눠 내고 싶어요. 어떻게 하나요?"])
+    expect(segments("줌 쓰다가 왔어요. 그리고 녹화 되나요?")).toEqual(["줌 쓰다가 왔어요. 그리고 녹화 되나요?"])
+  })
+
+  it("'…도' 를 단 요청 문장은 앞 요청·물음과 다른 조각이다('-어도·-해도'는 아니다)", () => {
+    expect(segments("프로필 사진을 바꾸고 싶어요. 지난 수업 기록도 지워 주세요.")).toEqual(["프로필 사진을 바꾸고 싶어요.", "지난 수업 기록도 지워 주세요."])
+    expect(segments("학생 초대하고 싶어요. 학부모도 초대해 주세요.")).toEqual(["학생 초대하고 싶어요.", "학부모도 초대해 주세요."])
+    expect(segments("학생을 초대하고 싶어요. 해도 안 되면 알려 주세요.")).toEqual(["학생을 초대하고 싶어요. 해도 안 되면 알려 주세요."])
+    expect(segments("녹화를 하고 싶어요. 어떻게 해도 안 돼요.")).toEqual(["녹화를 하고 싶어요. 어떻게 해도 안 돼요."])
+  })
+
+  it("조각 수 상한을 3·4 로 받는다(그 밖의 값은 3)", () => {
+    const five = "1. 녹화 되나요\n2. 출석 되나요\n3. 퀴즈 되나요\n4. 채팅 되나요\n5. 판서 되나요"
+    expect(splitQuestion(five, { max: 4 })).toEqual({ segments: ["녹화 되나요", "출석 되나요", "퀴즈 되나요", "채팅 되나요"], overflow: ["판서 되나요"] })
+    expect(splitQuestion(five).segments).toHaveLength(3)
+    expect(splitQuestion(five, { max: 9 }).segments).toHaveLength(3)
+    expect([segmentLimit(undefined), segmentLimit(4), segmentLimit(5), segmentLimit(1), segmentLimit(3.5), segmentLimit(2)]).toEqual([3, 4, 3, 3, 3, 2])
   })
 })
 

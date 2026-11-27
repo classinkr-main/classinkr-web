@@ -42,6 +42,18 @@
  * 반례: 상위 5 후보마다 negMargin > 0 이면 탈락, 반례 행선 카드에 NEG_ROUTE_BONUS × 반례 코사인 가산, 행선이 none 이면
  * 탈락한 카드 점수로 'none' 자리를 만든다(1위가 되면 못 찾음).
  * 끈 카드(CHATBOT_COMPILED_DISABLED_CARDS)는 후보·이웃 라벨·표·반례 행선·없는 개념 공백 카드에서 빠지고 다음 순위가 경쟁한다.
+ *
+ * 덮임 점검(R3 a2, 규격 4.4, CHATBOT_SEGMENT_COVERAGE: 기본 켬 · off): 조각을 다른 조각·원문이 고른 카드 c 로 채웠으면(shared·whole) 그 카드가 그
+ * 조각을 실제로 덮는지 본다. 조각 판정(θ + 여유, 조각 승격 포함)으로 c 를 고른 조각은 통과다. 나머지는 차례로 검사한다.
+ *   not_covers: 갈래 신호 — 조각 순위 안의 c 의 notCovers 행선 카드가 조각 단독 1위(확신도가 그 종류 θ 의 절반 이상)이거나 그 카드만의 anchors 가
+ *   조각 글에 있다.
+ *   asks_mismatch: 조각의 묻는 꼴이 c.asks 와 안 맞는다(예/아니오는 늘 맞음, 방법·위치는 한 갈래, 증상은 방법 카드도 맞음).
+ *   no_overlap: 조각 내용 낱말·개념이 c 의 anchors·topic·covers·개념과 하나도 겹치지 않는다.
+ * 걸린 조각은 다른 후보로 다시 고른다(not_covers 면 그 갈래 카드를 단일 질문 문턱 θ 로 — 신호 직행, 그 밖은 조각 문턱 θ + 여유로 순위 안 다른
+ * 카드). 다시 고르지 못하면 그 조각은 알림 줄(따로 물으면 같은 c 가 나오면 '바로 찾지 못함', 다른 카드가 나오면 '따로 물어봐 주세요')로 둔다.
+ * 정한 조각이 모두 걸리면 c 순위가 가장 높은 조각 하나는 c 로 남긴다(질문 전체를 c 로 정했으므로 답을 잃지 않는다). 흔적 segments[].coverage.
+ * 조각 수(CHATBOT_SEGMENT_MAX: 3 기본 · 4)와 조각 문턱 여유(CHATBOT_SEGMENT_MARGIN: 0.1 기본 · 0~0.3)도 스위치다.
+ * 이미 해 본 동작(규격 S14): normalize.ts extractTriedActions 로 뽑아(DecideContext.tried 가 있으면 그 값) 판정의 tried 에 싣는다. 판정은 바꾸지 않는다.
  */
 import { prepareQuery, type CompiledAnswerIndex, type IndexQuery } from "./compile"
 import {
@@ -56,8 +68,20 @@ import {
   type CandidateCheck,
 } from "./checks"
 import { legacyVoteSources } from "./legacy-votes"
-import type { AbsentMatch } from "./lexicon"
-import { askingSentencesOf, detectAskType, hasOwnTopicWords, INDEX_SYMPTOM_RE, isAskingSegment, normalizeText, segmentHasContent, splitQuestion } from "./normalize"
+import { compactForm, type AbsentMatch } from "./lexicon"
+import {
+  askingSentencesOf,
+  detectAskType,
+  extractTriedActions,
+  hasOwnTopicWords,
+  INDEX_SYMPTOM_RE,
+  isAskingSegment,
+  normalizeText,
+  segmentHasContent,
+  segmentLimit,
+  splitQuestion,
+  stripParticle,
+} from "./normalize"
 import { isCompiledScope } from "./scope"
 import { compositeScore, confidenceOf, knnCountFeature, scoreCandidates, sortCandidates, type KnnSummary, type ScoreComponents } from "./score"
 import type {
@@ -68,9 +92,11 @@ import type {
   AnswerIndexDecisionKind,
   AnswerIndexFeatures,
   AnswerIndexRouter,
+  AnswerIndexSegmentCoverage,
   AnswerIndexSegmentDecision,
   AnswerIndexTrace,
   AnswerIndexTraceSegment,
+  AskType,
 } from "./types"
 
 export const CHECK_TOP = 5
@@ -111,7 +137,8 @@ export interface DecideContext {
   env?: Env
   /**
    * 질문에서 뽑은 '이미 해 본 동작' 표지(R3 계약 칸, 규격 S14: 재설치·재시작·업데이트·다시 로그인·껐다 켜기 등).
-   * R3 단계 0에서는 이름만 둔다(뽑는 곳은 a2 normalize.ts, 쓰는 곳은 a1 respond.ts — 스위치 CHATBOT_COMPILED_SKIP_TRIED).
+   * 없으면 질문 글에서 normalize.ts extractTriedActions 로 뽑는다(대화 맥락으로 넓힌 질문이면 부르는 쪽이 이번 말에서 뽑아 넘긴다).
+   * 판정에는 쓰지 않고 판정의 tried 로 넘긴다(쓰는 곳은 a1 respond.ts — 스위치 CHATBOT_COMPILED_SKIP_TRIED).
    */
   tried?: string[]
 }
@@ -146,6 +173,29 @@ export function minConfidence(env: Env = process.env) {
   if (raw === undefined || raw.trim() === "") return null
   const value = Number(raw)
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : null
+}
+
+/** CHATBOT_SEGMENT_COVERAGE: off·0·false 면 덮임 점검을 끈다(R2 와 같은 조각 잇기). 그 밖(없음·on)은 켬. */
+export function segmentCoverageEnabled(env: Env = process.env): boolean {
+  const raw = env.CHATBOT_SEGMENT_COVERAGE?.trim().toLowerCase()
+  return !(raw === "off" || raw === "0" || raw === "false")
+}
+
+/** 조각 문턱 여유 상한(CHATBOT_SEGMENT_MARGIN 이 이 값을 넘으면 받지 않는다). */
+export const SEGMENT_CONF_MARGIN_MAX = 0.3
+
+/** CHATBOT_SEGMENT_MARGIN: 조각 문턱 여유(0~SEGMENT_CONF_MARGIN_MAX). 없거나 잘못되면 SEGMENT_CONF_MARGIN(0.1). */
+export function segmentMargin(env: Env = process.env): number {
+  const raw = env.CHATBOT_SEGMENT_MARGIN
+  if (raw === undefined || raw.trim() === "") return SEGMENT_CONF_MARGIN
+  const value = Number(raw)
+  return Number.isFinite(value) && value >= 0 && value <= SEGMENT_CONF_MARGIN_MAX ? value : SEGMENT_CONF_MARGIN
+}
+
+/** CHATBOT_SEGMENT_MAX: 답할 조각 수 상한(3 기본 · 4). 그 밖의 값은 3. 넘는 조각은 overflow(알림 줄 대상). */
+export function segmentMax(env: Env = process.env): number {
+  const raw = env.CHATBOT_SEGMENT_MAX?.trim()
+  return segmentLimit(raw ? Number(raw) : undefined)
 }
 
 export function thresholdFor(index: CompiledAnswerIndex, kind: AnswerCardKind, env: Env = process.env) {
@@ -510,6 +560,12 @@ export interface QuestionAnalysis {
   voteRescue: VoteRescueMode
   /** 범위 관문(isCompiledScope, 분석할 때의 환경변수). */
   inScope: boolean
+  /** 조각 문턱 여유(CHATBOT_SEGMENT_MARGIN, 분석할 때의 환경변수). 없으면 SEGMENT_CONF_MARGIN. */
+  segmentMargin?: number
+  /** 덮임 점검을 하는지(CHATBOT_SEGMENT_COVERAGE, 분석할 때의 환경변수). 없으면 켬. */
+  coverage?: boolean
+  /** 이미 해 본 동작(DecideContext.tried, 없으면 질문에서 뽑은 것). */
+  tried?: string[]
 }
 
 /** 조각 분석의 비일반 개념(사전 개념 가운데 generic 이 아닌 것). */
@@ -571,7 +627,7 @@ function partVoteSources(index: CompiledAnswerIndex, pieces: string[], context: 
 export function analyzeQuestion(index: CompiledAnswerIndex, question: string, context: DecideContext = {}): QuestionAnalysis {
   const env = context.env ?? process.env
   const whole = analyzeSegment(index, question, context)
-  const split = splitQuestion(question)
+  const split = splitQuestion(question, { max: segmentMax(env) })
   const pieces = split.segments.length < 2 ? [] : split.segments
   const sources = partVoteSources(index, pieces, context)
   const partVotes = sources.map((map) => Array.from(map.keys()))
@@ -586,17 +642,20 @@ export function analyzeQuestion(index: CompiledAnswerIndex, question: string, co
     partSymptomOnlyVotes: pieces.map((piece, at) => symptomOnlyVoteCards(index, piece, partVotes[at], sources[at])),
     voteRescue: voteRescueMode(env),
     inScope: isCompiledScope(question, env),
+    segmentMargin: segmentMargin(env),
+    coverage: segmentCoverageEnabled(env),
+    tried: context.tried ? [...context.tried] : extractTriedActions(question),
   }
 }
 
-/** 조각 판정용 문턱: 그 종류 θ + SEGMENT_CONF_MARGIN. */
-export function segmentThreshold(threshold: ThresholdFn): ThresholdFn {
-  return (kind) => threshold(kind) + SEGMENT_CONF_MARGIN
+/** 조각 판정용 문턱: 그 종류 θ + 여유(기본 SEGMENT_CONF_MARGIN). */
+export function segmentThreshold(threshold: ThresholdFn, margin: number = SEGMENT_CONF_MARGIN): ThresholdFn {
+  return (kind) => threshold(kind) + margin
 }
 
-/** 분석 + 문턱 → 질문 판정(조각은 θ + SEGMENT_CONF_MARGIN, 그다음 정해 둔 답 승격). */
+/** 분석 + 문턱 → 질문 판정(조각은 θ + 여유, 그다음 덮임 점검·정해 둔 답 승격). */
 export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAnalysis, threshold: ThresholdFn): AnswerIndexDecision {
-  const partThreshold = segmentThreshold(threshold)
+  const partThreshold = segmentThreshold(threshold, analysis.segmentMargin ?? SEGMENT_CONF_MARGIN)
   const rescueOn = analysis.voteRescue !== "off" && analysis.inScope
   const parts = analysis.parts
     ? analysis.parts.map((part, at) => {
@@ -620,9 +679,11 @@ export function resolveDecision(index: CompiledAnswerIndex, analysis: QuestionAn
         }
       })
     : null
-  const base = combineSegments(resolveSegment(index, analysis.whole, threshold), parts, analysis.parts, analysis.overflow, cautionsOf(analysis.whole))
+  const coverage: CoverageOptions | null = analysis.coverage === false ? null : { index, threshold, partThreshold, fallback: analysis.whole.fallback }
+  const base = combineSegments(resolveSegment(index, analysis.whole, threshold), parts, analysis.parts, analysis.overflow, cautionsOf(analysis.whole), coverage)
   const rescued = applyVoteRescue(index, analysis, base)
-  return annotateSegments(index, analysis, mainClauseRescue(index, analysis, rescued, threshold), threshold)
+  const decision = annotateSegments(index, analysis, mainClauseRescue(index, analysis, rescued, threshold), threshold)
+  return analysis.tried && analysis.tried.length > 0 ? { ...decision, tried: [...analysis.tried] } : decision
 }
 
 /**
@@ -739,7 +800,9 @@ function annotateSegments(index: CompiledAnswerIndex, analysis: QuestionAnalysis
     // 따로 물었을 때도 머리 개념 가드를 건다(가드에 걸린 카드로 '따로 물어봐 주세요'를 약속하지 않게).
     if (!isDecided(segment)) {
       const solo = alone()
-      extra.alone = headConceptGuard(index, solo, resolveSegment(index, solo, threshold)).kind
+      const result = headConceptGuard(index, solo, resolveSegment(index, solo, threshold))
+      // 덮임 점검에 걸린 카드가 따로 물어도 그대로 나오면 '따로 물어봐 주세요'는 막다른 길이다(같은 카드가 또 나온다): 못 찾음으로 둔다(R3 a2).
+      extra.alone = segment.coverageCard && result.kind === "answer" && result.card === segment.coverageCard ? "abstain" : result.kind
     }
     return { ...segment, ...extra }
   })
@@ -886,6 +949,10 @@ interface SegmentSlot {
   topConf: number | null
   /** 이 자리를 정한 판정(답·공백일 때). */
   result: SegmentResult | null
+  /** 덮임 점검 판정(R3 a2). 점검을 끄면 없다. */
+  coverage?: AnswerIndexSegmentCoverage
+  /** 덮임 점검에 걸려 뺀 카드(다시 골랐거나 알림으로 둔 조각). */
+  coverageCard?: string
 }
 
 function slotRescued(slot: SegmentSlot) {
@@ -904,6 +971,8 @@ function slotDecision(slot: SegmentSlot): AnswerIndexSegmentDecision {
     ...(slot.absentHit ? { absentHit: slot.absentHit } : {}),
     ...(slot.topCard ? { topCard: slot.topCard, topConf: slot.topConf ?? 0 } : {}),
     ...(slotRescued(slot) ? { rescue: "vote" as const } : {}),
+    ...(slot.coverage ? { coverage: slot.coverage } : {}),
+    ...(slot.coverageCard ? { coverageCard: slot.coverageCard } : {}),
   }
 }
 
@@ -914,6 +983,208 @@ function rankIn(analysis: SegmentAnalysis, card: string | null) {
   return at < 0 ? Infinity : at
 }
 
+// ─── 덮임 점검(R3 a2, 규격 4.4) ──────────────────────────────────────────
+
+/** 덮임 점검에 쓰는 색인·문턱. null 이면 점검하지 않는다(CHATBOT_SEGMENT_COVERAGE=off, R2 와 같다). */
+interface CoverageOptions {
+  index: CompiledAnswerIndex
+  /** 단일 질문 문턱 θ(갈래 신호로 다시 고를 때). */
+  threshold: ThresholdFn
+  /** 조각 문턱 θ + 여유(그 밖에 다시 고를 때). */
+  partThreshold: ThresholdFn
+  /** 원문의 못 찾음 갈래(덮임 점검 뒤 정한 조각이 하나도 없을 때 낸다). */
+  fallback: SegmentAnalysis["fallback"]
+}
+
+const notCoversCache = new WeakMap<CompiledAnswerIndex, Map<number, Set<string>>>()
+
+/** 카드 notCovers 의 행선 카드 id(“… → 행선”, none 은 뺀다). */
+function notCoversTargets(index: CompiledAnswerIndex, card: number): Set<string> {
+  let byCard = notCoversCache.get(index)
+  if (!byCard) {
+    byCard = new Map()
+    notCoversCache.set(index, byCard)
+  }
+  let targets = byCard.get(card)
+  if (!targets) {
+    targets = new Set()
+    for (const entry of index.cards[card].card.notCovers ?? []) {
+      const at = entry.lastIndexOf("→")
+      const target = at >= 0 ? entry.slice(at + 1).trim() : ""
+      if (target && target !== NONE_ID) targets.add(target)
+    }
+    byCard.set(card, targets)
+  }
+  return targets
+}
+
+const coversCache = new WeakMap<CompiledAnswerIndex, Map<number, string>>()
+
+/** 카드 covers 글(공백 뺀 꼴). */
+function coversCompact(index: CompiledAnswerIndex, card: number): string {
+  let byCard = coversCache.get(index)
+  if (!byCard) {
+    byCard = new Map()
+    coversCache.set(index, byCard)
+  }
+  let compact = byCard.get(card)
+  if (compact === undefined) {
+    const covers = index.cards[card].card.covers
+    compact = typeof covers === "string" ? compactForm(covers) : ""
+    byCard.set(card, compact)
+  }
+  return compact
+}
+
+/**
+ * 조각 내용 낱말(뜻 없는 낱말 제외, 2자 이상, 조사 뗀 꼴 포함)이나 비일반 개념이 카드와 겹치는지(규격 4.4 2단계 둘째): 낱말이 카드 anchors·topic·covers 글에 있거나
+ * (anchors 가 낱말 안에 있어도 된다), 개념을 카드가 설명한다. 점수를 낸 글(주제를 이어 붙였으면 그 글)로 본다. 내용 낱말도 개념도 없으면
+ * 겹침을 따지지 않는다(true).
+ */
+function contentOverlaps(index: CompiledAnswerIndex, analysis: SegmentAnalysis, card: number): boolean {
+  const { query } = analysis
+  // 낱말과 그 조사 뗀 꼴("휴대폰으로" → "휴대폰")을 함께 본다.
+  const words = Array.from(new Set(query.contentWords.flatMap((word) => [compactForm(word), compactForm(stripParticle(word))]))).filter((word) => word.length >= 2)
+  const concepts = query.concepts.filter((concept) => index.lexicon.concepts.get(concept.id)?.generic === false)
+  if (words.length === 0 && concepts.length === 0) return true
+  if (concepts.some((concept) => conceptExplained(index, concept.id, card))) return true
+  const anchors = index.cards[card].anchorCompacts
+  const covers = coversCompact(index, card)
+  return words.some((word) => covers.includes(word) || anchors.some((anchor) => anchor.includes(word) || (anchor.length >= 2 && word.includes(anchor))))
+}
+
+/**
+ * 묻는 꼴이 카드와 맞는지(규격 4.4 2단계 첫째). 카드 asks 표시가 거칠어(howto·where 만 단 카드 203장) 다음은 맞는 것으로 본다:
+ * 예/아니오 물음(되나요·있나요 — 어떤 카드든 '네/아니요 + 방법'으로 답한다), 방법·위치(서로 같은 갈래), 증상(증상·방법 카드). 그 밖(비용·때·수량·
+ * 비교·누구·정의)은 카드 asks 에 그 꼴이 있어야 한다. 묻는 꼴을 못 정했거나 카드 asks 가 비었으면 맞는 것으로 본다.
+ */
+function asksCompatible(ask: AskType | null, asks: readonly AskType[]) {
+  if (!ask || asks.length === 0 || asks.includes(ask) || ask === "yesno") return true
+  if (ask === "howto" || ask === "where") return asks.includes("howto") || asks.includes("where")
+  if (ask === "symptom") return asks.includes("howto")
+  return false
+}
+
+/** 갈래 신호로 볼 조각 단독 1위의 확신도 바닥(그 종류 θ 에 곱한다). */
+export const BRANCH_TOP_MIN_SHARE = 0.5
+
+/**
+ * 갈래 신호(R3 a2, 설계 R6 "신호가 있으면 갈래 카드로 바로"): 조각 순위 상위 CHECK_TOP 안의 카드 d 가 c 의 notCovers 행선이고, d 가 조각 단독 1위이거나
+ * 조각 글에 d 만의 anchors(2자 이상, c 의 anchors·topic 에 없는 것 — 화면 문구·기기·상태 같은 갈래 낱말)가 있으면 그 자리. 없으면 -1.
+ */
+function branchSignalAt(index: CompiledAnswerIndex, analysis: SegmentAnalysis, card: number, threshold?: ThresholdFn): number {
+  const targets = notCoversTargets(index, card)
+  if (targets.size === 0) return -1
+  const own = index.cards[card].anchorCompacts
+  const compact = analysis.query.compact
+  for (let at = 0; at < Math.min(CHECK_TOP, analysis.ranked.length); at += 1) {
+    const candidate = analysis.ranked[at]
+    if (candidate.card < 0 || !targets.has(candidate.id)) continue
+    // 조각 단독 1위라는 것만으로는, 확신도가 그 종류 θ 의 절반에도 못 미치면 신호로 보지 않는다(낱말 하나 겹친 소음).
+    const plausible = !threshold || analysis.confs[at] >= threshold(candidate.kind as AnswerCardKind) * BRANCH_TOP_MIN_SHARE
+    if (at === analysis.topReal && plausible) return at
+    const signal = index.cards[candidate.card].anchorCompacts.some((anchor) => anchor.length >= 2 && compact.includes(anchor) && !own.some((mine) => mine.includes(anchor)))
+    if (signal) return at
+  }
+  return -1
+}
+
+/**
+ * 덮임 점검 2단계(규격 4.4): 조각 판정으로 고르지 않은 카드 c 가 조각을 덮는지. not_covers(갈래 신호 — branchSignalAt) → asks_mismatch(조각 묻는 꼴이
+ * c.asks 와 안 맞음, asksCompatible) → no_overlap(조각 내용이 c 와 안 겹침) 순으로 본다. 1단계(조각 판정으로 고른 카드)는 부르는 쪽이 통과로 둔다.
+ */
+export function segmentCoverageOf(index: CompiledAnswerIndex, analysis: SegmentAnalysis, cardId: string, threshold?: ThresholdFn): AnswerIndexSegmentCoverage {
+  const card = index.cardById.get(cardId)
+  if (card === undefined) return "no_overlap"
+  if (branchSignalAt(index, analysis, card, threshold) >= 0) return "not_covers"
+  if (!asksCompatible(analysis.query.askType, index.cards[card].asks)) return "asks_mismatch"
+  if (!contentOverlaps(index, analysis, card)) return "no_overlap"
+  return "pass"
+}
+
+/**
+ * 덮임 점검에 걸린 조각을 다른 후보로 다시 고른다. 갈래 신호가 있으면(not_covers) 그 갈래 카드를 단일 질문 문턱 θ 로 먼저 본다(신호 직행). 그다음 조각
+ * 순위 상위 CHECK_TOP 안 다른 카드를 조각 문턱 θ + 여유로 본다. 고른 카드도 덮임 점검과 머리 개념 가드를 통과해야 한다. 공백·none 자리는 고르지 않는다.
+ * 신호가 없으면 갈래 카드도 조각 문턱 θ + 여유를 넘어야 고른다(서로 배타적인 갈래를 짐작으로 고르지 않는다 — 못 고르면 알림 줄).
+ */
+function repickSegment(
+  options: CoverageOptions,
+  analysis: SegmentAnalysis,
+  part: SegmentResult,
+  rejected: string,
+  verdict: AnswerIndexSegmentCoverage
+): SegmentResult | null {
+  const { index } = options
+  const { ranked, confs } = analysis
+  const rejectedCard = index.cardById.get(rejected)
+  const branch = verdict === "not_covers" && rejectedCard !== undefined ? branchSignalAt(index, analysis, rejectedCard, options.threshold) : -1
+  const order = [...(branch >= 0 ? [branch] : []), ...Array.from({ length: Math.min(CHECK_TOP, ranked.length) }, (_, at) => at).filter((at) => at !== branch)]
+  for (const at of order) {
+    const candidate = ranked[at]
+    if (candidate.card < 0 || candidate.kind === "none" || candidate.kind === "gap" || candidate.id === rejected) continue
+    const kind = candidate.kind as AnswerCardKind
+    const floor = at === branch ? options.threshold(kind) : options.partThreshold(kind)
+    if (confs[at] < floor) continue
+    if (segmentCoverageOf(index, analysis, candidate.id, options.threshold) !== "pass") continue
+    const result: SegmentResult = {
+      ...part,
+      kind: "answer",
+      card: candidate.id,
+      conf: confs[at],
+      unexplained: candidate.check?.unexplained ?? [],
+      absentHit: null,
+      absentTail: null,
+      abstainReason: null,
+      features: analysis.topFeatures[at] ?? analysis.features,
+      rescued: false,
+    }
+    if (headConceptGuard(index, analysis, result).kind !== "answer") continue
+    return result
+  }
+  return null
+}
+
+/**
+ * 덮임 점검을 조각 자리에 건다(점검을 켰을 때). 조각 판정(조각 승격 포함)으로 정한 자리는 통과(pass), 다른 조각·원문 카드로 채운 자리는 segmentCoverageOf.
+ * 걸린 자리는 다시 고르거나(repickSegment, 출처 segment) 못 정한 자리로 되돌린다(알림 줄). 정한 자리가 하나도 남지 않으면 부르는 쪽이 원문
+ * 못 찾음으로 낸다(원문 카드가 어느 조각도 덮지 못했다 — 그 카드 한 장으로 모든 물음에 답한 척하지 않는다). 자리가 바뀌었으면 true.
+ */
+function applySegmentCoverage(slots: SegmentSlot[], parts: SegmentResult[], analyses: SegmentAnalysis[], options: CoverageOptions): boolean {
+  const failed: number[] = []
+  slots.forEach((slot, at) => {
+    if (!slot.result || !slot.card) return
+    // 1단계: 조각 판정으로 고른 카드는 통과. 조각 승격(옛 정규식 표)은 제 검사(상위 3·없는 개념·NODOC·증상 가드)를 지난 판정이라 그대로 둔다.
+    if (slot.source === "segment") {
+      slot.coverage = "pass"
+      return
+    }
+    slot.coverage = segmentCoverageOf(options.index, analyses[at], slot.card, options.threshold)
+    if (slot.coverage !== "pass") failed.push(at)
+  })
+  if (failed.length === 0) return false
+  for (const at of failed) {
+    const slot = slots[at]
+    const rejected = slot.card!
+    slot.coverageCard = rejected
+    const picked = repickSegment(options, analyses[at], parts[at], rejected, slot.coverage!)
+    if (picked) {
+      slot.kind = picked.kind
+      slot.card = picked.card
+      slot.conf = picked.conf
+      slot.source = "segment"
+      slot.result = picked
+      continue
+    }
+    // 그 조각 제 판정이 못 정함이면 그 꼴(못 찾음·되묻기), 아니면 그 조각의 못 찾음 갈래.
+    slot.kind = isDecided(parts[at]) ? analyses[at].fallback.kind : parts[at].kind
+    slot.card = null
+    slot.conf = parts[at].conf
+    slot.source = null
+    slot.result = null
+  }
+  return true
+}
+
 /**
  * 조각 판정 잇기(계획 §2.1). 조각은 질문 순서대로 둔다(답한 것 먼저가 아니다).
  * 1. 모든 조각의 1위 카드가 같고 원문도 그 카드로 정했으면 한 카드 답(확신도가 높은 쪽 판정, 조각은 모두 그 카드).
@@ -921,6 +1192,8 @@ function rankIn(analysis: SegmentAnalysis, card: string | null) {
  *    원문 판정(whole)으로 채운다. 원문 판정이 조각 판정을 덮지는 않는다(서로 다른 주제 조각).
  * 3. 어느 조각도 정하지 못했으면: 원문이 정했으면 원문 카드를 그 카드 순위가 가장 높은 조각에 붙이고(어느 조각 상위에도 없으면 모든 조각),
  *    원문도 못 정했으면 원문 판정(못 찾음·되묻기)에 조각 기록만 싣는다.
+ * 덮임 점검(coverage 가 있으면, R3 a2): 1~3에서 다른 조각·원문 카드로 채운 자리마다 그 카드가 조각을 덮는지 보고, 걸리면 다시 고르거나 알림 자리로
+ *    되돌린다(applySegmentCoverage). 1에서 자리가 바뀌면 한 카드 답이 아니라 4로 잇는다.
  * 4. 최대 조각 수를 넘은 조각은 abstain(overflow)으로 뒤에 붙인다(알림 줄 대상).
  * 결정 카드는 질문 순서로 처음 정한 조각의 카드, 결정 종류는 답한 조각이 있으면 answer 아니면 gap 이다.
  */
@@ -929,7 +1202,8 @@ function combineSegments(
   parts: SegmentResult[] | null,
   analyses: SegmentAnalysis[] | null,
   overflow: readonly string[],
-  cautions: AnswerIndexCaution[]
+  cautions: AnswerIndexCaution[],
+  coverage: CoverageOptions | null = null
 ): AnswerIndexDecision {
   if (!parts || !analyses || parts.length < 2) return toDecision(whole, null, cautions)
   const tops = analyses.map((analysis) => (analysis.topReal >= 0 ? analysis.ranked[analysis.topReal].id : null))
@@ -958,45 +1232,57 @@ function combineSegments(
 
   // 1. 같은 주제.
   const sameTopic = tops.every((top) => top !== null && top === tops[0])
+  let covered = false
   if (sameTopic && wholeDecided && whole.card === tops[0]) {
     const best = parts.filter((part) => isDecided(part) && part.card === whole.card).reduce<SegmentResult | null>((a, b) => (!a || b.conf > a.conf ? b : a), null)
     const chosen = best && best.conf > whole.conf ? best : whole
     for (const slot of slots) fill(slot, chosen, slot.source === "segment" ? "segment" : "whole")
-    const decision = toDecision(chosen, listed(), cautions)
-    return {
-      ...decision,
-      rescue: chosen.rescued ? "vote" : null,
-      partial: chosen.kind === "answer" ? Boolean(chosen.absentTail) || overflowSlots.length > 0 : false,
+    covered = true
+    if (!coverage || !applySegmentCoverage(slots, parts, analyses, coverage)) {
+      const decision = toDecision(chosen, listed(), cautions)
+      return {
+        ...decision,
+        rescue: chosen.rescued ? "vote" : null,
+        partial: chosen.kind === "answer" ? Boolean(chosen.absentTail) || overflowSlots.length > 0 : false,
+      }
     }
   }
 
-  // 2. 조각마다.
-  const answeredBy = new Map<string, SegmentResult>()
-  for (const slot of slots) if (slot.result && slot.card) answeredBy.set(slot.card, slot.result)
-  slots.forEach((slot, at) => {
-    if (slot.result) return
-    const top = tops[at]
-    if (top && answeredBy.has(top)) {
-      const from = answeredBy.get(top)!
-      fill(slot, { ...from, conf: parts[at].conf }, "shared")
-    } else if (wholeDecided && whole.card && whole.card === top && !answeredBy.has(whole.card)) {
-      fill(slot, whole, "whole")
-      answeredBy.set(whole.card, whole)
-    }
-  })
-
-  // 3. 어느 조각도 못 정함.
-  if (!slots.some((slot) => slot.result)) {
-    if (!wholeDecided) return toDecision(whole, listed(), cautions)
-    const ranks = analyses.map((analysis) => rankIn(analysis, whole.card))
-    const best = Math.min(...ranks)
+  if (!covered) {
+    // 2. 조각마다.
+    const answeredBy = new Map<string, SegmentResult>()
+    for (const slot of slots) if (slot.result && slot.card) answeredBy.set(slot.card, slot.result)
     slots.forEach((slot, at) => {
-      if (best === Infinity || ranks[at] === best) fill(slot, whole, "whole")
+      if (slot.result) return
+      const top = tops[at]
+      if (top && answeredBy.has(top)) {
+        const from = answeredBy.get(top)!
+        fill(slot, { ...from, conf: parts[at].conf }, "shared")
+      } else if (wholeDecided && whole.card && whole.card === top && !answeredBy.has(whole.card)) {
+        fill(slot, whole, "whole")
+        answeredBy.set(whole.card, whole)
+      }
     })
+
+    // 3. 어느 조각도 못 정함.
+    if (!slots.some((slot) => slot.result)) {
+      if (!wholeDecided) return toDecision(whole, listed(), cautions)
+      const ranks = analyses.map((analysis) => rankIn(analysis, whole.card))
+      const best = Math.min(...ranks)
+      slots.forEach((slot, at) => {
+        if (best === Infinity || ranks[at] === best) fill(slot, whole, "whole")
+      })
+    }
+    if (coverage) applySegmentCoverage(slots, parts, analyses, coverage)
   }
 
   // 4. 질문 순서로 잇는다.
   const decided = slots.filter((slot) => slot.result)
+  if (decided.length === 0) {
+    // 덮임 점검이 정한 자리를 모두 되돌렸다(원문 카드가 어느 조각도 덮지 못함): 원문 못 찾음 갈래에 조각 기록을 싣는다.
+    const fallback = coverage?.fallback ?? { kind: "abstain" as const, abstainReason: "nodoc" as const }
+    return toDecision({ ...whole, ...fallback, card: null, absentTail: null }, listed(), cautions)
+  }
   const primary = decided[0].result!
   const anyAnswer = decided.some((slot) => slot.kind === "answer")
   const absentTail = primary.absentTail ?? decided.map((slot) => slot.result!.absentTail).find(Boolean) ?? null
@@ -1062,6 +1348,7 @@ function traceSegmentOf(segment: AnswerIndexSegmentDecision): AnswerIndexTraceSe
     ...(segment.topCard ? { topCard: segment.topCard, topConf: segment.topConf ?? 0 } : {}),
     notice: !decided,
     ...(segment.alone ? { alone: segment.alone } : {}),
+    ...(segment.coverage ? { coverage: segment.coverage } : {}),
   }
 }
 
