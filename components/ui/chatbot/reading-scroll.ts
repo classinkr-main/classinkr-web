@@ -107,6 +107,9 @@ export function resolveReadingRoomMinHeight(input: ReadingRoomInput): number | n
     return Math.max(0, Math.ceil(input.roomTop + input.clientHeight - Math.max(0, input.paddingY)))
 }
 
+/** '아래로 이어서 읽기' 표시가 보이는 목록 아래에서 차지하는 높이: 아래 여백 12px + 보이는 36px + 띄움 4px. */
+export const CONTINUE_HINT_CLEARANCE_PX = 52
+
 export interface ContinueHintInput {
     hasUserMessages: boolean
     /** '새 답변' 버튼이 떠 있는지(둘은 같이 띄우지 않는다). */
@@ -115,20 +118,29 @@ export interface ContinueHintInput {
     following: boolean
     /** 보이는 목록 아래로 더 내려갈 수 있는 px. */
     remainingBelow: number
-    /** 마지막 말풍선 머리가 보이는 목록 아래 끝보다 위에 있는지 — 지금 읽는 답이 아래로 이어지는 경우만 알린다. */
-    lastHeadAboveFold: boolean
+    /** 목록 끝 말풍선이 답인지(질문이면 아래로 이어지는 답이 없다). */
+    lastIsAnswer: boolean
+    /** 목록 끝 말풍선 머리의 위치(px, 보이는 목록 위 끝 기준). 말풍선이 없으면 null. */
+    lastHeadTop: number | null
+    /** 보이는 목록 높이(px). */
+    listHeight: number
 }
 
 /**
  * '아래로 이어서 읽기' 표시. 답 머리에 맞춰 둔 채 답이 길어지면 아래 글이 화면 밖에 남는데, 휴대폰은 스크롤 막대가 보이지 않아
- * 더 있는지 알기 어렵다. 지금 읽는 답이 아래로 이어질 때만 보이고, 맨 아래 문턱 안이면 숨긴다.
+ * 더 있는지 알기 어렵다. 지금 읽는 답(목록 끝 답 말풍선)이 아래로 이어질 때만 보이고, 맨 아래 문턱 안이면 숨긴다.
+ * 표시는 목록 오른쪽 아래, 답 말풍선 밖 여백에 있다. 오른쪽에 붙는 질문 말풍선은 모두 끝 답 머리보다 위에 있으므로
+ * 끝 답 머리가 표시 자리(CONTINUE_HINT_CLEARANCE_PX)보다 위일 때만 띄우면 질문 말풍선과 겹치지 않는다 — 예전에는 맨 아래 8px 를 기준으로 삼아
+ * 손가락으로 끄는 도중 질문 말풍선의 오른쪽 아래 모서리가 표시 아래로 약 5px 들어왔다.
  */
 export function shouldShowContinueHint(input: ContinueHintInput): boolean {
     return (
         input.hasUserMessages &&
         !input.jumpToLatestShown &&
         !input.following &&
-        input.lastHeadAboveFold &&
+        input.lastIsAnswer &&
+        input.lastHeadTop !== null &&
+        input.lastHeadTop <= input.listHeight - CONTINUE_HINT_CLEARANCE_PX &&
         input.remainingBelow > CHAT_NEAR_BOTTOM_THRESHOLD_PX
     )
 }
