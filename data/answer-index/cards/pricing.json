@@ -9961,7 +9961,10 @@
       "결제 주기",
       "최소 계약 기간",
       "충전형 미리 충전",
-      "약정 기간"
+      "약정 기간",
+      "한 달씩 결제",
+      "1개월 단위 결제",
+      "월 단위로 이용"
     ],
     "covers": "구독형은 월 또는 연 단위로, 충전형은 원화를 미리 충전해 쓰는 방식으로 결제한다는 것과 최소 계약 기간은 공개 안내에 정해진 기준이 없다는 것, 사용 기간은 서면으로 받아 두라는 안내",
     "notCovers": [
@@ -9970,7 +9973,8 @@
       "결제 수단 → policy:payment-methods",
       "연 결제로 하면 할인되는지·월에서 연으로 바꿀 때 → policy:monthly-to-yearly-switch",
       "중도 해지·위약금 기준 → policy:payment-cycle-termination-terms",
-      "한 달만 써 보기·무료 체험 → doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
+      "한 달만 써 보기·무료 체험 → doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
+      "회원가입만 하면 무료인지 → policy:free-version-scope"
     ],
     "negatives": [
       {
@@ -10117,7 +10121,9 @@
       "1인 강사",
       "소규모 학원",
       "개인 교사 인증",
-      "S65"
+      "S65",
+      "소형 요금",
+      "작은 학원 요금"
     ],
     "covers": "공부방·교습소·혼자 가르치는 과외 선생님도 쓸 수 있다는 것, 1인 강사에게 권하는 요금제와 개인 교사 인증, 전자칠판은 필수가 아니라는 것, 소규모에 맞춘 S65 모델",
     "notCovers": [
@@ -10192,7 +10198,8 @@
       "Enterprise 맞춤 계약",
       "여러 지점",
       "S110",
-      "강당"
+      "강당",
+      "대형 요금"
     ],
     "covers": "대형 학원도 쓸 수 있다는 것, 대형 기관을 위한 Enterprise 맞춤 계약에 전담 매니저·하드웨어 설치 연계·보안 권한 설정이 들어간다는 것, 대형 강의실용 S110 모델과 반 수·인원 한도는 상담 확인",
     "notCovers": [
@@ -10263,13 +10270,17 @@
       "가입만 하면 무료",
       "체험 범위",
       "무료로 되는 기능",
-      "유료 전환 필요"
+      "유료 전환 필요",
+      "회원가입 무료",
+      "회원가입만 하면 무료",
+      "가입비 없이 시작"
     ],
     "covers": "회원 가입을 마치면 무료 버전으로 시작하고 2주 무료 체험도 신청할 수 있다는 것, 학원에서 쓰려면 유료 계정 전환이 필요하다는 것, 녹화·웹 라이브는 유료 결제와 계정 인증이 필요하다는 것, 무료 버전 세부 범위는 공개 안내에 없다는 것",
     "notCovers": [
       "2주 무료 체험 신청 위치 → doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
       "무료로 가입한 계정을 학원에서 쓰려면 유료 전환 필요 → doc:/docs/admin/billing-upgrade#summary/paid-switch-need",
-      "체험 끝난 뒤 자동 결제 → policy:trial-auto-billing"
+      "체험 끝난 뒤 자동 결제 → policy:trial-auto-billing",
+      "한 달 단위 결제·최소 계약 기간 → policy:billing-period-term"
     ],
     "negatives": [
       {
@@ -10336,7 +10347,9 @@
       "학원 소속 아니어도",
       "개인 교사 인증",
       "프리랜서 강사",
-      "개인으로 가입"
+      "개인으로 가입",
+      "사업자 필요",
+      "사업자등록 없이 개인으로"
     ],
     "covers": "학원 소속이 아니어도 개인 과외 강사로 쓸 수 있다는 것, 1인 강사에게 권하는 요금제와 계정 인증 때 개인 교사를 고르는 방식, 가격은 단정하지 않는다는 것",
     "notCovers": [

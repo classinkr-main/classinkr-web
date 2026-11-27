@@ -1509,7 +1509,8 @@
       "일반 전자칠판과 차이 → doc:/docs/start/academy-system-os-positioning#1/vs-other-board",
       "Zoom에서 옮길 때 데이터 이전 → gap:company/zoom-migration",
       "타사 무료판 수업 시간 제한 비교 → gap:classroom/session-time-limit",
-      "구루미·구글 미트·팀즈·웨일온 등 다른 화상 서비스 비교 → fixed:basics-vs-other-video-tools"
+      "구루미·구글 미트·팀즈·웨일온 등 다른 화상 서비스 비교 → fixed:basics-vs-other-video-tools",
+      "줌과 팀즈 등 여러 화상 서비스를 함께 묻는 비교 → fixed:basics-vs-other-video-tools"
     ],
     "negatives": [
       {
@@ -2865,7 +2866,8 @@
       "하이브리드",
       "레퍼런스",
       "후기",
-      "목동 쇼룸"
+      "목동 쇼룸",
+      "어떤 학원용"
     ],
     "covers": "국어·영어·과학·입시 학원부터 온라인·하이브리드 학원까지 클래스인을 쓰고, 비슷한 과목·운영 형태의 사례와 후기는 도입 상담이나 목동 쇼룸에서 더 자세히 보여 준다는 것",
     "notCovers": [
@@ -2873,7 +2875,9 @@
       "과목별 사례(국어) → doc:/docs/start/customer-stories#1/korean-academy-case",
       "국내 도입 기관 수 → gap:company/domestic-adoption-count",
       "미술 등 업종별 적합성 → gap:company/subject-fit",
-      "학원 말고 대학·학교·1:1 튜터링에서도 쓰는지 → doc:/docs/start/company-overview#7/where-used"
+      "학원 말고 대학·학교·1:1 튜터링에서도 쓰는지 → doc:/docs/start/company-overview#7/where-used",
+      "클래스인이 어떤 서비스인지 한 줄 소개 → doc:/docs/start/company-overview#0/one-line-intro",
+      "대학 간 공개 강의·K-12 학교 등 학원 밖 사용처 → doc:/docs/start/company-overview#7/where-used"
     ],
     "negatives": [
       {
@@ -7851,7 +7855,10 @@
       "만든 회사 EEO → doc:/docs/start/company-overview#summary/what-is-classin",
       "기능 묶음 상세 → doc:/docs/start/company-overview#3/main-features",
       "줌과의 차이 → doc:/docs/start/why-classin-needs#7/just-zoom",
-      "비대면 중심 온라인 학원에서도 쓰는지 → fixed:basics-fit-online-academy"
+      "비대면 중심 온라인 학원에서도 쓰는지 → fixed:basics-fit-online-academy",
+      "대학·학교·1:1 튜터링 등 어디에서 쓰는지 → doc:/docs/start/company-overview#7/where-used",
+      "도입한 학원 종류·사례 → doc:/docs/start/customer-stories#summary/which-academies-use",
+      "줌·팀즈 등 다른 화상 서비스와 차이 → fixed:basics-vs-other-video-tools"
     ],
     "negatives": [
       {
@@ -10002,7 +10009,8 @@
       "모든 과목 적용 여부 → doc:/docs/software/app-capabilities-map#summary/ai-not-always",
       "수업 중 AI 칠판 채점 → doc:/docs/software/app-capabilities-map#3/ai-board-summary",
       "AI 채점 결과 검토·게시 → doc:/docs/software/classin-ai-feature-guide#1/ai-grading-review",
-      "LMS 기본 자동 채점·성적표 자동 생성 → doc:/docs/start/company-overview#3/lms-admin-dashboard"
+      "LMS 기본 자동 채점·성적표 자동 생성 → doc:/docs/start/company-overview#3/lms-admin-dashboard",
+      "숙제 채점 기준·답안 추가 → doc:/docs/teacher/course-activities#4/homework-settings"
     ],
     "negatives": [
       {
@@ -17782,7 +17790,10 @@
       "팀즈",
       "웨일온",
       "다른 화상 서비스랑 비교",
-      "어느 쪽이 더 나은지"
+      "어느 쪽이 더 나은지",
+      "줌 팀즈 차이",
+      "줌이랑 팀즈",
+      "화상 서비스 차이"
     ],
     "covers": "수업 준비부터 판서·녹화·LMS·관리자 데이터까지 수업 운영 전체를 잇는다는 설명과 줌은 화상회의 중심이라는 구분, 다른 서비스의 기능·요금·우열은 말하지 않고 상담으로 이어지는 안내",
     "notCovers": [

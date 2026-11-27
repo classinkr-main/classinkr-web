@@ -73,6 +73,30 @@ describe("buildFragmentRecord", () => {
     expect(record.perFragment[1]).toMatchObject({ soloAnswered: false, soloTop: true })
   })
 
+  it("고르기가 채운 조각은 흔적 parts 의 고른 카드로 센다(고르기를 안 쓴 줄은 그대로)", () => {
+    const probe = {
+      kind: "answer",
+      card: "doc:rec",
+      segments: [
+        { text: "녹화는 어떻게 하나요?", kind: "answer", card: "doc:rec", conf: 0.9 },
+        { text: "무료 체험도 있나요?", kind: "abstain", card: null, conf: 0.5 },
+      ],
+    }
+    const parts = [
+      { text: "녹화는 어떻게 하나요?", kind: "answer", card: "doc:rec", by: "index" },
+      { text: "무료 체험도 있나요?", kind: "answer", card: "policy:trial", by: "assist" },
+    ]
+    const base = { question: "녹화는 어떻게 하나요? 그리고 무료 체험도 있나요?", answer: "1. 녹화\n2. 체험", indexDecided: true, probe, expect: expectTwo, topicOf }
+    const assisted = buildFragmentRecord({ ...base, trace: { card: "doc:rec", segments: 2, parts, assist: { used: true, accepted: true } } })
+    expect(assisted.source).toBe("probe")
+    expect(assisted.segments.map((segment) => [segment.card, segment.by])).toEqual([["doc:rec", "index"], ["policy:trial", "assist"]])
+    expect(assisted.perFragment.map((item) => item.answered)).toEqual([true, true])
+    const notUsed = buildFragmentRecord({ ...base, trace: { card: "doc:rec", segments: 2, parts, assist: { used: false } } })
+    expect(notUsed.perFragment.map((item) => item.answered)).toEqual([true, false])
+    const noAssist = buildFragmentRecord({ ...base, trace: { card: "doc:rec", segments: 2, parts } })
+    expect(noAssist.segments).toEqual(buildFragmentRecord({ ...base, trace: { card: "doc:rec", segments: 2 } }).segments)
+  })
+
   it("흔적의 segments 배열이 있으면 그것을 먼저 쓴다", () => {
     const record = buildFragmentRecord({
       question: "q",

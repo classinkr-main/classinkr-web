@@ -61,7 +61,12 @@
       "가입 절차",
       "아이디 만들기",
       "인증코드",
-      "앱에서 가입"
+      "앱에서 가입",
+      "회원 등록 방법",
+      "계정 등록 순서",
+      "가입 등록 절차",
+      "앱에 등록하기",
+      "처음 등록하는 순서"
     ],
     "covers": "클래스인 계정을 설치한 앱·PC 프로그램에서 만드는 전체 순서(어디서 하는지, 휴대폰 번호 형식, 약관 동의·인증코드·비밀번호)",
     "notCovers": [
@@ -9315,7 +9320,11 @@
       "부모님 가입",
       "학부모 전용 계정",
       "부모 아이디",
-      "보호자 가입"
+      "보호자 가입",
+      "부모 계정과 아이 계정",
+      "자녀 계정 연결",
+      "아이 계정만 있으면",
+      "부모 가입 필요"
     ],
     "covers": "설치를 마친 학생·학부모·강사는 계정부터 만들고 수업은 학생 계정으로 들어가며, 학부모 전용 계정·연결 기능은 공개 안내에 없다는 것",
     "notCovers": [
@@ -10480,7 +10489,9 @@
     "notCovers": [
       "학부모가 따로 가입해야 하는지 → fixed:basics-parent-signup",
       "요금제 비교·추천 → policy:tutor-plan-recommend",
-      "학생 프로필·닉네임 → doc:/docs/student/student-profile#summary/student-profile-overview"
+      "학생 프로필·닉네임 → doc:/docs/student/student-profile#summary/student-profile-overview",
+      "회원 가입·계정 등록 전체 순서 → doc:/docs/start/signup#summary/signup-overview",
+      "학원이 만들어 준 계정으로 로그인 → doc:/docs/start/signup#0/temp-password-account"
     ],
     "negatives": [
       {

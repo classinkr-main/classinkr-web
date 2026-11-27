@@ -52,14 +52,22 @@
       "프로그램 깔기",
       "설치하기",
       "시작하기",
-      "Applications"
+      "Applications",
+      "설치 필수",
+      "컴퓨터에 꼭 설치",
+      "설치해야 수업",
+      "설치형 프로그램",
+      "프로그램 먼저 받기"
     ],
     "covers": "컴퓨터(윈도우·맥·리눅스)에 클래스인을 공식 다운로드 페이지에서 받아 설치하는 전체 방법과 운영체제별 핵심 단계",
     "notCovers": [
       "휴대폰·태블릿 앱 설치 → doc:/docs/start/mobile-install#summary/mobile-install-overview",
       "설치했는데 켜지지 않을 때 → doc:/docs/start/pc-install#4/wont-open-checks",
       "이 컴퓨터 사양으로 수업이 되는지 → doc:/docs/start/pc-install#5/min-spec",
-      "설치 뒤 가입·로그인 → doc:/docs/start/pc-install#6/login-in-program"
+      "설치 뒤 가입·로그인 → doc:/docs/start/pc-install#6/login-in-program",
+      "컴퓨터 최소 사양·쓰려면 갖출 조건 → doc:/docs/start/pc-install#5/min-spec",
+      "폰·태블릿으로 수업에 들어갈 수 있는지 → doc:/docs/start/mobile-install#summary/mobile-class-on-phone",
+      "계정 만들기·가입 위치 → doc:/docs/start/pc-install#6/login-in-program"
     ],
     "negatives": [
       {
@@ -1471,14 +1479,22 @@
       "사양 확인",
       "학생 컴퓨터",
       "화면 해상도",
-      "1280×720"
+      "1280×720",
+      "쓰려면 필요한 컴퓨터",
+      "이용 요건",
+      "구동 환경",
+      "컴퓨터 성능",
+      "PC 요구 조건",
+      "컴퓨터 조건"
     ],
     "covers": "학생과 녹화를 쓰지 않는 강사가 쓰는 컴퓨터의 최소 사양(프로세서·메모리·화면 해상도·운영체제·인터넷 속도)",
     "notCovers": [
       "수업을 녹화하는 강사 사양 → doc:/docs/start/pc-install#5/recording-teacher-spec",
       "여유 있게 쓰는 권장 사양 → doc:/docs/start/pc-install#5/recommended-spec",
       "인터넷 속도 기준 전체 → doc:/docs/start/pc-install#summary/internet-speed-guide",
-      "휴대폰·태블릿 최소 사양 → doc:/docs/start/mobile-install#5/mobile-min-spec"
+      "휴대폰·태블릿 최소 사양 → doc:/docs/start/mobile-install#5/mobile-min-spec",
+      "폰·태블릿으로 수업에 들어갈 수 있는지 → doc:/docs/start/mobile-install#summary/mobile-class-on-phone",
+      "컴퓨터에 설치해야 하는지·설치 방법 → doc:/docs/start/pc-install#summary/pc-install-overview"
     ],
     "negatives": [
       {
@@ -1791,7 +1807,9 @@
       "계정 만들기",
       "어디서 로그인",
       "처음 실행",
-      "웹사이트 로그인"
+      "웹사이트 로그인",
+      "계정 새로 만들기",
+      "새 계정 만드는 곳"
     ],
     "covers": "PC 프로그램을 실행한 뒤 가입·로그인을 프로그램에서 하고, 홈페이지 로그인은 관리자용이라 학생이 쓰면 체험판 선택 화면이 떠 수업에 못 들어간다는 것",
     "notCovers": [
@@ -2204,7 +2222,12 @@
       "핸드폰만 있어도",
       "스마트폰 수업",
       "학생이 폰으로 수업",
-      "컴퓨터 없이 수업 참여"
+      "컴퓨터 없이 수업 참여",
+      "폰 태블릿 수업 참여",
+      "모바일 기기로 수업",
+      "패드로 수업 듣기",
+      "스마트기기 수강",
+      "폰 하나로 수업"
     ],
     "covers": "학생이 컴퓨터 없이 휴대폰이나 태블릿 앱으로 수업에 들어갈 수 있는지와, 그러려면 플레이 스토어·앱 스토어에서 클래스인 앱부터 받는다는 것",
     "notCovers": [
@@ -2214,7 +2237,9 @@
       "한 기기로 여럿이 수업 → fixed:shared-device",
       "안드로이드 설치 순서 → doc:/docs/start/mobile-install#0/android-steps",
       "아이폰·아이패드 설치 순서 → doc:/docs/start/mobile-install#1/ios-steps",
-      "선생님이 휴대폰·태블릿만으로 수업 진행 → fixed:basics-teach-tablet-phone-only"
+      "선생님이 휴대폰·태블릿만으로 수업 진행 → fixed:basics-teach-tablet-phone-only",
+      "컴퓨터 최소 사양 → doc:/docs/start/pc-install#5/min-spec",
+      "컴퓨터에 설치해야 하는지·설치 방법 → doc:/docs/start/pc-install#summary/pc-install-overview"
     ],
     "negatives": [
       {
@@ -2619,7 +2644,10 @@
       "관리자 페이지",
       "첫 화면",
       "폰에서 가입",
-      "어플 가입"
+      "어플 가입",
+      "계정 만들기",
+      "앱에서 계정 생성",
+      "새 계정 만드는 곳"
     ],
     "covers": "휴대폰·태블릿 앱을 연 뒤 계정이 있으면 로그인하고 없으면 첫 화면 오른쪽 위 [회원 가입]으로 만들며, 가입·로그인을 홈페이지가 아니라 앱에서 하는 것",
     "notCovers": [

@@ -3649,7 +3649,8 @@
     "notCovers": [
       "터치 응답 속도·정밀도 수치 → doc:/docs/hardware/board-writing-touch#1/touch-spec",
       "원격 학생에게 판서 권한 주기 → doc:/docs/student/class-join-replay#2/crown-permission",
-      "학생 개인 칠판 → doc:/docs/software/classroom-tools#4/personal-board"
+      "학생 개인 칠판 → doc:/docs/software/classroom-tools#4/personal-board",
+      "한 수업 최대 인원·정원·반 수 → doc:/docs/software/software-overview#1/class-size-limit"
     ],
     "negatives": [
       {
@@ -4646,7 +4647,8 @@
     "notCovers": [
       "데모에서 볼 장면 고르기 → doc:/docs/start/pre-adoption-faq-22-questions#7/demo-scenes",
       "쇼룸 방문 → doc:/docs/start/customer-stories#9/showroom-visit",
-      "도입 상담 순서 → doc:/docs/start/pre-adoption-faq-22-questions#summary/consult-flow-pilot"
+      "도입 상담 순서 → doc:/docs/start/pre-adoption-faq-22-questions#summary/consult-flow-pilot",
+      "도입을 어디서부터 시작하는지·첫 단계 → doc:/docs/start/adoption-journey-90days#0/where-to-start"
     ],
     "negatives": [
       {
@@ -16012,13 +16014,17 @@
       "S98 Pro 98인치",
       "S110 110인치",
       "학생 수별 모델",
-      "교실 크기 맞는 보드"
+      "교실 크기 맞는 보드",
+      "인원수별 보드",
+      "수강 인원 칠판",
+      "정원별 칠판 크기"
     ],
     "covers": "교실 크기와 학생 수에 따라 S75·S86·S98 Pro·S110 중 어느 모델이 맞는지",
     "notCovers": [
       "65인치 S65 → doc:/docs/hardware/board-lineup-specs#0/s65-quote-check",
       "모델 고를 때 함께 볼 조건 → doc:/docs/hardware/board-lineup-specs#0/pick-factors",
-      "모델별 사양 → doc:/docs/hardware/board-lineup-specs#2/dimensions-weight"
+      "모델별 사양 → doc:/docs/hardware/board-lineup-specs#2/dimensions-weight",
+      "한 수업 최대 인원·정원·반 수 → doc:/docs/software/software-overview#1/class-size-limit"
     ],
     "negatives": [
       {
@@ -27939,7 +27945,8 @@
       "할인·가격 협의 → policy:discount-negotiation",
       "쇼룸 위치·방문 예약 → none",
       "도입 상담 요청 방법 → none",
-      "보드 가격 비교 할인 → policy:board-price-comparison-discount"
+      "보드 가격 비교 할인 → policy:board-price-comparison-discount",
+      "도입을 어디서부터 시작하는지·첫 단계 → doc:/docs/start/adoption-journey-90days#0/where-to-start"
     ],
     "negatives": [
       {
@@ -32156,7 +32163,9 @@
       "칠판 판매 여부·제조 → policy:basics-sells-hardware",
       "다른 회사 칠판에서 소프트웨어만 → policy:other-brand-board-software-only",
       "TV·프로젝터 호환 → fixed:basics-existing-tv-projector",
-      "무료 체험 신청 위치 → doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial"
+      "무료 체험 신청 위치 → doc:/docs/software/software-pricing-quote-bundle-faq#2/free-trial",
+      "컴퓨터에서 클래스인을 쓰려면 갖출 사양·조건 → doc:/docs/start/pc-install#5/min-spec",
+      "폰·태블릿으로 수업에 들어갈 수 있는지 → doc:/docs/start/mobile-install#summary/mobile-class-on-phone"
     ],
     "negatives": [
       {

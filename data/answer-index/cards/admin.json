@@ -359,7 +359,8 @@
       "기능보다 기준이 먼저인 이유 → doc:/docs/admin/admin-operation-standardization#0/why-standards-first",
       "관리자 주간 점검 항목 → doc:/docs/admin/admin-operation-standardization#10/weekly-checklist",
       "새 강사가 왔을 때 할 일 → doc:/docs/admin/teacher-onboarding#summary/new-teacher-steps",
-      "도입 단계별 범위·성공 기준 → doc:/docs/start/adoption-journey-90days#1/scope-success-criteria"
+      "도입 단계별 범위·성공 기준 → doc:/docs/start/adoption-journey-90days#1/scope-success-criteria",
+      "도입을 어디서부터 시작하는지·첫 단계 → doc:/docs/start/adoption-journey-90days#0/where-to-start"
     ],
     "negatives": [
       {
@@ -15694,7 +15695,9 @@
     "notCovers": [
       "강사를 코스에 배정하기 → doc:/docs/admin/teacher-onboarding#4/assign-teacher-course",
       "하위 계정으로 관리자 권한 주기 → fixed:sub-account-admin",
-      "계정 합치기 → fixed:merge-accounts"
+      "계정 합치기 → fixed:merge-accounts",
+      "한 교사 계정으로 여러 반 맡기 → fixed:teacher-multi-course",
+      "학생 정보를 몇 년 보관하는지·삭제 → fixed:basics-student-data-retention"
     ],
     "negatives": [
       {
@@ -16726,7 +16729,9 @@
       "담임 교사 설정",
       "코스 구성원 교사",
       "강사 여러 반",
-      "교사 추가 목록에 없음"
+      "교사 추가 목록에 없음",
+      "한 계정 여러 반",
+      "선생님 한 분 반 여러 개"
     ],
     "covers": "[코스 관리] > 코스 이름 > [구성원] > [교사로 설정]으로 강사를 코스에 넣고 더보기 메뉴에서 [담임 교사로 설정]하는 방법, 코스에는 대시보드에 교사로 등록된 계정만 넣을 수 있고 목록에 없으면 [교사 추가]로 추가한다는 것",
     "notCovers": [
@@ -17277,7 +17282,8 @@
     "notCovers": [
       "통계를 내려받는 방법 → howto:stats-export",
       "학생 명단 등록 방법 → doc:/docs/admin/student-onboarding#summary/student-register-methods",
-      "개인정보 처리 방침 → none"
+      "개인정보 처리 방침 → none",
+      "학생 정보를 몇 년 보관하는지·삭제 → fixed:basics-student-data-retention"
     ],
     "negatives": [
       {
